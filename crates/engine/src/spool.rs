@@ -1,13 +1,11 @@
 use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::{FileExt, OpenOptionsExt, PermissionsExt};
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use voice_core::{Result, UtteranceId};
 
 pub(crate) struct Spool {
     file: File,
-    path: PathBuf,
     written: AtomicU64,
 }
 
@@ -23,9 +21,9 @@ impl Spool {
             .create_new(true)
             .mode(0o600)
             .open(&path)?;
+        fs::remove_file(&path)?;
         Ok(Self {
             file,
-            path,
             written: AtomicU64::new(0),
         })
     }
@@ -65,8 +63,29 @@ impl Spool {
     }
 }
 
-impl Drop for Spool {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn audio_is_private_and_has_no_named_file_to_survive_a_process_crash() {
+        let id = UtteranceId::random();
+        let spool = Spool::new(id).unwrap();
+        assert_eq!(
+            spool.file.metadata().unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let path = crate::manifest::model_cache()
+            .unwrap()
+            .join("audio-spool")
+            .join(format!("{}.pcm", id.0));
+        assert!(!path.exists());
+        spool.append(&[i16::MIN, 3, i16::MAX]).unwrap();
+        let mut offset = 0;
+        assert_eq!(
+            spool.read(&mut offset).unwrap().unwrap(),
+            [i16::MIN, 3, i16::MAX]
+        );
+        assert!(spool.consumed(offset));
     }
 }

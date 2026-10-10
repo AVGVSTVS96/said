@@ -81,14 +81,14 @@ upstream transcript composition convention. All text inside each line remains
 unchanged. Vocabulary explicitly enables native keyterm biasing; commas/NUL in
 individual terms are rejected because upstream's keyterm interface uses commas.
 
-Live audio is spooled in order to a 0600 temporary PCM file inside a 0700
+Live audio is spooled in order to a 0600 temporary PCM file created inside a 0700
 `~/.cache/voice-models/audio-spool` directory. Only published complete writes are
 read, in at most 1,600-sample frames. Bounded queues hold notifications and frames,
 so a slow recognizer cannot overflow capture's backlog into lost words. Finish is
-sent after the spool is consumed and all audio is acknowledged. Dropping the
-utterance removes its spool; the recorder's durable WAV remains authoritative.
-Spool I/O failure is explicit. A process crash can leave an orphan spool; recovery
-uses the WAV, and orphan cleanup is not yet automatic.
+sent after the spool is consumed and all audio is acknowledged. The file is unlinked immediately after opening: the engine can still read/write
+its handle, and the OS removes its audio when the handles close, including after
+a process crash. The recorder's durable WAV remains authoritative. Spool I/O
+failure is explicit.
 
 Host request and transport queues are bounded; response/event queues hold at
 most 64 frames. A receiver closing before Final is an engine failure, including
