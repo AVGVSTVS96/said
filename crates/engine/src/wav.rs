@@ -28,7 +28,7 @@ impl Wav {
                 length = rf64_length.ok_or("RF64 requires a data size before its samples")?;
             }
             let start = file.stream_position()?;
-            if start + length > file_size {
+            if start.checked_add(length).is_none_or(|end| end > file_size) {
                 return Err("truncated WAV chunk; repair capture before recognition".into());
             }
             match &chunk[..4] {

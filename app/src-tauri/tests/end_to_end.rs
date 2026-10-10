@@ -72,6 +72,26 @@ fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
             expected.as_bytes()
         );
         assert_eq!(saved.text, saved.raw_text);
+        let audio = history.audio_path(saved.audio_id);
+        let (sender, requests) = crossbeam_channel::bounded(1);
+        let audio_path = audio.clone();
+        let service = std::thread::spawn(move || match requests.recv().unwrap() {
+            voice_app::ipc::Request::Audio(requested, reply) => {
+                assert_eq!(requested, id);
+                reply.send(Ok(audio_path)).unwrap();
+            }
+            _ => panic!("unexpected playback request"),
+        });
+        let request = tauri::http::Request::builder()
+            .uri(format!("voice-audio://localhost/{}", id.0))
+            .header("Range", "bytes=0-79")
+            .body(Vec::new())
+            .unwrap();
+        let response = voice_app::ipc::audio(&voice_app::ipc::Connection(sender), request);
+        assert_eq!(response.status(), 206);
+        assert_eq!(response.headers()["Content-Type"], "audio/wav");
+        assert_eq!(response.body(), &fs::read(audio).unwrap()[..80]);
+        service.join().unwrap();
         if clip == "silence" {
             assert!(expected.is_empty());
             assert_eq!(receipt["paste"].as_array().unwrap().len(), 0);
@@ -91,5 +111,125 @@ fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
             expected.len()
         );
     }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn stop_drains_final_frames_before_the_next_recording_starts() {
+    use crossbeam_channel::{Receiver, Sender, bounded};
+    use std::time::{Duration, Instant};
+    use voice_app::{runtime::Host, storage::Paths};
+    use voice_audio::{Recorder, wav::WavWriter};
+    use voice_core::{AudioEvent, AudioFrame, InputDevice, Mode, Result, Target};
+    use voice_engine::host::{WorkerClient, WorkerConfig};
+    use voice_platform::fake::{FakePlatform, PlatformCall};
+
+    struct TailRecorder {
+        directory: std::path::PathBuf,
+        active: Option<(UtteranceId, WavWriter, Sender<AudioEvent>)>,
+    }
+    impl Recorder for TailRecorder {
+        fn list_devices(&self) -> Result<Vec<InputDevice>> {
+            Ok(vec![])
+        }
+        fn start(&mut self, id: UtteranceId, _: Option<&str>) -> Result<Receiver<AudioEvent>> {
+            let mut writer = WavWriter::create(&self.directory.join(format!("{}.wav", id.0)))?;
+            writer.append(&[11, 22])?;
+            let (sender, receiver) = bounded(4);
+            sender.send(AudioEvent::Frame(AudioFrame {
+                id,
+                pcm: vec![11, 22],
+                level: 0.1,
+            }))?;
+            self.active = Some((id, writer, sender));
+            Ok(receiver)
+        }
+        fn stop(&mut self) -> Result<()> {
+            let (id, mut writer, sender) = self.active.take().ok_or("already stopped")?;
+            writer.append(&[33, 44])?;
+            writer.finish()?;
+            sender.send(AudioEvent::Frame(AudioFrame {
+                id,
+                pcm: vec![33, 44],
+                level: 0.2,
+            }))?;
+            sender.send(AudioEvent::Stopped { id, duration_ms: 1 })?;
+            Ok(())
+        }
+    }
+    let root = model_cache()
+        .unwrap()
+        .join("app-fake-proof")
+        .join(UtteranceId::random().0.to_string());
+    fs::create_dir_all(&root).unwrap();
+    let text = "  no no, um don't change café.\n  ";
+    let trace = root.join("trace.json");
+    fs::write(&trace,serde_json::json!({"start":[],"feeds":[],"finish":[{"type":"committed","text":text},{"type":"final"}]}).to_string()).unwrap();
+    let client = WorkerClient::warm(WorkerConfig {
+        executable: env!("CARGO_BIN_EXE_voice").into(),
+        args: vec![
+            "--worker".into(),
+            "fake".into(),
+            "--trace".into(),
+            trace.to_string_lossy().into(),
+            "--model-cache".into(),
+            root.to_string_lossy().into(),
+        ],
+        startup_timeout: Duration::from_secs(5),
+        audio_timeout: Duration::from_secs(5),
+        finish_timeout: Duration::from_secs(5),
+        queue_frames: 16,
+    })
+    .unwrap();
+    let platform = FakePlatform::new(Some(Target {
+        app_id: "scratch".into(),
+        window_id: "1".into(),
+        name: "Scratch".into(),
+    }));
+    let recorder = TailRecorder {
+        directory: root.join("audio"),
+        active: None,
+    };
+    let mut host = Host::open(
+        platform,
+        recorder,
+        Paths::new(root.clone(), root.join("config")),
+    )
+    .unwrap();
+    host.set_client(client);
+    host.start(Mode::Quick, false).unwrap();
+    host.stop().unwrap();
+    host.start(Mode::Quick, false).unwrap();
+    host.stop().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        host.poll().unwrap();
+        if host
+            .history
+            .search("")
+            .unwrap()
+            .iter()
+            .filter(|row| row.pasted_at.is_some())
+            .count()
+            == 2
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "both finishing utterances must be delivered"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    for row in host.history.search("").unwrap() {
+        assert_eq!(row.raw_text.as_deref(), Some(text));
+        let mut wav =
+            voice_audio::wav::WavReader::open(&host.history.audio_path(row.audio_id)).unwrap();
+        let mut samples = [0; 4];
+        assert_eq!(wav.read(&mut samples).unwrap(), 4);
+        assert_eq!(samples, [11, 22, 33, 44]);
+    }
+    assert_eq!(host.platform.calls.borrow().iter().filter(|call|matches!(call,PlatformCall::Paste {text:received,send:false,..} if received.as_bytes()==text.as_bytes())).count(),2);
+    drop(host);
     fs::remove_dir_all(root).unwrap();
 }

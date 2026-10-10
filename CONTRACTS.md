@@ -156,3 +156,13 @@ Model installation lives in the app's data/models directory on both platforms, a
 host build brief. Hash-verified archives are retained there; runtime libraries install by fsync and
 rename so validation never truncates a mapped library. RF64 is accepted by the engine's file reader.
 Linux control requests add start/stop/history FTS search without changing ownership or peer checks.
+
+File replay exposes a cancelable engine-host entry point so Cancel terminates the isolated worker
+rather than leaving recognition running after core dismisses the identity. Linux control responses
+permit up to 16 MiB for history/status and reject oversize or incomplete replies instead of silently
+truncating them. Request framing remains one bounded line.
+
+The host consumes audio events as they arrive. Stop joins the recorder and drains every queued
+frame and Stopped acknowledgment before allowing a new capture to replace the receiver. This
+preserves back-to-back recording/finishing identities and start-ordered delivery. macOS shortcut
+updates preserve desktop window tokens; an existing Linux layer overlay can update its monitor.

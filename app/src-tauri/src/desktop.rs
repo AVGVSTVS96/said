@@ -69,6 +69,10 @@ impl Platform for Desktop {
     }
 }
 impl HostPlatform for Desktop {
+    fn is_self(&self, target: &Target) -> bool {
+        target.app_id == env!("PRODUCT_BUNDLE_ID")
+            || target.app_id == format!("pid:{}", std::process::id())
+    }
     fn copy(&self, text: &str) -> Result<()> {
         self.native
             .as_ref()
@@ -94,8 +98,13 @@ impl HostPlatform for Desktop {
                 config.portal_trigger = None;
             }
             config.chord = linux::input::Chord::parse(&settings.hotkey)?;
+            let reserved = linux::input::Chord::parse("ctrl+alt+v")?;
             if settings.hotkey.to_ascii_lowercase().contains("shift")
-                || settings.hotkey.eq_ignore_ascii_case("ctrl+alt+v")
+                || config.chord.key == reserved.key
+                    && reserved
+                        .modifiers
+                        .iter()
+                        .all(|modifier| config.chord.modifiers.contains(modifier))
             {
                 return Err(
                     "Shift is reserved for interactive mode and Ctrl+Alt+V for insert last".into(),
@@ -142,14 +151,17 @@ impl HostPlatform for Desktop {
             {
                 return Err("macOS paste shortcut is cmd+v".into());
             }
-            self.native = None;
-            match MacosPlatform::start(shortcut, configure_overlay) {
-                Ok(native) => {
-                    self.native = Some(native);
-                    self.error = None;
+            if let Some(native) = &mut self.native {
+                if settings.hotkey != self.hotkey {
+                    native.set_shortcut(shortcut)?;
                 }
-                Err(error) => {
-                    self.error = Some(error.to_string());
+            } else {
+                match MacosPlatform::start(shortcut, configure_overlay) {
+                    Ok(native) => {
+                        self.native = Some(native);
+                        self.error = None;
+                    }
+                    Err(error) => self.error = Some(error.to_string()),
                 }
             }
         }
@@ -219,8 +231,17 @@ impl HostPlatform for Desktop {
             for status in native.input_statuses().try_iter() {
                 events.push(match status {
                     macos::InputStatus::Available => SessionEvent::SessionAvailable,
-                    _ => SessionEvent::SessionUnavailable {
-                        reason: format!("{status:?}"),
+                    status => SessionEvent::SessionUnavailable {
+                        reason: match status {
+                            macos::InputStatus::SecureInput => "Secure Input is enabled",
+                            macos::InputStatus::SessionLocked => "Session is locked",
+                            macos::InputStatus::PermissionRequired => {
+                                "Enable Accessibility and Input Monitoring in System Settings"
+                            }
+                            macos::InputStatus::TapInterrupted => "Hotkey listener was interrupted",
+                            macos::InputStatus::Available => unreachable!(),
+                        }
+                        .into(),
                     },
                 });
             }

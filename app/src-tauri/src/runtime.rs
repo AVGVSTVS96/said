@@ -10,13 +10,16 @@ use voice_audio::Recorder;
 use voice_core::{history::SqliteHistory, *};
 use voice_engine::{
     Engine,
-    host::{WorkerClient, WorkerConfig, WorkerEngine, recognize_file},
+    host::{WorkerClient, WorkerConfig, WorkerEngine, recognize_file_with_cancel},
     manifest::Manifest,
 };
 use voice_platform::Platform;
 
 pub trait HostPlatform: Platform {
     fn copy(&self, text: &str) -> Result<()>;
+    fn is_self(&self, _target: &Target) -> bool {
+        false
+    }
     fn configure(&mut self, settings: &Settings) -> Result<()>;
     fn recording(&mut self, _active: bool) {}
     fn availability(&mut self, _available: bool) {}
@@ -72,7 +75,8 @@ pub struct Host<P: HostPlatform, R: Recorder> {
     sequence: u64,
     query: String,
     focused: Option<Target>,
-    replaying: std::collections::BTreeSet<UtteranceId>,
+    external: Option<Target>,
+    replaying: BTreeMap<UtteranceId, Sender<()>>,
     _lock: fs::File,
 }
 
@@ -109,6 +113,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         let permissions = platform.permissions();
         let instructions = platform.instructions();
         let focused = platform.focused();
+        let external = focused.clone().filter(|target| !platform.is_self(target));
         let (sender, background) = bounded(64);
         let state = HostState {
             models: manifest
@@ -156,6 +161,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             sequence: 0,
             query: String::new(),
             focused,
+            external,
             replaying: Default::default(),
             _lock: lock,
             session: Session::default(),
@@ -259,6 +265,23 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         if self.capture.is_some() {
             return Err("a recording is already active".into());
         }
+        if mode == Mode::Interactive {
+            let ids: Vec<_> = self
+                .session
+                .views()
+                .filter(|view| {
+                    view.mode == Mode::Interactive
+                        && !matches!(
+                            view.phase,
+                            Phase::Recording | Phase::Finishing | Phase::Saving | Phase::Pasting
+                        )
+                })
+                .map(|view| view.id)
+                .collect();
+            for id in ids {
+                self.session.dismiss(id);
+            }
+        }
         let context = self.context(mode, scratch);
         if scratch {
             self.state.scratch = Some(context.id);
@@ -300,6 +323,34 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             | UiAction::Cancel { id } => Some(*id),
             _ => None,
         };
+        if matches!(action, UiAction::Insert { .. })
+            && id.is_some_and(|id| {
+                !self
+                    .session
+                    .views()
+                    .any(|view| view.id == id && view.mode == Mode::Interactive)
+            })
+        {
+            let row = self
+                .history
+                .get(id.unwrap())?
+                .ok_or("unknown history entry")?;
+            if self
+                .platform
+                .focused()
+                .as_ref()
+                .is_some_and(|target| self.platform.is_self(target))
+            {
+                self.platform.focus(
+                    self.external
+                        .as_ref()
+                        .ok_or("focus a target app before opening history")?,
+                )?;
+            }
+            return self.event(SessionEvent::InsertLast {
+                utterance: Some(row),
+            });
+        }
         if id.is_some_and(|id| !self.session.views().any(|view| view.id == id)) {
             let id = id.unwrap();
             let row = self.history.get(id)?.ok_or("unknown history entry")?;
@@ -433,7 +484,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     view.phase,
                     Phase::Recording | Phase::Finishing | Phase::Saving | Phase::Pasting
                 )
-        }) || self.replaying.contains(&id)
+        }) || self.replaying.contains_key(&id)
         {
             return Err("finish recognition before deleting its audio".into());
         }
@@ -463,79 +514,19 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
     pub fn poll(&mut self) -> Result<bool> {
         let mut events = vec![];
         let focused = self.platform.focused();
+        if let Some(target) = focused
+            .as_ref()
+            .filter(|target| !self.platform.is_self(target))
+        {
+            self.external = Some(target.clone());
+        }
         if focused != self.focused {
             self.focused = focused.clone();
             events.push(SessionEvent::FocusChanged { target: focused });
         }
         events.extend(self.platform.poll());
-        if let Some((id, receiver)) = &self.capture {
-            let mut stopped = false;
-            loop {
-                match receiver.try_recv() {
-                    Ok(event) => {
-                        stopped |= matches!(event, AudioEvent::Stopped { .. });
-                        events.push(SessionEvent::Audio(event));
-                    }
-                    Err(crossbeam_channel::TryRecvError::Empty) => break,
-                    Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                        if !stopped {
-                            events.push(SessionEvent::CaptureFailed {id:*id,message:"Audio stopped without a durable flush; kept in history for retry".into()});
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        for (id, active) in &self.engines {
-            let mut terminal = false;
-            loop {
-                match active.events.try_recv() {
-                    Ok(output) => {
-                        terminal |=
-                            matches!(output.event, EngineEvent::Final | EngineEvent::Error(_));
-                        events.push(SessionEvent::Engine(output));
-                    }
-                    Err(crossbeam_channel::TryRecvError::Empty) => break,
-                    Err(crossbeam_channel::TryRecvError::Disconnected) => {
-                        if !terminal {
-                            events.push(SessionEvent::Engine(EngineOutput {
-                                id: *id,
-                                event: EngineEvent::Error(
-                                    "Worker output closed before Final".into(),
-                                ),
-                            }));
-                        }
-                        break;
-                    }
-                }
-            }
-        }
         let mut changed = !events.is_empty();
         for event in events {
-            if let SessionEvent::Audio(AudioEvent::Error { id, message }) = &event {
-                self.event(SessionEvent::Engine(EngineOutput {
-                    id: *id,
-                    event: EngineEvent::Error(message.clone()),
-                }))?;
-            }
-            if let SessionEvent::Audio(AudioEvent::Stopped { id, .. })
-            | SessionEvent::CaptureFailed { id, .. } = &event
-                && self
-                    .capture
-                    .as_ref()
-                    .is_some_and(|(current, _)| current == id)
-            {
-                let _ = self.recorder.stop();
-                self.capture = None;
-                self.platform.recording(false);
-            }
-            let done = match &event {
-                SessionEvent::Engine(EngineOutput {
-                    id,
-                    event: EngineEvent::Final | EngineEvent::Error(_),
-                }) => Some(*id),
-                _ => None,
-            };
             let available = match &event {
                 SessionEvent::SessionAvailable => Some(true),
                 SessionEvent::SessionUnavailable { .. } => Some(false),
@@ -546,8 +537,85 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 self.platform.availability(available);
                 self.state.instructions = self.platform.instructions();
             }
-            if let Some(id) = done {
-                self.engines.remove(&id);
+        }
+        if let Some((id, receiver)) = self
+            .capture
+            .as_ref()
+            .map(|(id, receiver)| (*id, receiver.clone()))
+        {
+            for _ in 0..128 {
+                match receiver.try_recv() {
+                    Ok(event) => {
+                        changed = true;
+                        if let AudioEvent::Error { message, .. } = &event {
+                            self.event(SessionEvent::Engine(EngineOutput {
+                                id,
+                                event: EngineEvent::Error(message.clone()),
+                            }))?;
+                        }
+                        if matches!(event, AudioEvent::Stopped { .. })
+                            && self
+                                .capture
+                                .as_ref()
+                                .is_some_and(|(current, _)| *current == id)
+                        {
+                            let _ = self.recorder.stop();
+                            self.capture = None;
+                            self.platform.recording(false);
+                        }
+                        self.event(SessionEvent::Audio(event))?;
+                    }
+                    Err(crossbeam_channel::TryRecvError::Empty) => break,
+                    Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                        if self
+                            .capture
+                            .as_ref()
+                            .is_some_and(|(current, _)| *current == id)
+                        {
+                            changed = true;
+                            self.capture = None;
+                            let _ = self.recorder.stop();
+                            self.platform.recording(false);
+                            self.event(SessionEvent::CaptureFailed {id,message:"Audio stopped without a durable flush; kept in history for retry".into()})?;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        let outputs: Vec<_> = self
+            .engines
+            .iter()
+            .map(|(id, active)| (*id, active.events.clone()))
+            .collect();
+        for (id, output) in outputs {
+            for _ in 0..64 {
+                match output.try_recv() {
+                    Ok(output) => {
+                        changed = true;
+                        let terminal =
+                            matches!(output.event, EngineEvent::Final | EngineEvent::Error(_));
+                        self.event(SessionEvent::Engine(output))?;
+                        if terminal {
+                            self.engines.remove(&id);
+                            break;
+                        }
+                    }
+                    Err(crossbeam_channel::TryRecvError::Empty) => break,
+                    Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                        if self.engines.contains_key(&id) {
+                            changed = true;
+                            self.event(SessionEvent::Engine(EngineOutput {
+                                id,
+                                event: EngineEvent::Error(
+                                    "Worker output closed before Final".into(),
+                                ),
+                            }))?;
+                            self.engines.remove(&id);
+                        }
+                        break;
+                    }
+                }
             }
         }
         for background in self.background.clone().try_iter() {
@@ -565,7 +633,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     }
                 },
                 Background::Replay { id, result } => {
-                    if !self.replaying.remove(&id) {
+                    if self.replaying.remove(&id).is_none() {
                         continue;
                     }
                     match result {
@@ -594,6 +662,13 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         Ok(changed)
     }
     pub fn event(&mut self, event: SessionEvent) -> Result<()> {
+        if let SessionEvent::FocusChanged {
+            target: Some(target),
+        } = &event
+            && !self.platform.is_self(target)
+        {
+            self.external = Some(target.clone());
+        }
         let effects = self.session.reduce(event);
         self.execute(effects)
     }
@@ -654,9 +729,34 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                         .capture
                         .as_ref()
                         .is_some_and(|(current, _)| *current == id)
-                        && let Err(error) = self.recorder.stop()
                     {
-                        self.state.notifications.insert(id, error.to_string());
+                        let (_, audio) = self.capture.take().unwrap();
+                        let result = self.recorder.stop();
+                        self.platform.recording(false);
+                        let mut stopped = false;
+                        for event in audio.try_iter() {
+                            if let AudioEvent::Error { message, .. } = &event {
+                                queue.extend(self.session.reduce(SessionEvent::Engine(
+                                    EngineOutput {
+                                        id,
+                                        event: EngineEvent::Error(message.clone()),
+                                    },
+                                )));
+                            }
+                            stopped |= matches!(event, AudioEvent::Stopped { .. });
+                            queue.extend(self.session.reduce(SessionEvent::Audio(event)));
+                        }
+                        if !stopped {
+                            response = Some(SessionEvent::CaptureFailed {
+                                id,
+                                message: result
+                                    .err()
+                                    .map(|error| error.to_string())
+                                    .unwrap_or_else(|| {
+                                        "Audio stopped without a durable flush".into()
+                                    }),
+                            });
+                        }
                     }
                 }
                 Effect::FeedEngine { id, pcm } => {
@@ -670,7 +770,9 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     }
                 }
                 Effect::CancelEngine { id } => {
-                    self.replaying.remove(&id);
+                    if let Some(cancellation) = self.replaying.remove(&id) {
+                        let _ = cancellation.try_send(());
+                    }
                     if let Some(mut active) = self.engines.remove(&id) {
                         active.engine.cancel();
                     }
@@ -688,14 +790,21 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     engine,
                     vocabulary,
                 } => {
-                    self.replaying.insert(id);
+                    let (cancel, cancellation) = bounded(1);
+                    self.replaying.insert(id, cancel);
                     let sender = self.sender.clone();
                     let path = self.history.audio_path(audio_id);
                     let config = worker_config(&self.paths.models, &engine)?;
                     std::thread::spawn(move || {
                         let result = (|| {
                             let samples = voice_audio::wav::recover_wav(&path)?;
-                            let text = recognize_file(id, &config, &path, &vocabulary)?;
+                            let text = recognize_file_with_cancel(
+                                id,
+                                &config,
+                                &path,
+                                &vocabulary,
+                                &cancellation,
+                            )?;
                             Ok((samples * 1000 / 16000, text))
                         })();
                         let _ = sender.send(Background::Replay { id, result });

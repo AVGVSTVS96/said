@@ -27,6 +27,7 @@ pub enum Request {
         Sender<std::result::Result<HostSnapshot, String>>,
     ),
     Audio(UtteranceId, Sender<std::result::Result<PathBuf, String>>),
+    CloseInteractive,
     Shutdown,
 }
 #[derive(Clone)]
@@ -96,6 +97,9 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
             let mut overlay_until: Option<Instant> = None;
             let mut overlay_id = None;
             let mut overlay_terminal = false;
+            let mut interactive_id = None;
+            let mut interactive_closed = false;
+            let mut tray_label = String::new();
             loop {
                 let mut changed = host.poll()?;
                 for hotkey in host.platform.hotkeys().try_iter() {
@@ -148,9 +152,15 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                             .map_err(|e| e.to_string());
                         let _ = response.send(result);
                     }
+                    Ok(Request::CloseInteractive) => {
+                        interactive_closed = true;
+                        changed = true;
+                    }
                     Ok(Request::Shutdown)
                     | Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                        host.event(SessionEvent::SessionUnavailable {reason:"App closing".into()})?;
+                        host.event(SessionEvent::SessionUnavailable {
+                            reason: "App closing".into(),
+                        })?;
                         host.stop()?;
                         app.exit(0);
                         break;
@@ -167,7 +177,52 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                     overlay_until = None;
                 }
                 if changed {
+                    if interactive_closed {
+                        let ids: Vec<_> = host
+                            .session
+                            .views()
+                            .filter(|view| {
+                                view.mode == Mode::Interactive
+                                    && !matches!(
+                                        view.phase,
+                                        Phase::Recording
+                                            | Phase::Finishing
+                                            | Phase::Saving
+                                            | Phase::Pasting
+                                    )
+                            })
+                            .map(|view| view.id)
+                            .collect();
+                        for id in ids {
+                            host.session.dismiss(id);
+                        }
+                    }
                     let snapshot = host.snapshot()?;
+                    let label = if let Some(reason) = &snapshot.host.unavailable {
+                        format!("{} — {reason}", env!("PRODUCT_NAME"))
+                    } else if snapshot
+                        .host
+                        .permissions
+                        .values()
+                        .any(|status| status != "authorized")
+                    {
+                        format!("{} — Grant permissions in Setup", env!("PRODUCT_NAME"))
+                    } else if snapshot.host.download.state != "ready" {
+                        format!(
+                            "{} — Model {}",
+                            env!("PRODUCT_NAME"),
+                            snapshot.host.download.state
+                        )
+                    } else {
+                        env!("PRODUCT_NAME").into()
+                    };
+                    if label != tray_label {
+                        if let Some(tray) = app.tray_by_id("main") {
+                            let _ = tray.set_tooltip(Some(&label));
+                        }
+                        tray_label = label;
+                    }
+
                     subscribers.retain(|channel: &Channel<HostSnapshot>| {
                         channel.send(snapshot.clone()).is_ok()
                     });
@@ -179,12 +234,16 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                         && snapshot.host.scratch != Some(view.id)
                     {
                         if view.mode == Mode::Interactive {
-                            if let Some(window) = app
-                                .get_webview_window("interactive")
-                                .map(|view| view.as_ref().window().clone())
-                            {
-                                let _ = window.show();
-                                let _ = window.set_focus();
+                            if let Some(window) = app.get_webview_window("overlay") {
+                                let _ = window.hide();
+                            }
+                            if view.phase == Phase::Recording && interactive_id != Some(view.id) {
+                                interactive_id = Some(view.id);
+                                interactive_closed = false;
+                                if let Some(window) = app.get_webview_window("interactive") {
+                                    let _ = window.show();
+                                    let _ = window.set_focus();
+                                }
                             }
                         } else if let Some(window) = app
                             .get_webview_window("overlay")

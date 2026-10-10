@@ -57,7 +57,8 @@
     "security": {
       "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; media-src 'self' voice-audio: http://voice-audio.localhost blob:"
     },
-    "macOSPrivateApi": true
+    "macOSPrivateApi": true,
+    "enableGTKAppId": true
   },
   "bundle": {
     "active": false,

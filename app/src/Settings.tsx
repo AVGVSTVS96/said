@@ -16,6 +16,7 @@ export function Settings({
   const value = draft ?? settings;
   const [vocabulary, setVocabulary] = useState(host?.vocabulary_text ?? "");
   const [before, setBefore] = useState("");
+  const [appId, setAppId] = useState("");
   return (
     <section>
       <header className="page-heading">
@@ -140,6 +141,10 @@ export function Settings({
                 </label>
               </div>
             ))}
+            <div className="button-group">
+              <label className="field-label">App ID<input value={appId} onChange={event => setAppId(event.target.value)} placeholder="App identifier" /></label>
+              <button disabled={!host || !appId.trim() || Boolean(value.apps[appId.trim()])} onClick={() => { setDraft({ ...value, apps: { ...value.apps, [appId.trim()]: { paste: host && "accessibility" in host.permissions ? "cmd+v" : "ctrl+v", send: false } } }); setAppId(""); }}>Add app rule</button>
+            </div>
             {Object.keys(value.apps).length === 0 ? (
               <p>No per-app overrides. Auto-send is off.</p>
             ) : null}
@@ -152,7 +157,7 @@ export function Settings({
                 <small>{host ? `${(host.disk_bytes / 1048576).toFixed(1)} MiB on disk` : "Storage appears after connection."}</small>
               </span>
               <label>Delete recordings before<input type="date" value={before} onChange={event => setBefore(event.target.value)} /></label>
-              <button className="danger" disabled={!host || !before} onClick={() => void send({ type: "history_retention", before: new Date(before).getTime() }).catch(() => {})}>Delete older recordings</button>
+              <button className="danger" disabled={!host || !before} onClick={() => void send({ type: "history_retention", before: new Date(`${before}T00:00:00`).getTime() }).catch(() => {})}>Delete older recordings</button>
             </div>
           </div>
           <footer className="settings-footer">

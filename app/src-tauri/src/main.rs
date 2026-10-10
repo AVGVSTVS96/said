@@ -32,7 +32,28 @@ fn main() {
 }
 fn run() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--worker")
+        && args.iter().any(|arg| {
+            matches!(
+                arg.as_str(),
+                "--model-cache" | "--model-manifest" | "--trace"
+            )
+        })
+    {
+        return voice_bench::cli(&args);
+    }
     let paths = Paths::discover()?;
+    if args.first().map(String::as_str) == Some("bench") {
+        let mut args = args;
+        if !args.iter().any(|arg| arg == "--model-cache") {
+            args.extend([
+                "--model-cache".into(),
+                paths.models.to_string_lossy().into(),
+            ]);
+        }
+        return voice_bench::cli(&args);
+    }
+
     if args.first().map(String::as_str) == Some("--worker") {
         let models = option(&args, "--models").unwrap_or(paths.models);
         return worker_main(
@@ -202,7 +223,7 @@ fn run() -> Result<()> {
                     .map(|item| item as &dyn tauri::menu::IsMenuItem<_>)
                     .collect::<Vec<_>>(),
             )?;
-            TrayIconBuilder::new()
+            TrayIconBuilder::with_id("main")
                 .icon(
                     app.default_window_icon()
                         .ok_or("missing tray icon")?
@@ -217,7 +238,7 @@ fn run() -> Result<()> {
                             .state::<ipc::Connection>()
                             .0
                             .send(ipc::Request::Shutdown);
-                        } else if id == "interactive" {
+                    } else if id == "interactive" {
                         let (reply, _) = crossbeam_channel::bounded(1);
                         let _ = app.state::<ipc::Connection>().0.send(ipc::Request::Action(
                             voice_core::HostAction::Start {
@@ -242,6 +263,13 @@ fn run() -> Result<()> {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
+                if window.label() == "interactive" {
+                    let _ = window
+                        .app_handle()
+                        .state::<ipc::Connection>()
+                        .0
+                        .send(ipc::Request::CloseInteractive);
+                }
                 let _ = window.hide();
             }
         })

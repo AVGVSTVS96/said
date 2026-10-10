@@ -1,5 +1,6 @@
 # Host
 
+`custom-protocol` embeds the built frontend for a standalone app; build `app/dist` first.
 The `voice` binary dispatches `--worker` before initializing Tauri. The host opens owner-only
 storage and a single-process data lock, verifies/downloads the selected model and pinned native
 runtime into `data/models`, warms the worker, and recovers pending recordings without pasting.
@@ -35,7 +36,9 @@ actions. Microphone usage text is in `Info.plist`.
 Settings, microphone, vocabulary and app-rule saves persist to the existing plain files. History
 search uses SQLite FTS, retry creates a fresh row sharing the WAV, and delete/retention use core's
 reference-aware deletion. Setup scratch recordings have no target and suppress clipboard effects,
-including worker replay. Notifications and local/vocabulary/auto-send indicators come from host state.
+including worker replay. History Insert returns to the last external target when the app owns focus.
+Interactive windows activate once per recording; closing them releases completed core views.
+Notifications and local/vocabulary/auto-send indicators come from host state.
 
 ## CLI
 
@@ -51,6 +54,7 @@ voice insert-last
 voice cancel
 voice status
 voice history search 'no AND file'
+voice bench bench/clips.jsonl --model-cache "$HOME/.cache/voice-models"
 voice import-vocabulary codex [dictionary.json]
 voice import-vocabulary wispr /path/to/flow.sqlite
 ```
@@ -67,14 +71,19 @@ Build with `CARGO_BUILD_JOBS=2`. No headless checks acquire a microphone or a ph
 Synthetic clips and large model/runtime files stay outside git.
 
 ```sh
-CARGO_BUILD_JOBS=2 cargo build -p voice-app --bin voice
+CARGO_BUILD_JOBS=2 cargo build -p voice-app --features custom-protocol --bin voice
 CARGO_BUILD_JOBS=2 cargo clippy -p voice-app --all-targets -- -D warnings
+CARGO_BUILD_JOBS=2 cargo test -p voice-app --test end_to_end
 CARGO_BUILD_JOBS=2 cargo test -p voice-app --test end_to_end -- --ignored --nocapture
 ```
 
+The default proof uses a scripted same-binary worker and a disk-backed synthetic recorder. It
+queues final frames during stop, immediately starts another utterance, verifies both complete WAVs
+and ordered exact-byte delivery. Stop drains the old receiver before a new capture replaces it.
+
 The ignored proof needs the engine's hash-verified cache and public synthetic `engine-proof` WAVs.
 It compares a direct Moonshine adapter at the recorder's 20 ms cadence with the same-binary worker,
-durable reopened history and the exact bytes received by fake paste. Fake paste independently
+durable reopened history, bounded playback ranges and the exact bytes received by fake paste. Fake paste independently
 opens SQLite read-only at the instant of delivery and rejects text without an exact durable save.
 Negation, self-repair, repeated words across pauses and silence are exercised. This proves byte
 preservation, not acoustic correctness or an engine ranking.
@@ -94,6 +103,7 @@ Ghostty scratch editor, checks exact terminal bytes and no stray Enter, and sear
 history over the control socket. Keep the test runtime path short enough for Unix sockets.
 
 The worker's 60/10/30-second startup/audio/final deadlines are diagnostic limits inherited from the
-engine probe. `bench/RESULTS.md` must provide measured release budgets before shipping. macOS
+engine probe. `bench/RESULTS.md` reports failed full-suite/quality gates and supplies no release watchdog recommendation.
+Release defaults and budgets remain uncertified. macOS
 verification is check/build only; the platform's signed test-account manual checklist remains
 separate and is not marked passed by a successful compilation.

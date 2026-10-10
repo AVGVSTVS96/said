@@ -1,8 +1,9 @@
 use crossbeam_channel::{Receiver, bounded};
+use std::collections::BTreeMap;
 use voice_core::{Result, SessionEvent};
 use zbus::{
     blocking::{Connection, Proxy},
-    zvariant::OwnedObjectPath,
+    zvariant::{OwnedObjectPath, OwnedValue},
 };
 
 pub struct Login {
@@ -33,15 +34,48 @@ impl Login {
             "org.freedesktop.DBus.Properties",
         )?;
         let signals = properties.receive_signal("PropertiesChanged")?;
-        let initial_active = active(&connection, path.clone())?;
+        let session = Proxy::new(
+            &connection,
+            "org.freedesktop.login1",
+            path,
+            "org.freedesktop.login1.Session",
+        )?;
+        let mut active = session.get_property::<bool>("Active")?;
+        let mut locked = session.get_property::<bool>("LockedHint")?;
+        let initial_active = active && !locked;
         let (sender, events) = bounded(64);
         sender.send(event(initial_active))?;
-        let worker_connection = connection.clone();
         std::thread::spawn(move || {
-            for _ in signals {
-                let current = active(&worker_connection, path.clone()).unwrap_or(false);
-                if sender.send(event(current)).is_err() {
-                    return;
+            let mut previous = initial_active;
+            for signal in signals {
+                let properties: std::result::Result<
+                    (String, BTreeMap<String, OwnedValue>, Vec<String>),
+                    _,
+                > = signal.body().deserialize();
+                let Ok((interface, mut changed, invalidated)) = properties else {
+                    break;
+                };
+                if interface != "org.freedesktop.login1.Session" {
+                    continue;
+                }
+                if invalidated
+                    .iter()
+                    .any(|name| matches!(name.as_str(), "Active" | "LockedHint"))
+                {
+                    break;
+                }
+                if let Some(value) = changed.remove("Active") {
+                    active = bool::try_from(value).unwrap_or(false);
+                }
+                if let Some(value) = changed.remove("LockedHint") {
+                    locked = bool::try_from(value).unwrap_or(true);
+                }
+                let current = active && !locked;
+                if current != previous {
+                    if sender.send(event(current)).is_err() {
+                        return;
+                    }
+                    previous = current;
                 }
             }
             let _ = sender.send(event(false));
@@ -66,15 +100,6 @@ impl Drop for Login {
     fn drop(&mut self) {
         let _ = self.connection.clone().close();
     }
-}
-fn active(connection: &Connection, path: OwnedObjectPath) -> Result<bool> {
-    let proxy = Proxy::new(
-        connection,
-        "org.freedesktop.login1",
-        path,
-        "org.freedesktop.login1.Session",
-    )?;
-    Ok(proxy.get_property::<bool>("Active")? && !proxy.get_property::<bool>("LockedHint")?)
 }
 fn event(active: bool) -> SessionEvent {
     if active {

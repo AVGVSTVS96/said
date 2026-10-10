@@ -20,6 +20,8 @@ conversion returns an error: leave the overlay hidden. Consume `overlay_errors()
 because the shared `make_overlay` signature cannot return errors. Panel creation,
 positioning, content, fade and reduced-motion handling remain host/UI effects.
 
+`set_shortcut` replaces the input listener while retaining desktop window identities. The host
+uses it for settings changes so an open interactive review can still refocus its original window.
 Consume one `hotkeys()` receiver. Feed each event to
 `Session::hotkey(event, context, monotonic_ms, true)`: the adapter supplies real
 Down/Up, ignores repeats and pairs swallowed key releases, even when modifiers

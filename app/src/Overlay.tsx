@@ -54,7 +54,7 @@ export function Overlay({
         ) : (
           <p className="overlay-empty">
             {source.connected
-              ? "Ready for dictation"
+              ? (source.getSnapshot().host?.unavailable ?? "Ready for dictation")
               : "Waiting for core connection"}
           </p>
         )}
