@@ -65,7 +65,7 @@ fn run() -> Result<()> {
         let data = option(&args, "--data").ok_or("--replay needs an isolated --data directory")?;
         let mut paths = Paths::new(data.clone(), data.join("config"));
         paths.models = option(&args, "--models").ok_or("--replay needs --models")?;
-        let recorder = voice_audio::ReplayRecorder::new(wav, paths.data.join("audio"));
+        let recorder = voice_app::proof::replay_recorder(std::path::Path::new(wav), &paths.data)?;
         let platform = voice_platform::fake::FakePlatform::new(Some(Target {
             app_id: "scratch".into(),
             window_id: "synthetic".into(),
@@ -100,6 +100,20 @@ fn run() -> Result<()> {
                     println!("{}", serde_json::json!({"utterance":row,"paste":pasted}));
                     return Ok(());
                 }
+                if row.status == Some(voice_core::UtteranceStatus::Failed)
+                    && !host.session.views().any(|view| {
+                        matches!(
+                            view.phase,
+                            voice_core::Phase::Recording
+                                | voice_core::Phase::Finishing
+                                | voice_core::Phase::Saving
+                        )
+                    })
+                {
+                    return Err(
+                        format!("host replay failed: {:?}", host.state.notifications).into(),
+                    );
+                }
                 if row.status == Some(voice_core::UtteranceStatus::Empty) {
                     println!("{}", serde_json::json!({"utterance":row,"paste":[]}));
                     return Ok(());
@@ -113,11 +127,12 @@ fn run() -> Result<()> {
     }
     if !args.is_empty() {
         if args[0] == "import-vocabulary" {
-            return voice_app::cli::import_vocabulary(
-                &paths,
-                args.get(1).ok_or("specify wispr or codex")?,
-                &PathBuf::from(args.get(2).ok_or("provide the source dictionary path")?),
-            );
+            let source = args.get(1).ok_or("specify wispr or codex")?;
+            let path = match args.get(2) {
+                Some(path) => PathBuf::from(path),
+                None => voice_app::cli::vocabulary_source(source)?,
+            };
+            return voice_app::cli::import_vocabulary(&paths, source, &path);
         }
         #[cfg(target_os = "linux")]
         {
@@ -202,17 +217,25 @@ fn run() -> Result<()> {
                             .state::<ipc::Connection>()
                             .0
                             .send(ipc::Request::Shutdown);
-                        app.exit(0);
+                        } else if id == "interactive" {
+                        let (reply, _) = crossbeam_channel::bounded(1);
+                        let _ = app.state::<ipc::Connection>().0.send(ipc::Request::Action(
+                            voice_core::HostAction::Start {
+                                mode: Mode::Interactive,
+                                scratch: false,
+                            },
+                            reply,
+                        ));
                     } else if let Some(window) = app.get_webview_window(id) {
                         let _ = window.show();
                         let _ = window.set_focus();
                     }
                 })
                 .build(app)?;
-            if paths.config.join("setup-complete").is_file() {
-                if let Some(window) = app.get_webview_window("setup") {
-                    window.hide()?;
-                }
+            if paths.config.join("setup-complete").is_file()
+                && let Some(window) = app.get_webview_window("setup")
+            {
+                window.hide()?;
             }
             Ok(())
         })

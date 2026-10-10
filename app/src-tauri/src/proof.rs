@@ -106,6 +106,10 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
     {
         return Err("proof requires the isolated nested Niri harness".into());
     }
+    let mut keyboard = voice_platform::linux::keyboard::VirtualKeyboard::connect(
+        &runtime,
+        &std::env::var_os("VOICE_TEST_PARENT_DISPLAY").ok_or("parent display missing")?,
+    )?;
     let mut config = Config::from_environment(env!("PRODUCT_STORAGE_KEY"))?;
     config.read_input = false;
     config.portal_trigger = None;
@@ -139,7 +143,7 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
     let data = root.join("app-proof");
     let mut paths = Paths::new(data.clone(), data.join("config"));
     paths.models = models.into();
-    let recorder = voice_audio::ReplayRecorder::new(wav, paths.data.join("audio"));
+    let recorder = replay_recorder(std::path::Path::new(wav), &paths.data)?;
     let mut host = Host::open(NestedPlatform { native, changes }, recorder, paths)?;
     host.set_client(voice_engine::host::WorkerClient::warm(worker_config(
         models,
@@ -147,12 +151,10 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
     )?)?);
     host.poll()?;
     let controls = host.platform.native.control_requests();
-    let mut keyboard = voice_platform::linux::keyboard::VirtualKeyboard::connect(
-        &runtime,
-        &std::env::var_os("VOICE_TEST_PARENT_DISPLAY").ok_or("parent display missing")?,
-    )?;
     keyboard.physical_chord(&[29, 56, 57])?;
-    let request = controls.recv_timeout(Duration::from_secs(5))?;
+    let request = controls
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|error| format!("waiting for Niri bind to app socket: {error}"))?;
     if request.command != ControlCommand::Hotkey {
         return Err("Niri bind did not reach the app CLI".into());
     }
@@ -161,10 +163,10 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(120);
     let row = loop {
         host.poll()?;
-        if let Some(row) = host.history.last()? {
-            if row.pasted_at.is_some() {
-                break row;
-            }
+        if let Some(row) = host.history.last()?
+            && row.pasted_at.is_some()
+        {
+            break row;
         }
         if Instant::now() >= deadline {
             return Err("nested host recognition/paste timed out".into());
@@ -210,4 +212,19 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
     );
     println!("PASS persistent history search over the owner-only control socket");
     Ok(())
+}
+
+pub fn replay_recorder(
+    input: &std::path::Path,
+    data: &std::path::Path,
+) -> Result<voice_audio::ReplayRecorder> {
+    crate::storage::private_dir(data)?;
+    let source = data.join("replay-source.wav");
+    let mut input = voice_engine::wav::Wav::open(input)?;
+    let mut writer = voice_audio::wav::WavWriter::create(&source)?;
+    while let Some(samples) = input.read()? {
+        writer.append(&samples)?;
+    }
+    writer.finish()?;
+    Ok(voice_audio::ReplayRecorder::new(source, data.join("audio")))
 }

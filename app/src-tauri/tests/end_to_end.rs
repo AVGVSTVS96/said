@@ -23,7 +23,9 @@ fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
         recognizer.start(&[]).unwrap();
         let mut wav = Wav::open(&input).unwrap();
         while let Some(samples) = wav.read().unwrap() {
-            recognizer.feed(&samples);
+            for frame in samples.chunks(320) {
+                recognizer.feed(frame);
+            }
         }
         recognizer.finish();
         let mut expected = String::new();

@@ -198,6 +198,21 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
     pub fn set_client(&mut self, client: WorkerClient) {
         self.client = Some(client);
         self.state.download.state = "ready".into();
+        if let Ok(manifest) = Manifest::bundled()
+            && let Some(model) = manifest.models.get(&self.settings.engine)
+        {
+            let size = model
+                .files
+                .keys()
+                .filter_map(|name| {
+                    fs::metadata(self.paths.models.join(&model.directory).join(name)).ok()
+                })
+                .map(|file| file.len())
+                .sum();
+            self.state.download.file = self.settings.engine.clone();
+            self.state.download.received = size;
+            self.state.download.total = Some(size);
+        }
     }
     pub fn recover(&mut self) -> Result<()> {
         for utterance in self.history.recover()? {
@@ -235,6 +250,9 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         }
     }
     pub fn start(&mut self, mode: Mode, scratch: bool) -> Result<()> {
+        if let Some(reason) = self.session.unavailable_reason() {
+            return Err(reason.into());
+        }
         if self.client.is_none() {
             return Err("download and load the model before recording".into());
         }
@@ -451,26 +469,46 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         }
         events.extend(self.platform.poll());
         if let Some((id, receiver)) = &self.capture {
-            let audio: Vec<_> = receiver.try_iter().collect();
-            let stopped = audio
-                .iter()
-                .any(|event| matches!(event, AudioEvent::Stopped { .. }));
-            events.extend(audio.into_iter().map(SessionEvent::Audio));
-            if !stopped
-                && matches!(
-                    receiver.try_recv(),
-                    Err(crossbeam_channel::TryRecvError::Disconnected)
-                )
-            {
-                events.push(SessionEvent::CaptureFailed {
-                    id: *id,
-                    message: "Audio stopped without a durable flush; kept in history for retry"
-                        .into(),
-                });
+            let mut stopped = false;
+            loop {
+                match receiver.try_recv() {
+                    Ok(event) => {
+                        stopped |= matches!(event, AudioEvent::Stopped { .. });
+                        events.push(SessionEvent::Audio(event));
+                    }
+                    Err(crossbeam_channel::TryRecvError::Empty) => break,
+                    Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                        if !stopped {
+                            events.push(SessionEvent::CaptureFailed {id:*id,message:"Audio stopped without a durable flush; kept in history for retry".into()});
+                        }
+                        break;
+                    }
+                }
             }
         }
-        for active in self.engines.values() {
-            events.extend(active.events.try_iter().map(SessionEvent::Engine));
+        for (id, active) in &self.engines {
+            let mut terminal = false;
+            loop {
+                match active.events.try_recv() {
+                    Ok(output) => {
+                        terminal |=
+                            matches!(output.event, EngineEvent::Final | EngineEvent::Error(_));
+                        events.push(SessionEvent::Engine(output));
+                    }
+                    Err(crossbeam_channel::TryRecvError::Empty) => break,
+                    Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                        if !terminal {
+                            events.push(SessionEvent::Engine(EngineOutput {
+                                id: *id,
+                                event: EngineEvent::Error(
+                                    "Worker output closed before Final".into(),
+                                ),
+                            }));
+                        }
+                        break;
+                    }
+                }
+            }
         }
         let mut changed = !events.is_empty();
         for event in events {
@@ -482,16 +520,14 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             }
             if let SessionEvent::Audio(AudioEvent::Stopped { id, .. })
             | SessionEvent::CaptureFailed { id, .. } = &event
-            {
-                if self
+                && self
                     .capture
                     .as_ref()
                     .is_some_and(|(current, _)| current == id)
-                {
-                    let _ = self.recorder.stop();
-                    self.capture = None;
-                    self.platform.recording(false);
-                }
+            {
+                let _ = self.recorder.stop();
+                self.capture = None;
+                self.platform.recording(false);
             }
             let done = match &event {
                 SessionEvent::Engine(EngineOutput {
@@ -618,10 +654,9 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                         .capture
                         .as_ref()
                         .is_some_and(|(current, _)| *current == id)
+                        && let Err(error) = self.recorder.stop()
                     {
-                        if let Err(error) = self.recorder.stop() {
-                            self.state.notifications.insert(id, error.to_string());
-                        }
+                        self.state.notifications.insert(id, error.to_string());
                     }
                 }
                 Effect::FeedEngine { id, pcm } => {

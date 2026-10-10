@@ -9,6 +9,7 @@ use voice_platform::linux::{self, LinuxPlatform};
 #[cfg(target_os = "macos")]
 use voice_platform::macos::{self, MacosPlatform};
 
+#[derive(Default)]
 pub struct Desktop {
     #[cfg(target_os = "linux")]
     native: Option<LinuxPlatform>,
@@ -21,20 +22,6 @@ pub struct Desktop {
     error: Option<String>,
     hotkey: String,
     settings: Option<Settings>,
-}
-impl Default for Desktop {
-    fn default() -> Self {
-        Self {
-            native: None,
-            #[cfg(target_os = "linux")]
-            changes: None,
-            #[cfg(target_os = "linux")]
-            login: None,
-            error: None,
-            hotkey: String::new(),
-            settings: None,
-        }
-    }
 }
 impl Desktop {
     #[cfg(target_os = "linux")]
@@ -193,10 +180,10 @@ impl HostPlatform for Desktop {
                 .as_ref()
                 .is_some_and(|native| native.mode() == linux::Mode::NiriToggle)
         {
-            if let Some(settings) = self.settings.clone() {
-                if let Err(error) = self.configure(&settings) {
-                    self.error = Some(error.to_string());
-                }
+            if let Some(settings) = self.settings.clone()
+                && let Err(error) = self.configure(&settings)
+            {
+                self.error = Some(error.to_string());
             }
         } else if let Some(native) = &mut self.native {
             native.set_input_enabled(available);
@@ -369,7 +356,11 @@ fn shortcut(value: &str) -> Result<macos::Shortcut> {
 #[cfg(target_os = "macos")]
 fn configure_overlay(window: &tauri::Window) -> Result<()> {
     let pointer = std::ptr::NonNull::new(window.ns_window()?).ok_or("missing native window")?;
-    unsafe { macos::overlay::configure(pointer) }
+    unsafe {
+        macos::overlay::configure(pointer)?;
+    }
+    crate::permissions::position_overlay(pointer);
+    Ok(())
 }
 pub fn show_overlay(window: &tauri::Window) -> Result<()> {
     #[cfg(target_os = "linux")]
@@ -380,6 +371,7 @@ pub fn show_overlay(window: &tauri::Window) -> Result<()> {
         window.clone().run_on_main_thread(move || {
             if let Ok(pointer) = window.ns_window() {
                 if let Some(pointer) = std::ptr::NonNull::new(pointer) {
+                    crate::permissions::position_overlay(pointer);
                     let _ = unsafe { macos::overlay::show(pointer) };
                 }
             }

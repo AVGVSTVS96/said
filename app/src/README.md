@@ -8,16 +8,12 @@ From `app`, run `bun run dev`, then open `/?demo=1&screen=interactive`. The same
 
 The unedited editor displays committed bytes plus the current provisional tail. Once edited, core owns the editor value in `SessionView.edited`, including an empty string. Edited regions stay intact while untouched provisional text and subsequent chunks stream according to core snapshots. Original shows raw recognition separately. Optimistic drafts survive navigation and failed actions, and hand back to core when the edit is accepted. Enter always adds a newline. Ctrl+Enter or Cmd+Enter requests Insert after recognition completes; composition shortcuts never insert. Cancel recording is available while recording; Discard appears after release. Each explicit insertion waits for the latest edit to reach core. The UI never invokes clipboard, focus, paste or input APIs.
 
-The frozen contracts still need these additions from the integrator:
-
-- Host state subscription/bootstrap and an action dispatch connection in `main.tsx`. Production intentionally does not fabricate state or invent IPC names.
-- Settings save, microphone selection and vocabulary/app-rule updates; an engine manifest with local/cloud provenance and vocabulary capability.
-- Model size/license/download progress; permission state/request actions; platform setup instructions; a scratch-only dictation target and setup completion.
-- Audio playback state/actions or a host-provided audio resource, with optional word timestamps.
-- History query/results, retry/delete/retention actions and disk usage. Current search covers loaded original and edited text. Copy, edit, discard, cancel and insert use existing `UiAction` variants. The host must route stored history IDs through storage: core session actions alone ignore IDs no longer active.
-- Overlay outcome/notification data for disconnect, restart, empty/canceled/error distinctions and cloud/vocabulary/auto-send indicators. Overlay window focus, monitor placement and native dismissal belong to the platform/host.
-
-Unavailable operations are disabled and labeled. Settings/setup forms preview values but do not apply them. Master core/audio changes were merged into this branch; generated types were regenerated from core without hand edits.
+The host integration supplies the formerly missing operations through generated `HostAction` and
+`HostSnapshot` contracts: numbered subscription/bootstrap, ordered action replies, settings and
+vocabulary/app saves, model manifest/progress/license, permissions and platform instructions,
+scratch-only setup, range-based whole-clip audio playback, SQLite FTS search, retry/delete/retention,
+disk usage and overlay notifications/indicators. `main.tsx` uses Tauri Channels and invoke; normal
+browser builds stay disconnected. See `../src-tauri/README.md` for IPC names and acceptance scope.
 
 Checks from `app`:
 
@@ -28,4 +24,4 @@ bun test src/editor.test.ts src/source.test.ts
 bash src/verify-ui.sh http://127.0.0.1:1422 /path/outside/repo/ui-evidence
 ```
 
-The browser check requires a running Vite development server. It uses `bunx agent-browser` in an isolated headless session, exercises editing and keyboard/history behavior, writes fifteen screenshots plus accessibility reports, and closes its browser. Set `AGENT_BROWSER_EXECUTABLE_PATH` for an existing Chromium binary. Inspect every screenshot after running it; capture alone is not visual verification. Audio playback, native focus behavior, permissions, downloads and actual delivery cannot be verified until their host/core contracts exist.
+The browser check requires a running Vite development server. It uses `bunx agent-browser` in an isolated headless session, exercises editing and keyboard/history behavior, writes fifteen screenshots plus accessibility reports, and closes its browser. Set `AGENT_BROWSER_EXECUTABLE_PATH` for an existing Chromium binary. Inspect every screenshot after running it; capture alone is not visual verification. Browser checks cover renderer behavior; native permissions and delivery use the host/platform acceptance checks.

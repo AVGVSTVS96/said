@@ -1,6 +1,10 @@
+#[cfg(target_os = "linux")]
 use crate::runtime::{Host, HostPlatform};
+#[cfg(target_os = "linux")]
 use voice_audio::Recorder;
-use voice_core::{History, Mode, Result};
+use voice_core::Result;
+#[cfg(target_os = "linux")]
+use voice_core::{History, Mode};
 
 #[cfg(target_os = "linux")]
 pub fn control<P: HostPlatform, R: Recorder>(
@@ -38,6 +42,11 @@ pub fn import_vocabulary(
             let value: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
             let dictionary = value
                 .get("dictationDictionary")
+                .or_else(|| {
+                    value
+                        .get("electron-saved-atom-state")
+                        .and_then(|state| state.get("dictationDictionary"))
+                })
                 .ok_or("dictationDictionary is missing")?;
             match dictionary {
                 serde_json::Value::Array(terms) => terms
@@ -77,4 +86,22 @@ pub fn import_vocabulary(
         text.push('\n');
     }
     crate::storage::atomic_write(&file, text.as_bytes())
+}
+
+pub fn vocabulary_source(source: &str) -> Result<std::path::PathBuf> {
+    let home = std::path::PathBuf::from(std::env::var_os("HOME").ok_or("HOME is required")?);
+    match source {
+        "codex" => Ok(home.join(".codex/.codex-global-state.json")),
+        "wispr" => {
+            #[cfg(target_os = "macos")]
+            {
+                Ok(home.join("Library/Application Support/Wispr Flow/flow.sqlite"))
+            }
+            #[cfg(target_os = "linux")]
+            {
+                Err("Wispr is a macOS source; supply the path to its exported database".into())
+            }
+        }
+        _ => Err("source must be wispr or codex".into()),
+    }
 }

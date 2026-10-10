@@ -150,7 +150,9 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                     }
                     Ok(Request::Shutdown)
                     | Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                        host.event(SessionEvent::SessionUnavailable {reason:"App closing".into()})?;
                         host.stop()?;
+                        app.exit(0);
                         break;
                     }
                     Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
@@ -173,43 +175,43 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                         let _ = sender
                             .send(result.map(|_| snapshot.clone()).map_err(|e| e.to_string()));
                     }
-                    if let Some(view) = snapshot.sessions.last() {
-                        if snapshot.host.scratch != Some(view.id) {
-                            if view.mode == Mode::Interactive {
-                                if let Some(window) = app
-                                    .get_webview_window("interactive")
-                                    .map(|view| view.as_ref().window().clone())
-                                {
-                                    let _ = window.show();
-                                }
-                            } else if let Some(window) = app
-                                .get_webview_window("overlay")
+                    if let Some(view) = snapshot.sessions.last()
+                        && snapshot.host.scratch != Some(view.id)
+                    {
+                        if view.mode == Mode::Interactive {
+                            if let Some(window) = app
+                                .get_webview_window("interactive")
                                 .map(|view| view.as_ref().window().clone())
                             {
-                                let terminal = matches!(
-                                    view.phase,
-                                    Phase::Pasted | Phase::Saved | Phase::Failed
-                                );
-                                if overlay_id != Some(view.id) {
-                                    #[cfg(target_os = "linux")]
-                                    host.platform.make_overlay(&window);
-                                    let _ = crate::desktop::show_overlay(&window);
-                                }
-                                if terminal && (!overlay_terminal || overlay_id != Some(view.id)) {
-                                    overlay_until =
-                                        Some(
-                                            Instant::now()
-                                                + Duration::from_secs(
-                                                    if view.phase == Phase::Pasted { 1 } else { 3 },
-                                                ),
-                                        );
-                                }
-                                if !terminal {
-                                    overlay_until = None;
-                                }
-                                overlay_terminal = terminal;
-                                overlay_id = Some(view.id);
+                                let _ = window.show();
+                                let _ = window.set_focus();
                             }
+                        } else if let Some(window) = app
+                            .get_webview_window("overlay")
+                            .map(|view| view.as_ref().window().clone())
+                        {
+                            let terminal =
+                                matches!(view.phase, Phase::Pasted | Phase::Saved | Phase::Failed);
+                            if overlay_id != Some(view.id) {
+                                #[cfg(target_os = "linux")]
+                                host.platform.make_overlay(&window);
+                                let _ = crate::desktop::show_overlay(&window);
+                            }
+                            if terminal && (!overlay_terminal || overlay_id != Some(view.id)) {
+                                overlay_until = Some(
+                                    Instant::now()
+                                        + Duration::from_secs(if view.phase == Phase::Pasted {
+                                            1
+                                        } else {
+                                            3
+                                        }),
+                                );
+                            }
+                            if !terminal {
+                                overlay_until = None;
+                            }
+                            overlay_terminal = terminal;
+                            overlay_id = Some(view.id);
                         }
                     }
                     if let Some(reason) = &snapshot.host.unavailable {
