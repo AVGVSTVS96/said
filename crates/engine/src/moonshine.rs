@@ -3,7 +3,7 @@ use std::path::Path;
 use std::ptr;
 use std::rc::Rc;
 
-use crossbeam_channel::{Receiver, Sender, unbounded};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId};
 
 use crate::{Engine, native::Library};
@@ -195,7 +195,7 @@ impl Moonshine {
         id: UtteranceId,
         model: Rc<MoonshineModel>,
     ) -> (Self, Receiver<EngineOutput>) {
-        let (sender, receiver) = unbounded();
+        let (sender, receiver) = bounded(64);
         (
             Self {
                 model,
