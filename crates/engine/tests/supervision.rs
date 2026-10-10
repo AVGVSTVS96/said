@@ -63,9 +63,9 @@ impl Fixture {
                 "--trace".into(),
                 self.trace.display().to_string(),
             ],
-            startup_timeout: Duration::from_secs(2),
-            audio_timeout: Duration::from_millis(250),
-            finish_timeout: Duration::from_millis(250),
+            startup_timeout: Duration::from_secs(5),
+            audio_timeout: Duration::from_secs(1),
+            finish_timeout: Duration::from_secs(1),
             queue_frames: 8,
         }
     }
@@ -74,8 +74,8 @@ impl Fixture {
         fs::write(&script, format!("#!/bin/sh\nif mkdir '{}' 2>/dev/null; then\n{first}\nfi\nexec '{}' --worker --trace '{}'\n", self.directory.join("once").display(), env!("CARGO_BIN_EXE_voice-engine"), self.trace.display())).unwrap();
         fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
         WorkerConfig {
-            executable: script,
-            args: vec![],
+            executable: PathBuf::from("/bin/sh"),
+            args: vec![script.display().to_string()],
             ..self.config()
         }
     }
@@ -96,30 +96,25 @@ fn same_binary_worker_recognizes_file_without_changing_bytes() {
 }
 
 #[test]
-fn crash_hang_and_bad_framing_restart_and_replay_durable_audio() {
+fn crash_hang_and_bad_framing_restart_with_a_fresh_id_and_the_same_audio() {
     for first in ["exit 17", "exec sleep 10", "printf garbage; exit 0"] {
         let fixture = Fixture::new();
-        let (mut engine, output) = WorkerEngine::new(
-            UtteranceId::random(),
-            fixture.failing_once(first),
-            fixture.wav.clone(),
-        )
-        .unwrap();
+        let config = fixture.failing_once(first);
+        let old = UtteranceId::random();
+        let (mut engine, output) = WorkerEngine::new(old, config.clone()).unwrap();
         engine.start(&[]).unwrap();
         engine.feed(&[0]);
         engine.finish();
-        let mut transcript = String::new();
-        let mut failures = 0;
-        loop {
-            match output.recv_timeout(Duration::from_secs(5)).unwrap().event {
-                EngineEvent::Error(_) => failures += 1,
-                EngineEvent::Committed(chunk) => transcript.push_str(&chunk),
-                EngineEvent::Final => break,
-                _ => {}
-            }
-        }
-        assert_eq!(failures, 1);
-        assert_eq!(transcript, "no no  café\t\n");
+        let error = output.recv_timeout(Duration::from_secs(10)).unwrap();
+        assert_eq!(error.id, old);
+        assert!(matches!(error.event, EngineEvent::Error(_)));
+        assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
+        let new = UtteranceId::random();
+        assert_ne!(old, new);
+        assert_eq!(
+            recognize_file(new, &config, &fixture.wav, &[]).unwrap(),
+            "no no  café\t\n"
+        );
     }
 }
 
@@ -146,47 +141,41 @@ fn hung_final_is_recovered_even_after_finish_was_sent() {
         env!("CARGO_BIN_EXE_voice-engine"),
         fixture.trace.display()
     ));
-    let script = fs::read_to_string(&config.executable).unwrap().replace(
-        &format!(
-            "fi\nexec '{}' --worker --trace '{}'",
-            env!("CARGO_BIN_EXE_voice-engine"),
-            fixture.trace.display()
-        ),
-        &format!(
-            "fi\nexec '{}' --worker --trace '{}'",
-            env!("CARGO_BIN_EXE_voice-engine"),
-            recovered.display()
-        ),
-    );
-    fs::write(&config.executable, script).unwrap();
-    let (mut engine, output) =
-        WorkerEngine::new(UtteranceId::random(), config, fixture.wav.clone()).unwrap();
+    let script = fs::read_to_string(fixture.directory.join("worker.sh"))
+        .unwrap()
+        .replace(
+            &format!(
+                "fi\nexec '{}' --worker --trace '{}'",
+                env!("CARGO_BIN_EXE_voice-engine"),
+                fixture.trace.display()
+            ),
+            &format!(
+                "fi\nexec '{}' --worker --trace '{}'",
+                env!("CARGO_BIN_EXE_voice-engine"),
+                recovered.display()
+            ),
+        );
+    fs::write(fixture.directory.join("worker.sh"), script).unwrap();
+    let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config.clone()).unwrap();
     engine.start(&[]).unwrap();
     engine.feed(&[0]);
     engine.finish();
     assert!(matches!(
-        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
+        output.recv_timeout(Duration::from_secs(10)).unwrap().event,
         EngineEvent::Error(_)
     ));
+    assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
     assert_eq!(
-        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
-        EngineEvent::Committed("tail".into())
-    );
-    assert_eq!(
-        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
-        EngineEvent::Final
+        recognize_file(UtteranceId::random(), &config, &fixture.wav, &[]).unwrap(),
+        "tail"
     );
 }
 
 #[test]
 fn cancellation_stops_a_hung_worker_without_late_usable_events() {
     let fixture = Fixture::new();
-    let (mut engine, output) = WorkerEngine::new(
-        UtteranceId::random(),
-        fixture.failing_once("exec sleep 10"),
-        fixture.wav.clone(),
-    )
-    .unwrap();
+    let (mut engine, output) =
+        WorkerEngine::new(UtteranceId::random(), fixture.failing_once("exec sleep 10")).unwrap();
     engine.start(&[]).unwrap();
     engine.feed(&[0]);
     engine.cancel();
@@ -199,40 +188,7 @@ fn cancellation_stops_a_hung_worker_without_late_usable_events() {
 }
 
 #[test]
-fn recovery_appends_the_uncommitted_suffix_without_deduping_repeats() {
-    let fixture = Fixture::new();
-    fs::write(
-        &fixture.trace,
-        serde_json::to_vec(&Trace {
-            feeds: std::collections::VecDeque::from([
-                vec![EngineEvent::Committed("no ".into())],
-                vec![EngineEvent::Error("synthetic crash".into())],
-            ]),
-            finish: vec![EngineEvent::Committed("no".into()), EngineEvent::Final],
-            ..Trace::default()
-        })
-        .unwrap(),
-    )
-    .unwrap();
-    let (mut engine, output) =
-        WorkerEngine::new(UtteranceId::random(), fixture.config(), fixture.wav.clone()).unwrap();
-    engine.start(&[]).unwrap();
-    engine.feed(&[0]);
-    engine.feed(&[0]);
-    engine.finish();
-    let mut text = String::new();
-    loop {
-        match output.recv_timeout(Duration::from_secs(5)).unwrap().event {
-            EngineEvent::Committed(chunk) => text.push_str(&chunk),
-            EngineEvent::Final => break,
-            _ => {}
-        }
-    }
-    assert_eq!(text, "no no");
-}
-
-#[test]
-fn changed_recovery_prefix_fails_instead_of_rewriting_final_words() {
+fn replay_uses_new_identity_and_never_revises_failed_live_text() {
     let fixture = Fixture::new();
     let initial = fixture.directory.join("initial.json");
     fs::write(
@@ -252,23 +208,27 @@ fn changed_recovery_prefix_fails_instead_of_rewriting_final_words() {
         env!("CARGO_BIN_EXE_voice-engine"),
         initial.display()
     ));
-    let (mut engine, output) =
-        WorkerEngine::new(UtteranceId::random(), config, fixture.wav.clone()).unwrap();
+    let old = UtteranceId::random();
+    let new = UtteranceId::random();
+    let (mut engine, output) = WorkerEngine::new(old, config.clone()).unwrap();
     engine.start(&[]).unwrap();
     engine.feed(&[0]);
     engine.feed(&[0]);
     engine.finish();
-    let events: Vec<_> = output.iter().map(|output| output.event).collect();
-    assert_eq!(events[0], EngineEvent::Committed("old ".into()));
-    assert!(events.iter().any(|event| matches!(event, EngineEvent::Error(message) if message.contains("fresh utterance ID"))));
-    assert!(!events.contains(&EngineEvent::Final));
-    assert_eq!(
-        events
+    let events: Vec<_> = output.iter().collect();
+    assert!(events.iter().all(|output| output.id == old));
+    assert_eq!(events[0].event, EngineEvent::Committed("old ".into()));
+    assert!(
+        !events
             .iter()
-            .filter(|event| matches!(event, EngineEvent::Committed(_)))
-            .count(),
-        1
+            .any(|output| output.event == EngineEvent::Final)
     );
+    assert_ne!(old, new);
+    assert_eq!(
+        recognize_file(new, &config, &fixture.wav, &[]).unwrap(),
+        "no no  café\t\n"
+    );
+    assert!(fixture.wav.exists());
 }
 
 #[test]
@@ -294,9 +254,7 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
     })
     .unwrap();
     for _ in 0..2 {
-        let (mut engine, output) = client
-            .engine(UtteranceId::random(), fixture.wav.clone())
-            .unwrap();
+        let (mut engine, output) = client.engine(UtteranceId::random()).unwrap();
         engine.start(&[]).unwrap();
         engine.feed(&[0]);
         engine.finish();

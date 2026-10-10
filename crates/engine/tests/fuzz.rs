@@ -1,7 +1,7 @@
 use std::io::{self, Read};
 
-use voice_core::{UtteranceId, WorkerRequest};
-use voice_engine::protocol::{read_request, read_response, write_request};
+use voice_core::{EngineEvent, UtteranceId, WorkerRequest, WorkerResponse};
+use voice_engine::protocol::{read_request, read_response, write_request, write_response};
 
 struct Fragments<'a>(&'a [u8]);
 impl Read for Fragments<'_> {
@@ -22,7 +22,7 @@ fn mutation_fuzzing_request_and_response_decoders() {
         state ^= state << 17;
         state
     };
-    let id = UtteranceId::random();
+    let id: UtteranceId = serde_json::from_str("\"00000000-0000-4000-8000-000000000001\"").unwrap();
     let mut corpus = vec![vec![], vec![255; 4], br#"\x00{"type":"bogus"}"#.to_vec()];
     for message in [
         WorkerRequest::Start {
@@ -40,6 +40,29 @@ fn mutation_fuzzing_request_and_response_decoders() {
             matches!(message, WorkerRequest::Audio { .. }).then_some(&[i16::MIN, 0, i16::MAX][..]),
         )
         .unwrap();
+        corpus.push(bytes);
+    }
+    for response in [
+        WorkerResponse::Event {
+            id,
+            event: EngineEvent::Partial("  café\tno no".into()),
+        },
+        WorkerResponse::Event {
+            id,
+            event: EngineEvent::Committed("no no\n".into()),
+        },
+        WorkerResponse::Event {
+            id,
+            event: EngineEvent::Final,
+        },
+        WorkerResponse::Event {
+            id,
+            event: EngineEvent::Error("synthetic".into()),
+        },
+        WorkerResponse::AudioAck { id, sequence: 0 },
+    ] {
+        let mut bytes = vec![];
+        write_response(&mut bytes, &response).unwrap();
         corpus.push(bytes);
     }
     for _ in 0..50_000 {

@@ -125,10 +125,16 @@ impl MoonshineModel {
         }
         let api = Api::open(library)?;
         let path = CString::new(model.as_os_str().as_bytes())?;
-        let options = [OptionValue {
-            name: c"ort_providers".as_ptr(),
-            value: c"CPU".as_ptr(),
-        }];
+        let options = [
+            OptionValue {
+                name: c"ort_providers".as_ptr(),
+                value: c"CPU".as_ptr(),
+            },
+            OptionValue {
+                name: c"return_audio_data".as_ptr(),
+                value: c"false".as_ptr(),
+            },
+        ];
         let transcriber = api.check(unsafe {
             (api.load)(
                 path.as_ptr(),

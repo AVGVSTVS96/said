@@ -84,12 +84,8 @@ impl WorkerClient {
         })
     }
 
-    pub fn engine(
-        &self,
-        id: UtteranceId,
-        audio_path: PathBuf,
-    ) -> Result<(WorkerEngine, Receiver<EngineOutput>)> {
-        WorkerEngine::launch(id, self.config.clone(), audio_path, Some(self.idle.clone()))
+    pub fn engine(&self, id: UtteranceId) -> Result<(WorkerEngine, Receiver<EngineOutput>)> {
+        WorkerEngine::launch(id, self.config.clone(), Some(self.idle.clone()))
     }
 }
 
@@ -103,18 +99,13 @@ pub struct WorkerEngine {
 }
 
 impl WorkerEngine {
-    pub fn new(
-        id: UtteranceId,
-        config: WorkerConfig,
-        audio_path: PathBuf,
-    ) -> Result<(Self, Receiver<EngineOutput>)> {
-        Self::launch(id, config, audio_path, None)
+    pub fn new(id: UtteranceId, config: WorkerConfig) -> Result<(Self, Receiver<EngineOutput>)> {
+        Self::launch(id, config, None)
     }
 
     fn launch(
         id: UtteranceId,
         config: WorkerConfig,
-        audio_path: PathBuf,
         idle: Option<IdleWorker>,
     ) -> Result<(Self, Receiver<EngineOutput>)> {
         config.validate()?;
@@ -130,7 +121,6 @@ impl WorkerEngine {
                 supervise(
                     id,
                     config,
-                    audio_path,
                     requests,
                     failures,
                     events,
@@ -264,7 +254,6 @@ fn emit(events: &Sender<EngineOutput>, id: UtteranceId, event: EngineEvent) -> b
 fn supervise(
     id: UtteranceId,
     config: WorkerConfig,
-    audio_path: PathBuf,
     requests: Receiver<Input>,
     failures: Receiver<()>,
     events: Sender<EngineOutput>,
@@ -290,9 +279,7 @@ fn supervise(
         });
     let mut pending = VecDeque::new();
     let mut sequence = 0;
-    let mut committed = String::new();
     let mut finishing = None;
-    let mut first_audio = true;
     let mut loaded = false;
     loop {
         if cancelled.load(Ordering::Acquire) {
@@ -305,44 +292,6 @@ fn supervise(
                 EngineEvent::Error(format!("Recognizer interrupted: {error}")),
             ) {
                 return;
-            }
-            if finishing.is_none() {
-                loop {
-                    select! {
-                        recv(cancellation) -> _ => return,
-                        recv(requests) -> request => match request {
-                            Ok(Input::Audio(_)) => {},
-                            Ok(Input::Finish) => break,
-                            _ => return,
-                        }
-                    }
-                }
-            }
-            let recovered = replay(id, &config, &audio_path, &vocabulary, Some(&cancellation));
-            if cancelled.load(Ordering::Acquire) {
-                return;
-            }
-            match recovered {
-                Ok(text) => match text.strip_prefix(&committed) {
-                    Some(tail) => {
-                        if !tail.is_empty()
-                            && !emit(&events, id, EngineEvent::Committed(tail.into()))
-                        {
-                            return;
-                        }
-                        emit(&events, id, EngineEvent::Final);
-                    }
-                    None => {
-                        emit(&events, id, EngineEvent::Error("Recovered transcript differs from committed text; retry with a fresh utterance ID".into()));
-                    }
-                },
-                Err(error) => {
-                    emit(
-                        &events,
-                        id,
-                        EngineEvent::Error(format!("Recognition recovery failed: {error}")),
-                    );
-                }
             }
             return;
         }
@@ -365,13 +314,12 @@ fn supervise(
             recv(requests) -> input => match input {
                 Ok(Input::Audio(pcm)) => {
                     let timeout = if !loaded { config.startup_timeout } else { config.audio_timeout };
-                    first_audio = false;
                     pending.push_back((sequence, Instant::now() + timeout));
                     if let Err(error) = worker.send(WorkerRequest::Audio { id, sequence }, Some(pcm)) { transport = Err(error); }
                     sequence += 1;
                 }
                 Ok(Input::Finish) => {
-                    finishing = Some(Instant::now() + if first_audio { config.startup_timeout } else { config.finish_timeout });
+                    finishing = Some(Instant::now() + if !loaded { config.startup_timeout } else { config.finish_timeout });
                     if let Err(error) = worker.send(WorkerRequest::Finish { id }, None) { transport = Err(error); }
                 }
                 Err(_) => { return; }
@@ -382,12 +330,14 @@ fn supervise(
                     loaded = true;
                     if current != id || pending.pop_front().map(|(sequence, _)| sequence) != Some(ack) {
                         transport = Err("worker acknowledgment mismatch".into());
+                    } else if pending.is_empty() && finishing.is_some() {
+                        finishing = Some(Instant::now() + config.finish_timeout);
                     }
                 }
                 Ok(Ok(WorkerResponse::Event { id: current, event })) => {
                     if current != id { transport = Err("worker event identity mismatch".into()); continue; }
                     match &event {
-                        EngineEvent::Committed(text) => committed.push_str(text),
+
                         EngineEvent::Error(error) => { transport = Err(error.clone().into()); continue; }
                         EngineEvent::Final => {
                             if finishing.is_none() || !pending.is_empty() { transport = Err("worker Final before all audio was acknowledged".into()); continue; }

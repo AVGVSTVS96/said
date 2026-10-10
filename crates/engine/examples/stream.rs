@@ -23,7 +23,7 @@ fn main() -> Result<()> {
         queue_frames: 256,
     };
     let client = WorkerClient::warm(config)?;
-    let (mut engine, events) = client.engine(UtteranceId::random(), PathBuf::from(&args[1]))?;
+    let (mut engine, events) = client.engine(UtteranceId::random())?;
     let began = Instant::now();
     let receiver = thread::spawn(move || {
         let mut text = String::new();

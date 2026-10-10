@@ -2,7 +2,7 @@
 
 The app calls `manifest::worker_main` before desktop initialization for its
 `--worker` mode. The host warms a `WorkerClient` during setup, then calls
-`client.engine(id, wav_path)`
+`client.engine(id)`
 and consumes its receiver while invoking the existing `Engine` trait. The
 `voice-engine` probe demonstrates both sides in the same executable; it is not
 an additional process shipped alongside the app. App and bench use the same
@@ -18,7 +18,8 @@ the checked-in one. Small on Linux and Medium on macOS remain provisional.
 
 Moonshine Voice 0.1.5's C ABI uses native ONNX Runtime on both platforms.
 CPU is upstream's recommended default, including Apple Silicon; CoreML is not
-required. The Linux release contains self-contained shared libraries. On macOS
+required. `return_audio_data=false` releases completed segment audio; the
+recorder already owns the durable WAV. The Linux release contains self-contained shared libraries. On macOS
 we extract only the two native dylibs from the official arm64 wheel: no Python
 interpreter, package imports or Python subprocess runs in the app.
 
@@ -53,14 +54,15 @@ individual terms are rejected because upstream's keyterm interface uses commas.
 Host request, transport and event queues are bounded. PCM is sent in blocks of
 at most 1,600 samples. Audio acknowledgments must match the utterance and next
 sequence. Malformed output, native exit, queue overflow or a missed deadline
-kills the worker. Capture continues separately on disk. On Finish, one fresh
-worker replays the repaired, closed 16 kHz mono i16 WAV in bounded chunks.
-Cancellation kills the child and suppresses recovery output.
-
-Recovery may append only a byte-identical uncommitted suffix. A changed
-committed prefix emits an error and no Final. The executor must recognize the
-file with a fresh utterance ID using `recognize_file` to save a complete retry;
-it must never replace final words within the old live transcript.
+kills the worker and emits Error without Final for that identity. Capture
+continues separately on disk. Core allocates a fresh UUID and a new pending row
+with the original `audio_id`, then requests file recognition after capture stops.
+`recognize_file(new_id, config, wav_path, vocabulary)` starts a fresh worker,
+replays the same repaired, closed 16 kHz mono i16 WAV in bounded chunks, and
+returns its full raw text. It never appends replay text to the interrupted ID.
+The executor sends file duration as AudioEvent::Stopped before the replay's
+Committed/Final events. Cancellation kills the live child and emits no usable
+late transcript. A failed replay returns an error; it never loops.
 
 `WorkerConfig` takes startup, acknowledgment and finish deadlines from the
 benchmark caller. Startup is distinct from warm inference. The probe's generous
@@ -70,10 +72,9 @@ blocks (less than 1 MiB of PCM per queue). `WorkerClient` retains its model and 
 before capture. A concurrent utterance can use a second isolated worker.
 `WorkerEngine::new` is also available for an independent cold worker.
 
-The executor must treat the first `Recognizer interrupted` error as a recovery
-notice and keep receiving until Final, a recovery failure, cancellation or
-receiver closure. The existing shared event contract has no distinct restart
-notice. Do not stop capture or paste the provisional tail on this notice.
+The executor forwards worker Error to core. Core's AllocateReplay/ReplayReady
+and RecognizeFile effects own retry identity and durable-row ordering. No new
+shared engine event or wire message is needed.
 
 ## Verification
 
@@ -86,7 +87,7 @@ cargo fmt -p voice-engine --check
 The suite includes 50,000 deterministic mutated protocol inputs with fragmented
 reads; framing limits/truncation; lifecycle/identity/sequence validation; literal
 fake traces; crashes, hangs and malformed stdout; cancellation; and recovery
-prefix conflicts. It adds no runtime dependency or test-only dependency.
+fresh replay identity and isolation from failed live text. It adds no runtime dependency or test-only dependency.
 
 Generate the public synthetic clips on macOS, then copy only these WAVs to the
 same cache location on Linux. No microphone recording or private audio is used.
@@ -101,6 +102,8 @@ cargo run -p voice-engine --example stream -- target/debug/voice-engine \
 ```
 
 Golden verification compares direct adapter and same-binary worker results byte
-for byte on three synthetic speech clips and silence. It checks one terminal
+for byte on three synthetic speech clips, silence, and two repeat clips separated by a
+pause. The last clip must produce multiple committed chunks and retain all six
+spoken occurrences of "go". It checks one terminal
 Final and no post-Final events, and silence must produce no text. These are
 adapter-integrity checks, not a fidelity ranking or the full public CI corpus.
