@@ -18,4 +18,3 @@ unicode-normalization = "0.1"
 [[bin]]
 name = "voice-bench"
 path = "src/main.rs"
-
