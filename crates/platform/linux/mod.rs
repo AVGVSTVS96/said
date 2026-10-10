@@ -167,7 +167,10 @@ impl LinuxPlatform {
             ControlCommand::HotkeyInteractive | ControlCommand::Interactive => Hotkey::Interactive,
             ControlCommand::HotkeyInsertLast | ControlCommand::InsertLast => Hotkey::InsertLast,
             ControlCommand::Cancel => Hotkey::Cancel,
-            ControlCommand::Status => return None,
+            ControlCommand::Status
+            | ControlCommand::Start
+            | ControlCommand::Stop
+            | ControlCommand::HistorySearch { .. } => return None,
         };
         Some((event, false))
     }

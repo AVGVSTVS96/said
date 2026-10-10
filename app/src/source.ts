@@ -1,4 +1,6 @@
 import type {
+  HostAction,
+  HostState,
   InputDevice,
   SessionView,
   Settings,
@@ -15,6 +17,8 @@ export type {
   Utterance,
 } from "./contracts";
 
+export type AppAction = UiAction | HostAction;
+
 export function userText(session?: SessionView) {
   return session?.edited ?? null;
 }
@@ -24,16 +28,18 @@ export type CoreSnapshot = Readonly<{
   history: readonly Utterance[];
   settings: Settings | null;
   devices: readonly InputDevice[];
+  sequence?: number;
+  host?: HostState;
 }>;
 
 export interface CoreSource {
   getSnapshot(): CoreSnapshot;
   subscribe(listener: () => void): () => void;
-  dispatch(action: UiAction): Promise<void>;
+  dispatch(action: AppAction): Promise<void>;
   connected: boolean;
 }
 
-export function createCoreSource(send: (action: UiAction) => Promise<void>) {
+export function createCoreSource(send: (action: AppAction) => Promise<void>) {
   let snapshot: CoreSnapshot = {
     sessions: [],
     history: [],
@@ -51,11 +57,12 @@ export function createCoreSource(send: (action: UiAction) => Promise<void>) {
         listeners.delete(listener);
       };
     },
-    dispatch(action: UiAction) {
+    dispatch(action: AppAction) {
       pending = pending.catch(() => {}).then(() => send(action));
       return pending;
     },
     receive(next: CoreSnapshot) {
+      if (next.sequence !== undefined && snapshot.sequence !== undefined && next.sequence <= snapshot.sequence) return;
       snapshot = next;
       listeners.forEach((listener) => listener());
     },

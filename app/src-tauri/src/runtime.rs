@@ -1,0 +1,730 @@
+use crate::storage::{Paths, atomic_write, disk_bytes};
+use crossbeam_channel::{Receiver, Sender, bounded};
+use std::{
+    collections::{BTreeMap, VecDeque},
+    fs,
+    path::Path,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+use voice_audio::Recorder;
+use voice_core::{history::SqliteHistory, *};
+use voice_engine::{
+    Engine,
+    host::{WorkerClient, WorkerConfig, WorkerEngine, recognize_file},
+    manifest::Manifest,
+};
+use voice_platform::Platform;
+
+pub trait HostPlatform: Platform {
+    fn copy(&self, text: &str) -> Result<()>;
+    fn configure(&mut self, settings: &Settings) -> Result<()>;
+    fn recording(&mut self, _active: bool) {}
+    fn availability(&mut self, _available: bool) {}
+    fn poll(&mut self) -> Vec<SessionEvent> {
+        vec![]
+    }
+    fn release_observable(&self) -> bool {
+        false
+    }
+    fn permissions(&self) -> BTreeMap<String, String> {
+        BTreeMap::new()
+    }
+    fn instructions(&self) -> Vec<String> {
+        vec![]
+    }
+}
+impl HostPlatform for voice_platform::fake::FakePlatform {
+    fn copy(&self, _: &str) -> Result<()> {
+        Ok(())
+    }
+    fn configure(&mut self, _: &Settings) -> Result<()> {
+        Ok(())
+    }
+}
+
+pub enum Background {
+    Download(DownloadState),
+    Ready(Result<WorkerClient>),
+    Replay {
+        id: UtteranceId,
+        result: Result<(u64, String)>,
+    },
+}
+struct ActiveEngine {
+    engine: WorkerEngine,
+    events: Receiver<EngineOutput>,
+}
+
+pub struct Host<P: HostPlatform, R: Recorder> {
+    pub platform: P,
+    pub history: SqliteHistory,
+    pub session: Session,
+    pub settings: Settings,
+    pub paths: Paths,
+    pub state: HostState,
+    recorder: R,
+    capture: Option<(UtteranceId, Receiver<AudioEvent>)>,
+    engines: BTreeMap<UtteranceId, ActiveEngine>,
+    client: Option<WorkerClient>,
+    background: Receiver<Background>,
+    sender: Sender<Background>,
+    clock: Instant,
+    sequence: u64,
+    query: String,
+    focused: Option<Target>,
+    replaying: std::collections::BTreeSet<UtteranceId>,
+    _lock: fs::File,
+}
+
+pub fn now() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as i64
+}
+pub fn worker_config(models: &Path, model: &str) -> Result<WorkerConfig> {
+    Ok(WorkerConfig {
+        executable: std::env::current_exe()?,
+        args: vec![
+            "--worker".into(),
+            model.into(),
+            "--models".into(),
+            models.to_string_lossy().into(),
+        ],
+        startup_timeout: Duration::from_secs(60),
+        audio_timeout: Duration::from_secs(10),
+        finish_timeout: Duration::from_secs(30),
+        queue_frames: 256,
+    })
+}
+impl<P: HostPlatform, R: Recorder> Host<P, R> {
+    pub fn open(mut platform: P, recorder: R, paths: Paths) -> Result<Self> {
+        let lock = paths.lock()?;
+        let manifest = Manifest::bundled()?;
+        let settings = Settings::load(
+            &paths.config.join("settings.toml"),
+            manifest.default_model()?,
+        )?;
+        platform.configure(&settings)?;
+        let permissions = platform.permissions();
+        let instructions = platform.instructions();
+        let focused = platform.focused();
+        let (sender, background) = bounded(64);
+        let state = HostState {
+            models: manifest
+                .models
+                .iter()
+                .map(|(id, model)| ModelInfo {
+                    id: id.clone(),
+                    license: model.license.clone(),
+                    source: model.source.clone(),
+                    cloud: false,
+                    vocabulary: model.adapter == "moonshine",
+                })
+                .collect(),
+            download: DownloadState {
+                state: "missing".into(),
+                file: String::new(),
+                received: 0,
+                total: None,
+                error: None,
+            },
+            permissions,
+            instructions,
+            notifications: BTreeMap::new(),
+            vocabulary_text: fs::read_to_string(paths.config.join("vocabulary.txt"))
+                .unwrap_or_default(),
+            disk_bytes: 0,
+            unavailable: None,
+            scratch: None,
+            setup_complete: paths.config.join("setup-complete").is_file(),
+        };
+        let history = SqliteHistory::open(&paths.data)?;
+        Ok(Self {
+            platform,
+            history,
+            settings,
+            paths,
+            state,
+            recorder,
+            capture: None,
+            engines: BTreeMap::new(),
+            client: None,
+            background,
+            sender,
+            clock: Instant::now(),
+            sequence: 0,
+            query: String::new(),
+            focused,
+            replaying: Default::default(),
+            _lock: lock,
+            session: Session::default(),
+        })
+    }
+    pub fn install(&mut self) -> Result<()> {
+        if matches!(
+            self.state.download.state.as_str(),
+            "downloading" | "loading"
+        ) {
+            return Ok(());
+        }
+        if self.capture.is_some() || !self.engines.is_empty() || !self.replaying.is_empty() {
+            return Err("finish recognition before verifying the model".into());
+        }
+        self.client = None;
+        self.state.download.state = "downloading".into();
+        self.state.download.error = None;
+        let sender = self.sender.clone();
+        let models = self.paths.models.clone();
+        let model = self.settings.engine.clone();
+        std::thread::spawn(move || {
+            let result = (|| {
+                crate::download::install(&Manifest::bundled()?, &model, &models, |progress| {
+                    let _ = sender.try_send(Background::Download(progress));
+                })?;
+                let _ = sender.send(Background::Download(DownloadState {
+                    state: "loading".into(),
+                    file: String::new(),
+                    received: 0,
+                    total: None,
+                    error: None,
+                }));
+                WorkerClient::warm(worker_config(&models, &model)?)
+            })();
+            let _ = sender.send(Background::Ready(result));
+        });
+        Ok(())
+    }
+    pub fn set_client(&mut self, client: WorkerClient) {
+        self.client = Some(client);
+        self.state.download.state = "ready".into();
+    }
+    pub fn recover(&mut self) -> Result<()> {
+        for utterance in self.history.recover()? {
+            self.event(SessionEvent::Recover { utterance })?;
+        }
+        Ok(())
+    }
+    fn context(&self, mode: Mode, scratch: bool) -> StartContext {
+        let target = if scratch {
+            None
+        } else {
+            self.platform.focused()
+        };
+        let send = target
+            .as_ref()
+            .and_then(|t| self.settings.apps.get(&t.app_id))
+            .is_some_and(|rule| rule.send);
+        StartContext {
+            id: UtteranceId::random(),
+            started_at: now(),
+            engine: self.settings.engine.clone(),
+            target,
+            mode,
+            vocabulary: if self.settings.vocabulary {
+                self.state
+                    .vocabulary_text
+                    .lines()
+                    .filter(|term| !term.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            } else {
+                vec![]
+            },
+            send,
+        }
+    }
+    pub fn start(&mut self, mode: Mode, scratch: bool) -> Result<()> {
+        if self.client.is_none() {
+            return Err("download and load the model before recording".into());
+        }
+        if self.capture.is_some() {
+            return Err("a recording is already active".into());
+        }
+        let context = self.context(mode, scratch);
+        if scratch {
+            self.state.scratch = Some(context.id);
+        }
+        self.event(SessionEvent::HotkeyDown(context))
+    }
+    pub fn stop(&mut self) -> Result<()> {
+        if let Some((id, _)) = &self.capture {
+            self.event(SessionEvent::HotkeyUp { id: *id })?;
+        }
+        Ok(())
+    }
+    pub fn hotkey(&mut self, hotkey: Hotkey, observable: bool) -> Result<()> {
+        if self.client.is_none() && matches!(hotkey, Hotkey::Down | Hotkey::Interactive) {
+            return Err("model is not ready".into());
+        }
+        let context = self.context(
+            if hotkey == Hotkey::Interactive {
+                Mode::Interactive
+            } else {
+                Mode::Quick
+            },
+            false,
+        );
+        let effects = self.session.hotkey(
+            hotkey,
+            Some(context),
+            self.clock.elapsed().as_millis() as u64,
+            observable,
+        );
+        self.execute(effects)
+    }
+    pub fn ui(&mut self, action: UiAction) -> Result<()> {
+        let id = match &action {
+            UiAction::Insert { id }
+            | UiAction::Copy { id }
+            | UiAction::Edit { id, .. }
+            | UiAction::Discard { id }
+            | UiAction::Cancel { id } => Some(*id),
+            _ => None,
+        };
+        if id.is_some_and(|id| !self.session.views().any(|view| view.id == id)) {
+            let id = id.unwrap();
+            let row = self.history.get(id)?.ok_or("unknown history entry")?;
+            match action {
+                UiAction::Insert { .. } => {
+                    return self.event(SessionEvent::InsertLast {
+                        utterance: Some(row),
+                    });
+                }
+                UiAction::Copy { .. } => self
+                    .platform
+                    .copy(row.text.as_deref().ok_or("recognition is unfinished")?)?,
+                UiAction::Edit { text, .. } => self.history.edit(id, &text)?,
+                UiAction::Discard { .. } => {
+                    self.history.set_status(id, UtteranceStatus::Discarded)?
+                }
+                UiAction::Cancel { .. } => return Err("recording is no longer active".into()),
+                UiAction::InsertLast => unreachable!(),
+            }
+            return Ok(());
+        }
+        self.event(SessionEvent::Ui(action))
+    }
+    pub fn action(&mut self, action: HostAction) -> Result<()> {
+        match action {
+            HostAction::SettingsSave { settings } => {
+                if self.capture.is_some() || !self.engines.is_empty() || !self.replaying.is_empty()
+                {
+                    return Err("finish recognition before changing settings".into());
+                }
+                if !self
+                    .state
+                    .models
+                    .iter()
+                    .any(|model| model.id == settings.engine)
+                {
+                    return Err("unknown engine".into());
+                }
+                let old = self.settings.clone();
+                self.platform.configure(&settings)?;
+                if let Err(error) = settings.save(&self.paths.config.join("settings.toml")) {
+                    let _ = self.platform.configure(&old);
+                    return Err(error);
+                }
+                let changed = settings.engine != old.engine;
+                self.settings = settings;
+                if changed {
+                    self.client = None;
+                    self.state.download.state = "missing".into();
+                    self.install()?;
+                }
+                self.state.instructions = self.platform.instructions();
+            }
+            HostAction::VocabularySave { text } => {
+                atomic_write(&self.paths.config.join("vocabulary.txt"), text.as_bytes())?;
+                self.state.vocabulary_text = text;
+            }
+            HostAction::DownloadModel => self.install()?,
+            HostAction::Permission { permission } => {
+                crate::desktop::request_permission(&permission)?
+            }
+            HostAction::HistorySearch { query } => {
+                self.history.search(&query)?;
+                self.query = query;
+            }
+            HostAction::HistoryDelete { id } => {
+                self.delete(id)?;
+            }
+            HostAction::HistoryRetention { before } => {
+                for row in self
+                    .history
+                    .search("")?
+                    .into_iter()
+                    .filter(|row| row.started_at < before)
+                {
+                    self.delete(row.id)?;
+                }
+            }
+            HostAction::HistoryRetry { id } => {
+                let mut row = self.history.get(id)?.ok_or("unknown history entry")?;
+                if row.raw_text.is_none()
+                    || self.session.views().any(|view| {
+                        view.id == id
+                            && matches!(
+                                view.phase,
+                                Phase::Recording
+                                    | Phase::Finishing
+                                    | Phase::Saving
+                                    | Phase::Pasting
+                            )
+                    })
+                {
+                    return Err("recognition is still active".into());
+                }
+                row.id = UtteranceId::random();
+                row.started_at = now();
+                row.raw_text = None;
+                row.text = None;
+                row.status = None;
+                row.pasted_to = None;
+                row.pasted_at = None;
+                self.history.insert(&row)?;
+                self.event(SessionEvent::Recover { utterance: row })?;
+            }
+            HostAction::Start { mode, scratch } => self.start(mode, scratch)?,
+            HostAction::Stop => self.stop()?,
+            HostAction::SetupComplete => {
+                if self.client.is_none() {
+                    return Err("model is not ready".into());
+                }
+                if self
+                    .platform
+                    .permissions()
+                    .values()
+                    .any(|state| state != "authorized")
+                {
+                    return Err("grant the required permissions first".into());
+                }
+                self.settings
+                    .save(&self.paths.config.join("settings.toml"))?;
+                atomic_write(&self.paths.config.join("setup-complete"), b"complete\n")?;
+                self.state.setup_complete = true;
+            }
+        }
+        Ok(())
+    }
+    fn delete(&mut self, id: UtteranceId) -> Result<()> {
+        if self.session.views().any(|view| {
+            view.id == id
+                && matches!(
+                    view.phase,
+                    Phase::Recording | Phase::Finishing | Phase::Saving | Phase::Pasting
+                )
+        }) || self.replaying.contains(&id)
+        {
+            return Err("finish recognition before deleting its audio".into());
+        }
+        self.history.delete(id)?;
+        self.session.dismiss(id);
+        self.state.notifications.remove(&id);
+        Ok(())
+    }
+    pub fn snapshot(&mut self) -> Result<HostSnapshot> {
+        self.sequence += 1;
+        self.state.unavailable = self.session.unavailable_reason().map(str::to_owned);
+        self.state.permissions = self.platform.permissions();
+        self.state.disk_bytes = disk_bytes(&self.paths.data)?;
+        let sessions: Vec<_> = self.session.views().cloned().collect();
+        self.state
+            .notifications
+            .retain(|id, _| sessions.iter().any(|view| view.id == *id));
+        Ok(HostSnapshot {
+            sequence: self.sequence,
+            sessions,
+            history: self.history.search(&self.query)?,
+            settings: self.settings.clone(),
+            devices: self.recorder.list_devices().unwrap_or_default(),
+            host: self.state.clone(),
+        })
+    }
+    pub fn poll(&mut self) -> Result<bool> {
+        let mut events = vec![];
+        let focused = self.platform.focused();
+        if focused != self.focused {
+            self.focused = focused.clone();
+            events.push(SessionEvent::FocusChanged { target: focused });
+        }
+        events.extend(self.platform.poll());
+        if let Some((id, receiver)) = &self.capture {
+            let audio: Vec<_> = receiver.try_iter().collect();
+            let stopped = audio
+                .iter()
+                .any(|event| matches!(event, AudioEvent::Stopped { .. }));
+            events.extend(audio.into_iter().map(SessionEvent::Audio));
+            if !stopped
+                && matches!(
+                    receiver.try_recv(),
+                    Err(crossbeam_channel::TryRecvError::Disconnected)
+                )
+            {
+                events.push(SessionEvent::CaptureFailed {
+                    id: *id,
+                    message: "Audio stopped without a durable flush; kept in history for retry"
+                        .into(),
+                });
+            }
+        }
+        for active in self.engines.values() {
+            events.extend(active.events.try_iter().map(SessionEvent::Engine));
+        }
+        let mut changed = !events.is_empty();
+        for event in events {
+            if let SessionEvent::Audio(AudioEvent::Error { id, message }) = &event {
+                self.event(SessionEvent::Engine(EngineOutput {
+                    id: *id,
+                    event: EngineEvent::Error(message.clone()),
+                }))?;
+            }
+            if let SessionEvent::Audio(AudioEvent::Stopped { id, .. })
+            | SessionEvent::CaptureFailed { id, .. } = &event
+            {
+                if self
+                    .capture
+                    .as_ref()
+                    .is_some_and(|(current, _)| current == id)
+                {
+                    let _ = self.recorder.stop();
+                    self.capture = None;
+                    self.platform.recording(false);
+                }
+            }
+            let done = match &event {
+                SessionEvent::Engine(EngineOutput {
+                    id,
+                    event: EngineEvent::Final | EngineEvent::Error(_),
+                }) => Some(*id),
+                _ => None,
+            };
+            let available = match &event {
+                SessionEvent::SessionAvailable => Some(true),
+                SessionEvent::SessionUnavailable { .. } => Some(false),
+                _ => None,
+            };
+            self.event(event)?;
+            if let Some(available) = available {
+                self.platform.availability(available);
+                self.state.instructions = self.platform.instructions();
+            }
+            if let Some(id) = done {
+                self.engines.remove(&id);
+            }
+        }
+        for background in self.background.clone().try_iter() {
+            changed = true;
+            match background {
+                Background::Download(progress) => self.state.download = progress,
+                Background::Ready(result) => match result {
+                    Ok(client) => {
+                        self.set_client(client);
+                        self.recover()?;
+                    }
+                    Err(error) => {
+                        self.state.download.state = "failed".into();
+                        self.state.download.error = Some(error.to_string());
+                    }
+                },
+                Background::Replay { id, result } => {
+                    if !self.replaying.remove(&id) {
+                        continue;
+                    }
+                    match result {
+                        Ok((duration_ms, text)) => {
+                            self.event(SessionEvent::Audio(AudioEvent::Stopped {
+                                id,
+                                duration_ms,
+                            }))?;
+                            self.event(SessionEvent::Engine(EngineOutput {
+                                id,
+                                event: EngineEvent::Committed(text),
+                            }))?;
+                            self.event(SessionEvent::Engine(EngineOutput {
+                                id,
+                                event: EngineEvent::Final,
+                            }))?;
+                        }
+                        Err(error) => self.event(SessionEvent::Engine(EngineOutput {
+                            id,
+                            event: EngineEvent::Error(error.to_string()),
+                        }))?,
+                    }
+                }
+            }
+        }
+        Ok(changed)
+    }
+    pub fn event(&mut self, event: SessionEvent) -> Result<()> {
+        let effects = self.session.reduce(event);
+        self.execute(effects)
+    }
+    fn execute(&mut self, effects: Vec<Effect>) -> Result<()> {
+        let mut queue = VecDeque::from(effects);
+        while let Some(effect) = queue.pop_front() {
+            let mut response = None;
+            match effect {
+                Effect::Save { utterance } => {
+                    let result = if utterance.raw_text.is_none() {
+                        self.history.insert(&utterance)
+                    } else {
+                        self.history.finish(&utterance)
+                    };
+                    response = Some(match result {
+                        Ok(()) => SessionEvent::Saved { id: utterance.id },
+                        Err(error) => SessionEvent::SaveFailed {
+                            id: utterance.id,
+                            message: error.to_string(),
+                        },
+                    });
+                }
+                Effect::StartEngine { id, vocabulary } => {
+                    let result: Result<ActiveEngine> = (|| {
+                        let (mut engine, events) =
+                            self.client.as_ref().ok_or("model not ready")?.engine(id)?;
+                        engine.start(&vocabulary)?;
+                        Ok(ActiveEngine { engine, events })
+                    })();
+                    match result {
+                        Ok(active) => {
+                            self.engines.insert(id, active);
+                        }
+                        Err(error) => {
+                            response = Some(SessionEvent::Engine(EngineOutput {
+                                id,
+                                event: EngineEvent::Error(format!("{error}")),
+                            }))
+                        }
+                    }
+                }
+                Effect::StartCapture { id } => {
+                    match self.recorder.start(id, self.settings.microphone.as_deref()) {
+                        Ok(events) => {
+                            self.capture = Some((id, events));
+                            self.platform.recording(true);
+                        }
+                        Err(error) => {
+                            response = Some(SessionEvent::CaptureFailed {
+                                id,
+                                message: error.to_string(),
+                            });
+                        }
+                    }
+                }
+                Effect::StopCapture { id } => {
+                    if self
+                        .capture
+                        .as_ref()
+                        .is_some_and(|(current, _)| *current == id)
+                    {
+                        if let Err(error) = self.recorder.stop() {
+                            self.state.notifications.insert(id, error.to_string());
+                        }
+                    }
+                }
+                Effect::FeedEngine { id, pcm } => {
+                    if let Some(active) = self.engines.get_mut(&id) {
+                        active.engine.feed(&pcm);
+                    }
+                }
+                Effect::FinishEngine { id } => {
+                    if let Some(active) = self.engines.get_mut(&id) {
+                        active.engine.finish();
+                    }
+                }
+                Effect::CancelEngine { id } => {
+                    self.replaying.remove(&id);
+                    if let Some(mut active) = self.engines.remove(&id) {
+                        active.engine.cancel();
+                    }
+                }
+                Effect::AllocateReplay { id } => {
+                    let recognition_id = UtteranceId::random();
+                    if self.state.scratch == Some(id) {
+                        self.state.scratch = Some(recognition_id);
+                    }
+                    response = Some(SessionEvent::ReplayReady { id, recognition_id });
+                }
+                Effect::RecognizeFile {
+                    id,
+                    audio_id,
+                    engine,
+                    vocabulary,
+                } => {
+                    self.replaying.insert(id);
+                    let sender = self.sender.clone();
+                    let path = self.history.audio_path(audio_id);
+                    let config = worker_config(&self.paths.models, &engine)?;
+                    std::thread::spawn(move || {
+                        let result = (|| {
+                            let samples = voice_audio::wav::recover_wav(&path)?;
+                            let text = recognize_file(id, &config, &path, &vocabulary)?;
+                            Ok((samples * 1000 / 16000, text))
+                        })();
+                        let _ = sender.send(Background::Replay { id, result });
+                    });
+                }
+                Effect::CheckFocus { id } => {
+                    response = Some(SessionEvent::FocusChecked {
+                        id,
+                        target: self.platform.focused(),
+                    })
+                }
+                Effect::FocusTarget { id, target } => {
+                    let _ = self.platform.focus(&target);
+                    response = Some(SessionEvent::FocusChecked {
+                        id,
+                        target: self.platform.focused(),
+                    });
+                }
+                Effect::Paste {
+                    id,
+                    target,
+                    text,
+                    send,
+                } => {
+                    response = Some(match self.platform.paste(&target, &text, send) {
+                        Ok(()) => SessionEvent::Pasted { id, at: now() },
+                        Err(error) => SessionEvent::PasteFailed {
+                            id,
+                            message: error.to_string(),
+                        },
+                    })
+                }
+                Effect::Copy { id, text } => {
+                    if self.state.scratch != Some(id) {
+                        self.platform.copy(&text)?;
+                    }
+                }
+                Effect::EditHistory { id, text } => {
+                    response = Some(match self.history.edit(id, &text) {
+                        Ok(()) => SessionEvent::EditSaved { id },
+                        Err(error) => SessionEvent::EditFailed {
+                            id,
+                            message: error.to_string(),
+                        },
+                    })
+                }
+                Effect::SetStatus { id, status } => self.history.set_status(id, status)?,
+                Effect::LoadLast => {
+                    response = Some(SessionEvent::InsertLast {
+                        utterance: self.history.last()?,
+                    })
+                }
+                Effect::RecordDelivery { id, target, at } => {
+                    self.history.record_delivery(id, &target, at)?
+                }
+                Effect::Show { .. } => {}
+                Effect::Notify { id, message } => {
+                    self.state.notifications.insert(id, message);
+                }
+            }
+            if let Some(event) = response {
+                queue.extend(self.session.reduce(event));
+            }
+        }
+        Ok(())
+    }
+}

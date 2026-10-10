@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { product } from "./product";
 import {
   type CoreSource,
-  type UiAction,
+  type AppAction,
   disconnectedSource,
   userText,
 } from "./source";
@@ -64,7 +64,7 @@ export function App({
     document.documentElement.dataset.demo = demo ? "true" : "false";
   }, [screen, demo]);
 
-  async function send(action: UiAction) {
+  async function send(action: AppAction) {
     setError("");
     setFeedback("");
     try {
@@ -183,6 +183,8 @@ export function App({
                 key={JSON.stringify(snapshot.settings)}
                 settings={snapshot.settings}
                 devices={snapshot.devices}
+                host={snapshot.host}
+                send={send}
               />
             ) : null}
             {screen === "setup" ? (
@@ -191,6 +193,8 @@ export function App({
                 settings={snapshot.settings}
                 devices={snapshot.devices}
                 session={session}
+                host={snapshot.host}
+                send={send}
               />
             ) : null}
             {feedback ? (

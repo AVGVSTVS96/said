@@ -67,7 +67,8 @@ export function createFakeSource() {
   let ownedTail = false;
   const actions: UiAction[] = [];
   const source = createCoreSource(async (action) => {
-    actions.push(action);
+    if (!["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(action.type)) throw new Error("This operation needs a native host.");
+    actions.push(action as UiAction);
     const actionId = "id" in action ? action.id : history[0]?.id;
     if (!actionId) return;
     const row = history.find((row) => row.id === actionId);

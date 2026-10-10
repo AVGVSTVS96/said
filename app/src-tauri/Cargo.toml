@@ -7,12 +7,34 @@ rust-version.workspace = true
 
 [dependencies]
 voice-core.workspace = true
-voice-audio.workspace = true
+voice-audio = { workspace = true, features = ["native"] }
 voice-engine.workspace = true
 voice-platform = { workspace = true, features = ["native"] }
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
+serde.workspace = true
+serde_json.workspace = true
+crossbeam-channel.workspace = true
+fs2 = "0.4"
+sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+flate2 = "1"
+tar = "0.4"
+zip = { version = "4", default-features = false, features = ["deflate"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+[[bin]]
+name = "voice"
+path = "src/main.rs"
 
 [build-dependencies]
 tauri-build = "2"
 toml = "1"
 serde_json.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSString"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { version = "5", default-features = false, features = ["blocking-api", "tokio"] }

@@ -17,5 +17,7 @@ pub fn export(output: impl AsRef<Path>) -> std::result::Result<(), ExportError> 
     UiAction::export_all(&config)?;
     Settings::export_all(&config)?;
     InputDevice::export_all(&config)?;
+    HostAction::export_all(&config)?;
+    HostSnapshot::export_all(&config)?;
     Ok(())
 }

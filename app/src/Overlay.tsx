@@ -37,6 +37,8 @@ export function Overlay({
                 </button>
               ) : null}
             </div>
+            {source.getSnapshot().host?.notifications[session.id] ? <p role="status">{source.getSnapshot().host?.notifications[session.id]}</p> : null}
+            <p className="quiet">{source.getSnapshot().host?.models.find(model => model.id === source.getSnapshot().settings?.engine)?.cloud ? "Cloud" : "Local"}{source.getSnapshot().settings?.vocabulary ? " · Vocabulary on" : ""}{session.target && source.getSnapshot().settings?.apps[session.target.app_id]?.send ? " · Auto-send on" : ""}</p>
             <TranscriptTail session={session} />
             <div className="overlay-footer">
               <LevelMeter level={session.level} />

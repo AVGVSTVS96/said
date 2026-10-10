@@ -35,7 +35,7 @@ def stop(process):
 def inside():
     processes = []
     try:
-        binary = BASE / 'harness/target/debug/voice'
+        binary = Path(os.environ.get('VOICE_APP_BINARY', BASE / 'harness/target/debug/voice'))
         (STATE / 'niri.kdl').write_text(f'''input {{ keyboard {{ xkb {{ layout "us"; }}; }}; }};
 prefer-no-csd
 animations {{ off; }}
@@ -68,8 +68,9 @@ binds {{
             processes.append(subprocess.Popen(command, env=env, start_new_session=True,
                                                stdout=(STATE / f'target-{index}.log').open('w'), stderr=subprocess.STDOUT))
         wait_for(lambda: all((STATE / f'{name}.ready').exists() for name in ['gtk', 'terminal', 'electron']), processes)
-        result = subprocess.run([str(BASE / 'harness/target/debug/e2e')], env=env,
-                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=60)
+        command = json.loads(os.environ['VOICE_APP_E2E']) if 'VOICE_APP_E2E' in os.environ else [str(BASE / 'harness/target/debug/e2e')]
+        result = subprocess.run(command, env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
         (STATE / 'results.log').write_text(result.stdout)
         print(result.stdout, end='', flush=True)
         if result.returncode:
@@ -96,7 +97,8 @@ elif '--inside' in sys.argv:
 else:
     BASE.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, VOICE_LINUX_TEST_DIR=str(BASE), CARGO_BUILD_JOBS='2')
-    subprocess.run([str(HERE / 'build.sh')], env=env, check=True)
+    if 'VOICE_APP_E2E' not in env:
+        subprocess.run([str(HERE / 'build.sh')], env=env, check=True)
     STATE = Path(tempfile.mkdtemp(prefix='session-', dir=BASE))
     runtime = STATE / 'runtime'
     runtime.mkdir(mode=0o700)

@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
-import { createCoreSource, type UiAction } from "./source";
+import { createCoreSource, type AppAction } from "./source";
 import { createFakeSource } from "./fake";
 
 test("core actions stay ordered across delayed edits and insertion", async () => {
-  const calls: UiAction[] = [];
+  const calls: AppAction[] = [];
   let finish: (() => void) | undefined;
   const source = createCoreSource(async (action) => {
     calls.push(action);

@@ -6,8 +6,22 @@ license.workspace = true
 rust-version.workspace = true
 
 [features]
-native = []
+native = ["dep:serde_json", "dep:libc", "dep:evdev", "dep:gtk", "dep:gtk-layer-shell", "dep:tauri", "dep:ashpd", "dep:futures-util", "dep:tokio", "dep:wayland-client", "dep:wayland-protocols-misc", "dep:xkbcommon"]
 
 [dependencies]
 voice-core.workspace = true
 crossbeam-channel.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+serde_json = { workspace = true, optional = true }
+libc = { version = "0.2", optional = true }
+evdev = { version = "0.13", optional = true }
+gtk = { version = "0.18", optional = true }
+gtk-layer-shell = { version = "0.8", features = ["v0_6"], optional = true }
+tauri = { version = "2", default-features = false, features = ["wry"], optional = true }
+ashpd = { version = "0.12.3", optional = true }
+futures-util = { version = "0.3", optional = true }
+tokio = { version = "1", features = ["rt", "sync", "time", "macros"], optional = true }
+wayland-client = { version = "0.31", optional = true }
+wayland-protocols-misc = { version = "0.3", features = ["client"], optional = true }
+xkbcommon = { version = "0.9", default-features = false, optional = true }

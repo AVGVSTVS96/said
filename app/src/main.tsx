@@ -2,6 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { product } from "./product";
 import { App } from "./App";
+import { createCoreSource } from "./source";
+import type { HostSnapshot } from "./contracts";
+import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import "./tokens.css";
 import "./style.css";
 
@@ -18,6 +21,19 @@ if (
       <App source={demo} demo={demo} />
     </StrictMode>,
   );
+ } else if (isTauri()) {
+  const source = createCoreSource(async (action) => {
+    const command = ["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(action.type) ? "ui_action" : "host_action";
+    source.receive(await invoke<HostSnapshot>(command, { action }));
+  });
+  const updates = new Channel<HostSnapshot>();
+  updates.onmessage = (snapshot) => source.receive(snapshot);
+  try {
+    source.receive(await invoke<HostSnapshot>("connect", { updates }));
+    root.render(<StrictMode><App source={source} /></StrictMode>);
+  } catch (error) {
+    root.render(<main role="alert">Host connection failed: {String(error)}</main>);
+  }
 } else {
   root.render(
     <StrictMode>

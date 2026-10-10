@@ -10,7 +10,7 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use voice_core::Result;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ControlCommand {
     Hotkey,
     HotkeyInteractive,
@@ -20,6 +20,9 @@ pub enum ControlCommand {
     InsertLast,
     Cancel,
     Status,
+    Start,
+    Stop,
+    HistorySearch { query: String },
 }
 
 impl ControlCommand {
@@ -33,8 +36,12 @@ impl ControlCommand {
             "insert-last" => Ok(Self::InsertLast),
             "cancel" => Ok(Self::Cancel),
             "status" => Ok(Self::Status),
+            "start" => Ok(Self::Start),
+            "stop" => Ok(Self::Stop),
+            "history" => Ok(Self::HistorySearch { query: String::new() }),
+            value if value.starts_with("history ") => Ok(Self::HistorySearch { query: value[8..].into() }),
             _ => Err(
-                "expected hotkey [interactive|insert-last], toggle, interactive, insert-last, cancel or status"
+                "expected hotkey [interactive|insert-last], toggle, start, stop, interactive, insert-last, cancel, status or history <FTS query>"
                     .into(),
             ),
         }

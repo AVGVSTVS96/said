@@ -1,6 +1,7 @@
 import { useDeferredValue, useState } from "react";
 import type { CoreSource, Utterance } from "./source";
-import { duration, Icon, Unavailable } from "./components";
+import { Playback } from "./Playback";
+import { duration, Icon } from "./components";
 
 export function History({
   rows,
@@ -19,7 +20,7 @@ export function History({
   const matches = rows
     .filter(
       (row) =>
-        !search ||
+        source.getSnapshot().host || !search ||
         (row.text ?? "").toLocaleLowerCase().includes(search) ||
         (row.raw_text ?? "").toLocaleLowerCase().includes(search),
     )
@@ -42,7 +43,11 @@ export function History({
           aria-label="Search history"
           placeholder="Search your words"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            const query = event.target.value;
+            setQuery(query);
+            if (source.getSnapshot().host) void send({ type: "history_search", query }).catch(() => {});
+          }}
         />
       </label>
       <p className="results" role="status">
@@ -76,13 +81,7 @@ export function History({
                   : row.text}
             </p>
             <div className="history-actions">
-              <button
-                disabled
-                title="Audio playback is unavailable in this build"
-              >
-                <Icon name="play" />
-                Play audio
-              </button>
+              <Playback id={row.id} />
               <button
                 disabled={
                   !source.connected ||
@@ -133,8 +132,8 @@ export function History({
                     : " · Saved without delivery"}
                 </p>
                 <div className="button-group">
-                  <button disabled>Retry recognition</button>
-                  <button className="danger" disabled>
+                  <button disabled={!source.connected || row.raw_text === null} onClick={() => void send({ type: "history_retry", id: row.id }).catch(() => {})}>Retry recognition</button>
+                  <button className="danger" disabled={!source.connected} onClick={() => void send({ type: "history_delete", id: row.id }).catch(() => {})}>
                     Delete recording
                   </button>
                 </div>
@@ -159,10 +158,7 @@ export function History({
           </div>
         ) : null}
       </div>
-      <Unavailable>
-        Audio playback, retry and deletion are unavailable in this build. Search
-        covers the loaded recordings.
-      </Unavailable>
+
     </section>
   );
 }
