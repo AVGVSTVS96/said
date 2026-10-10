@@ -1,0 +1,106 @@
+# engine
+
+The app calls `manifest::worker_main` before desktop initialization for its
+`--worker` mode. The host warms a `WorkerClient` during setup, then calls
+`client.engine(id, wav_path)`
+and consumes its receiver while invoking the existing `Engine` trait. The
+`voice-engine` probe demonstrates both sides in the same executable; it is not
+an additional process shipped alongside the app. App and bench use the same
+`protocol` codec and `recognize_file` path.
+
+`models.json` selects the adapter and per-platform default. Its model entries
+pin the architecture, files, SHA-256 hashes, source and license. Change one
+platform's default line after the full bake-off; no adapter code changes.
+`Manifest::read` accepts an installed manifest, and `Manifest::bundled` embeds
+the checked-in one. Small on Linux and Medium on macOS remain provisional.
+
+## Native runtime
+
+Moonshine Voice 0.1.5's C ABI uses native ONNX Runtime on both platforms.
+CPU is upstream's recommended default, including Apple Silicon; CoreML is not
+required. The Linux release contains self-contained shared libraries. On macOS
+we extract only the two native dylibs from the official arm64 wheel: no Python
+interpreter, package imports or Python subprocess runs in the app.
+
+Sources: [C ABI](https://github.com/moonshine-ai/moonshine/blob/v0.1.5/core/moonshine-c-api.h),
+[execution providers](https://github.com/moonshine-ai/moonshine/blob/v0.1.5/docs/execution-providers.md),
+[native releases](https://github.com/moonshine-ai/moonshine/releases/tag/v0.1.5).
+The Rust binding checks the transcript ABI before loading a model. Unsafe code
+is confined to the native loader and ABI calls, inside the isolated worker.
+
+```sh
+crates/engine/scripts/fetch-model.sh
+CARGO_BUILD_JOBS=2 cargo build -p voice-engine --bin voice-engine --examples
+cargo run -p voice-engine --bin voice-engine -- /path/to/16k-mono-i16.wav
+```
+
+The provisioning script requires curl, jq, OpenSSL, tar and unzip. It verifies
+all downloaded model files and runtime archives before installing them under
+`~/.cache/voice-models/`. macOS arm64 requires macOS 15 or newer for this build.
+Linux x86_64 and aarch64 runtime artifacts are pinned; aarch64 is not yet tested.
+Setup can use the same manifest hashes in its own downloader.
+
+## Text and recovery
+
+Moonshine's stable line indexes identify audio segments. Completed lines append
+once; the incomplete tail replaces its previous value. No word overlap test,
+trimming, case conversion, punctuation changes or spelling fusion is used.
+The adapter supplies one space between nonempty model lines, following the
+upstream transcript composition convention. All text inside each line remains
+unchanged. Vocabulary explicitly enables native keyterm biasing; commas/NUL in
+individual terms are rejected because upstream's keyterm interface uses commas.
+
+Host request, transport and event queues are bounded. PCM is sent in blocks of
+at most 1,600 samples. Audio acknowledgments must match the utterance and next
+sequence. Malformed output, native exit, queue overflow or a missed deadline
+kills the worker. Capture continues separately on disk. On Finish, one fresh
+worker replays the repaired, closed 16 kHz mono i16 WAV in bounded chunks.
+Cancellation kills the child and suppresses recovery output.
+
+Recovery may append only a byte-identical uncommitted suffix. A changed
+committed prefix emits an error and no Final. The executor must recognize the
+file with a fresh utterance ID using `recognize_file` to save a complete retry;
+it must never replace final words within the old live transcript.
+
+`WorkerConfig` takes startup, acknowledgment and finish deadlines from the
+benchmark caller. Startup is distinct from warm inference. The probe's generous
+60/10/30-second deadlines are diagnostic limits, not release budgets. The
+initial queue must accommodate cold loading; probe queues hold 256 100-ms
+blocks (less than 1 MiB of PCM per queue). `WorkerClient` retains its model and child between utterances; warming happens
+before capture. A concurrent utterance can use a second isolated worker.
+`WorkerEngine::new` is also available for an independent cold worker.
+
+The executor must treat the first `Recognizer interrupted` error as a recovery
+notice and keep receiving until Final, a recovery failure, cancellation or
+receiver closure. The existing shared event contract has no distinct restart
+notice. Do not stop capture or paste the provisional tail on this notice.
+
+## Verification
+
+```sh
+CARGO_BUILD_JOBS=2 cargo test -p voice-engine
+CARGO_BUILD_JOBS=2 cargo clippy -p voice-engine --all-targets -- -D warnings
+cargo fmt -p voice-engine --check
+```
+
+The suite includes 50,000 deterministic mutated protocol inputs with fragmented
+reads; framing limits/truncation; lifecycle/identity/sequence validation; literal
+fake traces; crashes, hangs and malformed stdout; cancellation; and recovery
+prefix conflicts. It adds no runtime dependency or test-only dependency.
+
+Generate the public synthetic clips on macOS, then copy only these WAVs to the
+same cache location on Linux. No microphone recording or private audio is used.
+The scripts and literal synthetic sentences are public; generated clips remain
+outside git.
+
+```sh
+crates/engine/scripts/generate-clips.sh
+CARGO_BUILD_JOBS=2 cargo test -p voice-engine --test golden -- --ignored --nocapture
+cargo run -p voice-engine --example stream -- target/debug/voice-engine \
+  "$HOME/.cache/voice-models/engine-proof/repeats.wav" moonshine-small-en
+```
+
+Golden verification compares direct adapter and same-binary worker results byte
+for byte on three synthetic speech clips and silence. It checks one terminal
+Final and no post-Final events, and silence must produce no text. These are
+adapter-integrity checks, not a fidelity ranking or the full public CI corpus.

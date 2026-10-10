@@ -1,5 +1,11 @@
 pub mod fake;
+pub mod host;
+pub mod manifest;
+pub mod moonshine;
+mod native;
 pub mod protocol;
+pub mod wav;
+pub mod worker;
 
 use voice_core::Result;
 
