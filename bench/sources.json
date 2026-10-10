@@ -1,0 +1,39 @@
+{
+  "tts_model": {
+    "name": "en_US-ljspeech-high.onnx",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/high/en_US-ljspeech-high.onnx",
+    "sha256": "5d4f08ba6a2a48c44592eed3ce56bf85e9de3dd4e20df90541ae68a8310c029a"
+  },
+  "tts_config": {
+    "name": "en_US-ljspeech-high.onnx.json",
+    "url": "https://huggingface.co/rhasspy/piper-voices/resolve/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/high/en_US-ljspeech-high.onnx.json",
+    "sha256": "7e1f4634af596d83cca997fb7a931ba80b70f8a316a2655ee69c55365e0ace14"
+  },
+  "ami_annotations": {
+    "name": "ami_public_manual_1.6.2.zip",
+    "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusAnnotations/ami_public_manual_1.6.2.zip",
+    "sha256": "b56e5babb2496b8795deeeda7e71178d7fbc9963f94276cf2a3f4b56ebbc9f9d"
+  },
+  "ami_audio": {
+    "A": {
+      "name": "ES2002a.Headset-0.wav",
+      "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002a/audio/ES2002a.Headset-0.wav",
+      "sha256": "3bf0627106d6b6f02e5cc8b69f283b70303275c6b354aef3bdc7a50762d3f25e"
+    },
+    "B": {
+      "name": "ES2002a.Headset-1.wav",
+      "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002a/audio/ES2002a.Headset-1.wav",
+      "sha256": "285ed5b5eaa4f871cc146900d0cf87487ca757aa57a7062def2eb49feaabc23d"
+    },
+    "C": {
+      "name": "ES2002a.Headset-2.wav",
+      "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002a/audio/ES2002a.Headset-2.wav",
+      "sha256": "f881505606c390b0826a525fec9ecc216e497196adefe7a70fe71522b82e2e92"
+    },
+    "D": {
+      "name": "ES2002a.Headset-3.wav",
+      "url": "https://groups.inf.ed.ac.uk/ami/AMICorpusMirror/amicorpus/ES2002a/audio/ES2002a.Headset-3.wav",
+      "sha256": "fa65d53a97074e31bf83da4ab4cc6235f6e7625d6d40bd223158467d7df9f581"
+    }
+  }
+}

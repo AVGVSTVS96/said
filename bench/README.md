@@ -1,3 +1,188 @@
-# Benchmark module
+# Benchmark
 
-Scaffold only. Add a public `clips.jsonl` corpus manifest, runner and literal scorer as described in SPEC.md. Reuse `voice-engine`; do not build a second recognizer path. Synthetic/consented clips need hashes, references, tags and licenses. Private corpora stay outside this repository. No engine default or benchmark result has been chosen yet.
+`voice bench <manifest>` replays 16 kHz mono PCM i16 WAVs through the unchanged
+`voice-engine` worker and scores its committed text. It concatenates committed
+chunks with no separator. Partial text is timed and recorded, never promoted to
+final text. Recognition has no vocabulary bias or postprocessing.
+
+This module builds independently so its changes stay under `bench/`. Its `voice`
+CLI includes the same-binary `--worker` dispatch. The app integrator can use the
+library entrypoint described below without adding another recognizer.
+
+```sh
+CARGO_BUILD_JOBS=2 cargo build --locked --manifest-path bench/Cargo.toml
+bench/target/debug/voice bench bench/clips.jsonl --ci
+```
+
+That command selects the bundled platform default. Both real engines run
+sequentially with `--all`, or select `--engine moonshine-small-en` or
+`--engine moonshine-medium-en`. The fake worker is for protocol checks:
+`--engine fake --trace /path/to/scripted-events.json`.
+Scribe has no implemented adapter and cannot be benchmarked yet.
+
+The 12 CI clips are checked into `bench/clips/`. The full corpus adds a long
+synthetic monologue kept outside git. Provision it, then run all engines:
+
+```sh
+crates/engine/scripts/fetch-model.sh moonshine-small-en
+crates/engine/scripts/fetch-model.sh moonshine-medium-en
+bench/scripts/fetch.sh
+bench/target/debug/voice bench bench/clips.jsonl --all \
+  --audio-root "$HOME/.cache/voice-models/bench-public"
+```
+
+Provisioning needs Python 3 and curl for the engine script; the long clip also
+needs `uv`. Public source URLs and SHA-256 hashes live in `sources.json`.
+`recipes.jsonl` pins AMI crop times, verbatim references, TTS input and control
+seeds. The fetch script verifies source and derived WAV hashes, uses one Piper
+model at a time, and generates one clip at a time. Zero generator/width noise
+reduces randomness; a different toolchain may still produce different PCM.
+Such a run fails the hash check rather than silently changing the corpus.
+Short clips are bundled, so CI needs neither TTS nor AMI downloads.
+
+## Public references
+
+There are five AMI excerpts, twenty-one Piper clips and two controls. The
+synthetic text and control audio are dedicated to CC0. AMI excerpts and
+transcripts retain CC BY 4.0; see [LICENSES.md](LICENSES.md) for attribution,
+provenance and upstream sources. No private recordings, private transcripts,
+silver labels, private outputs or personal research are included.
+
+AMI references come from manual word XML, retaining repetitions, fragments
+such as `charac`, hesitations and contractions. Punctuation attaches to the
+preceding word; a previous utterance's boundary punctuation is excluded.
+The speaker-to-headset mapping is recorded in upstream `meetings.xml`.
+Excerpts preserve the original headset channel, including background leakage.
+Upstream annotation is a reference, not a guarantee of perfect acoustic truth.
+
+Piper scripts cover negative/affirmative twins, start/end negatives,
+backchannel `no`, fillers, repeats, false starts, self-corrections, identifiers,
+paths, CLI flags, versions, numbers, profanity, one word and a long monologue.
+They carry `reference_status: authored_unreviewed`: **these generated clips
+have not received human listening acceptance**. Orthographic identifier/path
+references are especially provisional: TTS can pronounce spelling differently.
+The separate `spoken-path` clip tests literal spoken path/flag wording.
+The first results are engineering evidence, not a certified engine selection.
+Listen, adjudicate references, update their status and rerun before choosing a
+release default. Never use recognizer agreement as acoustic adjudication.
+
+## Manifest and private runs
+
+One JSON object per line, UTF-8. Blank lines are allowed; unknown fields,
+duplicate IDs, invalid terms, missing hashes and incomplete polarity twins fail.
+`audio` resolves relative to the manifest, or `--audio-root` overrides the root.
+Absolute paths are used unchanged. Every selected WAV is hash-checked before
+any engine starts; audio is streamed in 1,600-sample blocks, not loaded whole.
+
+```json
+{"id":"example","audio":"clips/example.wav","sha256":"<64 hex digits>","reference":"Um, don't use --force","tags":["filler","negation","flag"],"license":"CC0-1.0","source":"synthetic example","reference_status":"listened","terms":[{"text":"--force","kind":"flag"}],"ci":true}
+```
+
+`terms` are optional and use `technical`, `identifier`, `path` or `flag`.
+Each term must occur in the reference. Use one entry per distinct term; every
+occurrence is scored. Optional `pair` + `polarity` identify a negative and its
+`affirmative` twin; every pair must have exactly one of each. `ci` selects the
+small subset. Tag silence and noise explicitly with an empty reference.
+
+The identical command runs private audio outside the repository:
+
+```sh
+bench/target/debug/voice bench /private/corpus/clips.jsonl \
+  --engine moonshine-small-en --output /private/results/new-run
+```
+
+Private references use `license: private` and an honest `reference_status`
+(such as `human_verbatim`, `silver_unreviewed`); the benchmark makes no claim
+that an arbitrary reference is ground truth. Existing private bake-off manifests
+need their fields mapped to this documented schema outside the repository.
+The benchmark never changes an input manifest or WAV.
+
+Results default to a new directory under `~/.cache/voice-models/bench-runs/`,
+not the repo. Each directory is 0700 and each output file 0600. Explicit output
+paths must be new. `clips.jsonl` records the reference, raw text, every received
+event/timestamp, scores and failures. `summary.json` records aggregates, strata,
+model hashes, native library hashes, runtime version, corpus/binary/dependency
+hashes, deadlines and host CPU/OS/architecture; it omits hostname and input paths.
+Treat private results as private: they contain transcripts and reference text.
+An incomplete run exits nonzero; failed clips never masquerade as empty success.
+
+## Scoring
+
+- **Literal WER:** whitespace-delimited tokens, preserving case, punctuation,
+  contractions, fillers and repeats. Edit distance uses deterministic ties:
+  diagonal, then deletion, then insertion. Numerator is S + D + I; denominator
+  is reference tokens. Corpus WER pools counts, never averages clip percentages.
+- **Normalized WER:** Unicode NFC, lowercase, curly-to-straight apostrophes,
+  alphanumeric/contraction tokens. Punctuation and symbol differences disappear
+  only in this comparison metric. It is never applied to the saved output.
+- **Negation:** aligned tokens `not`, `never`, `no`, `without`, `neither`, `nor`,
+  `cannot`, and contractions ending in `n't`. Count lost, added and changed
+  negative tokens separately. A negative changed to a different negative is
+  `changed`; this is a lexical measure, not a semantic polarity classifier.
+  Affirmative twins expose added negatives. `no` backchannels count explicitly.
+- **Fillers:** `um`, `uh`, `uhm`, `erm`, `er`, `hmm`. Ambiguous lexical `like`
+  is not automatically a hesitation. Recall and precision use aligned tokens.
+- **Repetition:** each adjacent equal word after the first is an opportunity;
+  extra repeated words lower precision. Nonadjacent rephrasings remain in WER.
+  No reference or hypothesis is deduplicated.
+- **Technical terms:** normalized, contiguous, exactly aligned tagged phrases.
+- **Identifiers, paths, flags:** contiguous, exactly aligned literal tokens,
+  retaining case and symbols. Include adjacent punctuation in the tagged term
+  when present in its reference token. Normalized WER cannot hide these losses.
+- **Hallucination:** normalized words produced on tagged silence/noise. Empty
+  reference WER and zero-opportunity retention are null, not artificial zero.
+- **Latency:** real-time replay by default, pacing each block to its sample end.
+  First nonempty Partial and first text (Partial or Committed) are separate.
+  Release is immediately before Finish; final timing includes pending inference.
+  p50/p95 use nearest rank; missing partials and sample counts are explicit.
+  Release latency is also broken out for the spec's 5–20-second budget.
+  Max replay lag shows host scheduling/backpressure. All runs replay in real time.
+- **RAM/load:** sampled total RSS of host plus direct worker every 20 ms; shared
+  mappings can be counted twice and short peaks can be missed. On macOS this
+  uses `ps`; it does not measure unified-memory physical footprint. Cold load
+  times process launch through the worker's first empty-audio acknowledgment.
+  Model hashing and warm inference are separate from cold load.
+
+A worker stays loaded between clips and is released before the next model.
+Diagnostic startup/audio/final deadlines default to 60/10/30 seconds; override
+with `--startup-seconds`, `--audio-seconds`, `--finish-seconds`. They are not
+production watchdog recommendations. Engine/model/runtime manifests can be
+selected with `--model-manifest` and `--model-cache`; model hashes are verified.
+Alignment uses two cost rows and a byte per traceback cell. A score exceeding
+64 million cells fails explicitly; split extremely long reference material into
+clips rather than exhausting the server.
+
+## Checks and integration
+
+```sh
+cargo fmt --manifest-path bench/Cargo.toml --check
+CARGO_BUILD_JOBS=2 cargo clippy --locked --manifest-path bench/Cargo.toml --all-targets -- -D warnings
+CARGO_BUILD_JOBS=2 cargo test --locked --manifest-path bench/Cargo.toml
+bench/scripts/ci.sh
+```
+
+The scorer checks run without corpus/audio integration; the external-manifest
+check proves worker use, raw byte preservation and hash rejection. `ci.sh`
+executes the real public subset and verifies regression counts, not transcript
+strings. Its smoke gate permits at most three lost and one changed negation
+across the subset (current recognizer limitations), requires clean clear
+negative/affirmative twins, normalized WER ≤35%, some filler retention and no
+control hallucinations. This gate detects regressions; it does not certify the
+verbatim promise or select a release engine. Model provisioning is a separate CI/cache step.
+
+The integrator owns root manifests, the application CLI and CI wiring:
+
+1. Add `bench` as a workspace member and a `voice-bench` dependency of the host;
+   remove this crate's standalone `[workspace]` table. Rename its development
+   binary to `voice-bench` and update the integration test's `CARGO_BIN_EXE_voice`
+   reference to that name when the host provides the production `voice` binary.
+   The development probe is not shipped. Reconcile the lockfiles.
+2. Before Tauri initialization, route `bench` to `voice_bench::cli(&args)`.
+   The worker executable is the current executable. Its `--worker` dispatch
+   must also accept benchmark `--model-manifest`, `--model-cache` and `--trace`
+   options, or route those worker invocations through this same entrypoint.
+3. Add scorer and `ci.sh` checks to Linux/macOS CI after native model provisioning.
+
+No shared engine event, worker wire format, core type or engine code change is
+needed. Benchmark does not choose or edit the engine manifest's defaults;
+release selection waits for accepted references and both platform runs.
