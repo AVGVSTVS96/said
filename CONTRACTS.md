@@ -60,7 +60,7 @@ FakeHistory is in memory. Its search is a literal substring convenience, not an 
 `product.toml` is the source of display name, stable bundle ID and stable storage key. Rename **name** only; preserve the other two. This deliberately uses the storage key instead of the spec's display-name directory so a later rename cannot strand data:
 
 - macOS: `~/Library/Application Support/<storage_key>/` for settings, vocabulary, history, audio and models.
-- Linux: `$XDG_CONFIG_HOME/<storage_key>/` for settings/vocabulary, `$XDG_DATA_HOME/<storage_key>/` for history/audio, `$XDG_CACHE_HOME/<storage_key>/models/` for downloaded models. Standard XDG fallback directories apply.
+- Linux: `$XDG_CONFIG_HOME/<storage_key>/` for settings/vocabulary, `$XDG_DATA_HOME/<storage_key>/` for history/audio, `$XDG_DATA_HOME/<storage_key>/models/` for downloaded models. Standard XDG fallback directories apply.
 - Linux control socket: `$XDG_RUNTIME_DIR/<storage_key>.sock`, mode 0600. Data directories 0700, personal files 0600. Stable storage key also prefixes any UI preference keys.
 
 ## Reducer and UI boundary
@@ -138,3 +138,31 @@ engine, platform and history fakes. The one-hour trace supplies 14,400 quarter-s
 retaining PCM in core; it models one hour rather than waiting an hour. Native recorder durability and
 real paste behavior remain audio/platform acceptance tests. `persistence.rs` verifies SQLite reopen,
 FTS edits/deletion, audio references, interrupted unlink cleanup, immutable raw bytes and settings.
+
+## Host integration wave
+
+The host adds `HostAction`, `HostState`, `DownloadState`, `ModelInfo` and `HostSnapshot`, exported
+through the existing ts-rs pipeline. They carry setup/settings/download/history operations and the
+numbered full UI subscription; they do not change worker messages, Engine/Recorder/Platform traits,
+UiAction or schema version 1. Tauri command and subscription details are in app/src-tauri/README.md.
+
+`SessionEvent::CaptureFailed { id, message }` distinguishes an audio receiver closing without a
+successful durable Stopped from an ordinary end. Core saves the row as failed, cancels recognition,
+inhibits delivery and permits later recordings. The host must not fabricate a successful Stopped
+for a capture that failed to start or flush. Live audio delivery gaps with a subsequent Stopped
+still use worker invalidation and fresh-identity file replay.
+
+Model installation lives in the app's data/models directory on both platforms, as required by the
+host build brief. Hash-verified archives are retained there; runtime libraries install by fsync and
+rename so validation never truncates a mapped library. RF64 is accepted by the engine's file reader.
+Linux control requests add start/stop/history FTS search without changing ownership or peer checks.
+
+File replay exposes a cancelable engine-host entry point so Cancel terminates the isolated worker
+rather than leaving recognition running after core dismisses the identity. Linux control responses
+permit up to 16 MiB for history/status and reject oversize or incomplete replies instead of silently
+truncating them. Request framing remains one bounded line.
+
+The host consumes audio events as they arrive. Stop joins the recorder and drains every queued
+frame and Stopped acknowledgment before allowing a new capture to replace the receiver. This
+preserves back-to-back recording/finishing identities and start-ordered delivery. macOS shortcut
+updates preserve desktop window tokens; an existing Linux layer overlay can update its monitor.

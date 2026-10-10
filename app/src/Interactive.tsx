@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import type { SessionView, UiAction, Utterance } from "./source";
 import { userText } from "./source";
 import type { CoreSource } from "./source";
-import { duration, Icon, LevelMeter, Status, Unavailable } from "./components";
+import { Playback } from "./Playback";
+import { duration, Icon, LevelMeter, Status } from "./components";
 import { editDraft, editorText, type Draft } from "./editor";
 
 export function Interactive({
@@ -205,15 +206,8 @@ export function Interactive({
           Enter adds a line. <kbd>Ctrl / ⌘</kbd> + <kbd>Enter</kbd> inserts into
           the recorded app.
         </p>
-        <button disabled>
-          <Icon name="play" />
-          Play recording
-        </button>
+        <Playback id={id} />
       </div>
-      <Unavailable>
-        Audio playback is unavailable in this build. Insert pastes your text
-        without submitting it.
-      </Unavailable>
     </section>
   );
 }

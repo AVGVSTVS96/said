@@ -1,16 +1,22 @@
 import { useState } from "react";
 import type { InputDevice, Settings as SettingsValue } from "./source";
-import { Unavailable } from "./components";
+import type { HostState } from "./contracts";
+import type { CoreSource } from "./source";
 
 export function Settings({
   settings,
-  devices,
+  devices, host, send,
 }: {
   settings: SettingsValue | null;
   devices: readonly InputDevice[];
+  host?: HostState;
+  send: CoreSource["dispatch"];
 }) {
   const [draft, setDraft] = useState<SettingsValue | null>(null);
   const value = draft ?? settings;
+  const [vocabulary, setVocabulary] = useState(host?.vocabulary_text ?? "");
+  const [before, setBefore] = useState("");
+  const [appId, setAppId] = useState("");
   return (
     <section>
       <header className="page-heading">
@@ -63,11 +69,9 @@ export function Settings({
                 <strong>Recognition engine</strong>
                 <small>Current recognition engine.</small>
               </span>
-              <input
-                aria-label="Recognition engine"
-                value={value.engine}
-                readOnly
-              />
+              <select aria-label="Recognition engine" value={value.engine} onChange={event => setDraft({ ...value, engine: event.target.value })}>
+                {(host?.models ?? [{ id: value.engine }]).map(model => <option key={model.id}>{model.id}</option>)}
+              </select>
             </label>
           </div>
           <div className="settings-group">
@@ -91,6 +95,8 @@ export function Settings({
               />
             </label>
           </div>
+          <label className="field-label">Vocabulary terms, one per line<textarea value={vocabulary} onChange={event => setVocabulary(event.target.value)} spellCheck={false} /></label>
+          <button disabled={!host} onClick={() => void send({ type: "vocabulary_save", text: vocabulary }).catch(() => {})}>Save vocabulary</button>
           <div className="settings-group">
             <h2>App insertion</h2>
             <p className="quiet">
@@ -135,6 +141,10 @@ export function Settings({
                 </label>
               </div>
             ))}
+            <div className="button-group">
+              <label className="field-label">App ID<input value={appId} onChange={event => setAppId(event.target.value)} placeholder="App identifier" /></label>
+              <button disabled={!host || !appId.trim() || Boolean(value.apps[appId.trim()])} onClick={() => { setDraft({ ...value, apps: { ...value.apps, [appId.trim()]: { paste: host && "accessibility" in host.permissions ? "cmd+v" : "ctrl+v", send: false } } }); setAppId(""); }}>Add app rule</button>
+            </div>
             {Object.keys(value.apps).length === 0 ? (
               <p>No per-app overrides. Auto-send is off.</p>
             ) : null}
@@ -144,9 +154,10 @@ export function Settings({
             <div className="setting-row">
               <span>
                 <strong>Keep recordings until deleted</strong>
-                <small>Disk usage is unavailable in this build.</small>
+                <small>{host ? `${(host.disk_bytes / 1048576).toFixed(1)} MiB on disk` : "Storage appears after connection."}</small>
               </span>
-              <button disabled>Delete older than…</button>
+              <label>Delete recordings before<input type="date" value={before} onChange={event => setBefore(event.target.value)} /></label>
+              <button className="danger" disabled={!host || !before} onClick={() => void send({ type: "history_retention", before: new Date(`${before}T00:00:00`).getTime() }).catch(() => {})}>Delete older recordings</button>
             </div>
           </div>
           <footer className="settings-footer">
@@ -157,14 +168,12 @@ export function Settings({
               <button disabled={!draft} onClick={() => setDraft(null)}>
                 Reset changes
               </button>
-              <button className="primary" disabled>
+              <button className="primary" disabled={!host || !draft} onClick={() => void send({ type: "settings_save", settings: value }).then(() => setDraft(null)).catch(() => {})}>
                 Save settings
               </button>
             </div>
           </footer>
-          <Unavailable>
-            Changes here are a preview. Saving is unavailable in this build.
-          </Unavailable>
+
         </>
       ) : (
         <div className="empty-state">

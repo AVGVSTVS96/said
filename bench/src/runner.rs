@@ -327,7 +327,7 @@ pub fn run(mut options: Options) -> Result<()> {
         "requested_engines": options.engines,
         "model_manifest_sha256": options.model_manifest.as_ref().map(|p| corpus::hash(p)).transpose()?.unwrap_or_else(|| format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../crates/engine/models.json")))),
         "build": {"rust": std::process::Command::new("rustc").arg("--version").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned()),
-        "dependency_lock_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../Cargo.lock")))},
+        "dependency_lock_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../Cargo.lock")))},
         "host": host(), "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
         "engine_crate": env!("CARGO_PKG_VERSION"), "runtime_version": manifest.runtime.version,
         "binary_sha256": corpus::hash(&std::env::current_exe()?)?,

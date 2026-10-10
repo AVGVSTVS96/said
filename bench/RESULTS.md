@@ -108,7 +108,7 @@ CARGO_BUILD_JOBS=2 cargo build --locked --manifest-path bench/Cargo.toml
 crates/engine/scripts/fetch-model.sh moonshine-small-en
 crates/engine/scripts/fetch-model.sh moonshine-medium-en
 bench/scripts/fetch.sh
-bench/target/debug/voice bench bench/clips.jsonl --all \
+target/debug/voice-bench bench bench/clips.jsonl --all \
   --audio-root "$HOME/.cache/voice-models/bench-public"
 ```
 

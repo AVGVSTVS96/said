@@ -15,3 +15,7 @@ export type { Effect } from "./bindings/Effect";
 export type { UtteranceStatus } from "./bindings/UtteranceStatus";
 export type { Phase } from "./bindings/Phase";
 export type { Mode } from "./bindings/Mode";
+
+export type { HostAction } from "./bindings/HostAction";
+export type { HostState } from "./bindings/HostState";
+export type { HostSnapshot } from "./bindings/HostSnapshot";

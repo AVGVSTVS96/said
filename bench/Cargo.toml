@@ -5,20 +5,16 @@ edition = "2024"
 license = "MIT"
 rust-version = "1.90"
 
-[workspace]
 
 [dependencies]
-voice-core = { path = "../crates/core" }
-voice-engine = { path = "../crates/engine" }
-crossbeam-channel = "0.5"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+voice-core.workspace = true
+voice-engine.workspace = true
+crossbeam-channel.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 sha2 = "0.10"
 unicode-normalization = "0.1"
 
 [[bin]]
-name = "voice"
+name = "voice-bench"
 path = "src/main.rs"
-
-[profile.dev]
-debug = 0

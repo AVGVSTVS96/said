@@ -8,13 +8,63 @@
   },
   "app": {
     "windows": [
-      { "label": "overlay", "url": "index.html?screen=overlay", "title": "Dictation", "width": 480, "height": 160, "visible": false, "focus": false, "focusable": false, "alwaysOnTop": true, "skipTaskbar": true, "decorations": false },
-      { "label": "interactive", "url": "index.html?screen=interactive", "title": "Review", "width": 720, "height": 560, "visible": false },
-      { "label": "history", "url": "index.html?screen=history", "title": "History", "width": 800, "height": 640, "visible": false },
-      { "label": "settings", "url": "index.html?screen=settings", "title": "Settings", "width": 640, "height": 560, "visible": false },
-      { "label": "setup", "url": "index.html?screen=setup", "title": "Setup", "width": 640, "height": 560 }
+      {
+        "label": "overlay",
+        "url": "index.html?screen=overlay",
+        "title": "Dictation",
+        "width": 480,
+        "height": 160,
+        "visible": false,
+        "focus": false,
+        "focusable": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "decorations": false,
+        "transparent": true
+      },
+      {
+        "label": "interactive",
+        "url": "index.html?screen=interactive",
+        "title": "Review",
+        "width": 720,
+        "height": 560,
+        "visible": false
+      },
+      {
+        "label": "history",
+        "url": "index.html?screen=history",
+        "title": "History",
+        "width": 800,
+        "height": 640,
+        "visible": false
+      },
+      {
+        "label": "settings",
+        "url": "index.html?screen=settings",
+        "title": "Settings",
+        "width": 640,
+        "height": 560,
+        "visible": false
+      },
+      {
+        "label": "setup",
+        "url": "index.html?screen=setup",
+        "title": "Setup",
+        "width": 640,
+        "height": 560
+      }
     ],
-    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost" }
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; media-src 'self' voice-audio: http://voice-audio.localhost blob:"
+    },
+    "macOSPrivateApi": true,
+    "enableGTKAppId": true
   },
-  "bundle": { "active": false, "macOS": { "minimumSystemVersion": "14.0" } }
+  "bundle": {
+    "active": false,
+    "macOS": {
+      "minimumSystemVersion": "15.0",
+      "infoPlist": "Info.plist"
+    }
+  }
 }

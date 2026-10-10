@@ -371,6 +371,17 @@ pub fn recognize_file(
     replay(id, config, path, vocabulary, None)
 }
 
+pub fn recognize_file_with_cancel(
+    id: UtteranceId,
+    config: &WorkerConfig,
+    path: &std::path::Path,
+    vocabulary: &[String],
+    cancellation: &Receiver<()>,
+) -> Result<String> {
+    config.validate()?;
+    replay(id, config, path, vocabulary, Some(cancellation))
+}
+
 fn replay(
     id: UtteranceId,
     config: &WorkerConfig,

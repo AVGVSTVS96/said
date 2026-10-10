@@ -232,6 +232,17 @@ impl Session {
         let mut effects = vec![];
         let mut restart = false;
         match event {
+            SessionEvent::CaptureFailed { message, .. }
+                if entry.capture_started && !entry.stopped =>
+            {
+                entry.capture_started = false;
+                entry.stopped = true;
+                entry.broken_engine = true;
+                entry.delivery_done = true;
+                effects.push(Effect::CancelEngine { id });
+                effects.push(Effect::Notify { id, message });
+                effects.push(entry.save(UtteranceStatus::Failed));
+            }
             SessionEvent::HotkeyUp { .. } if entry.view.phase == Phase::Recording => {
                 entry.view.phase = Phase::Finishing;
                 if entry.capture_started {
@@ -947,6 +958,7 @@ fn event_id(event: &SessionEvent) -> UtteranceId {
     match event {
         SessionEvent::HotkeyUp { id }
         | SessionEvent::Saved { id }
+        | SessionEvent::CaptureFailed { id, .. }
         | SessionEvent::SaveFailed { id, .. }
         | SessionEvent::FocusChecked { id, .. }
         | SessionEvent::Pasted { id, .. }

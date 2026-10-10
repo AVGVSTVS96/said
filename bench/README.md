@@ -5,13 +5,14 @@
 chunks with no separator. Partial text is timed and recorded, never promoted to
 final text. Recognition has no vocabulary bias or postprocessing.
 
-This module builds independently so its changes stay under `bench/`. Its `voice`
-CLI includes the same-binary `--worker` dispatch. The app integrator can use the
-library entrypoint described below without adding another recognizer.
+The app provides `voice bench` through this library and uses its own `--worker` dispatch.
+The `voice-bench` development probe is a workspace target for isolated tests; it is not shipped.
+The application defaults to its installed data/models directory; use `--model-cache` explicitly
+for the shared development cache. The probe defaults to `~/.cache/voice-models`.
 
 ```sh
 CARGO_BUILD_JOBS=2 cargo build --locked --manifest-path bench/Cargo.toml
-bench/target/debug/voice bench bench/clips.jsonl --ci
+target/debug/voice-bench bench bench/clips.jsonl --ci
 ```
 
 That command selects the bundled platform default. Both real engines run
@@ -27,7 +28,7 @@ synthetic monologue kept outside git. Provision it, then run all engines:
 crates/engine/scripts/fetch-model.sh moonshine-small-en
 crates/engine/scripts/fetch-model.sh moonshine-medium-en
 bench/scripts/fetch.sh
-bench/target/debug/voice bench bench/clips.jsonl --all \
+target/debug/voice-bench bench bench/clips.jsonl --all \
   --audio-root "$HOME/.cache/voice-models/bench-public"
 ```
 
@@ -87,7 +88,7 @@ small subset. Tag silence and noise explicitly with an empty reference.
 The identical command runs private audio outside the repository:
 
 ```sh
-bench/target/debug/voice bench /private/corpus/clips.jsonl \
+target/debug/voice-bench bench /private/corpus/clips.jsonl \
   --engine moonshine-small-en --output /private/results/new-run
 ```
 
@@ -170,19 +171,8 @@ negative/affirmative twins, normalized WER ≤35%, some filler retention and no
 control hallucinations. This gate detects regressions; it does not certify the
 verbatim promise or select a release engine. Model provisioning is a separate CI/cache step.
 
-The integrator owns root manifests, the application CLI and CI wiring:
-
-1. Add `bench` as a workspace member and a `voice-bench` dependency of the host;
-   remove this crate's standalone `[workspace]` table. Rename its development
-   binary to `voice-bench` and update the integration test's `CARGO_BIN_EXE_voice`
-   reference to that name when the host provides the production `voice` binary.
-   The development probe is not shipped. Reconcile the lockfiles.
-2. Before Tauri initialization, route `bench` to `voice_bench::cli(&args)`.
-   The worker executable is the current executable. Its `--worker` dispatch
-   must also accept benchmark `--model-manifest`, `--model-cache` and `--trace`
-   options, or route those worker invocations through this same entrypoint.
-3. Add scorer and `ci.sh` checks to Linux/macOS CI after native model provisioning.
-
-No shared engine event, worker wire format, core type or engine code change is
-needed. Benchmark does not choose or edit the engine manifest's defaults;
-release selection waits for accepted references and both platform runs.
+The host owns the production `voice` CLI and routes benchmark worker flags through this same
+entrypoint before Tauri initialization. The root workspace/lockfile owns dependencies; pure scorer
+and fake-worker checks run in CI. The real quality gate remains separate and currently fails as
+reported in RESULTS.md. Model defaults remain provisional; no shared engine event, worker wire
+format or schema change is needed for this integration.

@@ -36,7 +36,7 @@ impl Fixture {
             "license":"CC0-1.0","source":"synthetic fixture", "reference_status":"synthetic"}).to_string()).unwrap();
     }
     fn run(&self) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_voice"))
+        Command::new(env!("CARGO_BIN_EXE_voice-bench"))
             .arg("bench")
             .arg(self.0.join("manifest.jsonl"))
             .args(["--engine", "fake", "--trace"])

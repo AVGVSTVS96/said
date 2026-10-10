@@ -9,6 +9,16 @@ pub fn configure(
 ) -> Result<()> {
     let window: &gtk::Window = window.as_ref();
     if window.is_visible() || window.is_realized() {
+        if layer_shell && window.is_layer_window() {
+            if let Some(monitor) = monitor {
+                window.set_monitor(monitor);
+            }
+            return Ok(());
+        }
+        if !layer_shell {
+            window.set_keep_above(true);
+            return Ok(());
+        }
         return Err("configure the overlay before its first realization".into());
     }
     window.set_accept_focus(false);

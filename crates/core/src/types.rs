@@ -222,6 +222,10 @@ pub enum SessionEvent {
     HotkeyUp {
         id: UtteranceId,
     },
+    CaptureFailed {
+        id: UtteranceId,
+        message: String,
+    },
     Audio(AudioEvent),
     Engine(EngineOutput),
     Saved {
@@ -349,4 +353,84 @@ pub struct Settings {
     pub vocabulary: bool,
     pub microphone: Option<String>,
     pub apps: BTreeMap<String, AppSettings>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HostAction {
+    SettingsSave {
+        settings: Settings,
+    },
+    VocabularySave {
+        text: String,
+    },
+    DownloadModel,
+    Permission {
+        permission: String,
+    },
+    HistorySearch {
+        query: String,
+    },
+    HistoryDelete {
+        id: UtteranceId,
+    },
+    HistoryRetry {
+        id: UtteranceId,
+    },
+    HistoryRetention {
+        #[ts(type = "number")]
+        before: i64,
+    },
+    Start {
+        mode: Mode,
+        scratch: bool,
+    },
+    Stop,
+    SetupComplete,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ModelInfo {
+    pub id: String,
+    pub license: String,
+    pub source: String,
+    pub cloud: bool,
+    pub vocabulary: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct DownloadState {
+    pub state: String,
+    pub file: String,
+    #[ts(type = "number")]
+    pub received: u64,
+    #[ts(type = "number | null")]
+    pub total: Option<u64>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostState {
+    pub models: Vec<ModelInfo>,
+    pub download: DownloadState,
+    pub permissions: BTreeMap<String, String>,
+    pub instructions: Vec<String>,
+    pub notifications: BTreeMap<UtteranceId, String>,
+    pub vocabulary_text: String,
+    #[ts(type = "number")]
+    pub disk_bytes: u64,
+    pub unavailable: Option<String>,
+    pub scratch: Option<UtteranceId>,
+    pub setup_complete: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct HostSnapshot {
+    #[ts(type = "number")]
+    pub sequence: u64,
+    pub sessions: Vec<SessionView>,
+    pub history: Vec<Utterance>,
+    pub settings: Settings,
+    pub devices: Vec<InputDevice>,
+    pub host: HostState,
 }

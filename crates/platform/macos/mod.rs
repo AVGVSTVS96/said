@@ -34,6 +34,10 @@ impl<W> MacosPlatform<W> {
             errors,
         })
     }
+    pub fn set_shortcut(&mut self, shortcut: Shortcut) -> Result<()> {
+        self.input = Input::start(shortcut)?;
+        Ok(())
+    }
     pub fn input_statuses(&self) -> Receiver<InputStatus> {
         self.input.statuses()
     }

@@ -10,7 +10,9 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use voice_core::Result;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+const MAX_REPLY: usize = 16 * 1024 * 1024;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ControlCommand {
     Hotkey,
     HotkeyInteractive,
@@ -20,6 +22,9 @@ pub enum ControlCommand {
     InsertLast,
     Cancel,
     Status,
+    Start,
+    Stop,
+    HistorySearch { query: String },
 }
 
 impl ControlCommand {
@@ -33,8 +38,12 @@ impl ControlCommand {
             "insert-last" => Ok(Self::InsertLast),
             "cancel" => Ok(Self::Cancel),
             "status" => Ok(Self::Status),
+            "start" => Ok(Self::Start),
+            "stop" => Ok(Self::Stop),
+            "history" => Ok(Self::HistorySearch { query: String::new() }),
+            value if value.starts_with("history ") => Ok(Self::HistorySearch { query: value[8..].into() }),
             _ => Err(
-                "expected hotkey [interactive|insert-last], toggle, interactive, insert-last, cancel or status"
+                "expected hotkey [interactive|insert-last], toggle, start, stop, interactive, insert-last, cancel, status or history <FTS query>"
                     .into(),
             ),
         }
@@ -137,7 +146,10 @@ impl ControlSocket {
                     };
                     let response = serve(&mut stream, &sender);
                     let message = match response {
-                        Ok(message) => format!("ok {message}\n"),
+                        Ok(message) if message.len() <= MAX_REPLY - 4 => format!("ok {message}\n"),
+                        Ok(_) => {
+                            "error control reply exceeds 16 MiB; narrow the history query\n".into()
+                        }
                         Err(error) => format!("error {error}\n"),
                     };
                     let _ = stream.write_all(message.as_bytes());
@@ -204,13 +216,21 @@ fn serve(stream: &mut UnixStream, sender: &Sender<ControlRequest>) -> Result<Str
 
 pub fn run_cli(runtime: &Path, storage_key: &str, arguments: &[String]) -> Result<String> {
     let command = arguments.join(" ");
+    if command.len() > 126 || command.contains(['\n', '\r', '\0']) {
+        return Err("control command must be one line of at most 126 bytes".into());
+    }
     ControlCommand::parse(&command)?;
     let mut stream = UnixStream::connect(socket_path(runtime, storage_key)?)?;
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(1)))?;
     writeln!(stream, "{command}")?;
     let mut response = String::new();
-    BufReader::new(stream).take(8192).read_line(&mut response)?;
+    BufReader::new(stream)
+        .take(MAX_REPLY as u64 + 1)
+        .read_line(&mut response)?;
+    if response.len() > MAX_REPLY || !response.ends_with('\n') {
+        return Err("control reply is too large or truncated".into());
+    }
     match response.strip_prefix("ok ") {
         Some(response) => Ok(response.trim_end_matches('\n').into()),
         None => Err(response.into()),
