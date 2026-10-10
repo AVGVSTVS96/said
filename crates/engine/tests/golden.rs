@@ -13,12 +13,15 @@ fn native_adapter_and_worker_preserve_identical_raw_transcripts() {
     let manifest = Manifest::bundled().unwrap();
     let cache = model_cache().unwrap();
     let model = manifest.default_model().unwrap();
+    let timeout = std::env::var("VOICE_PROOF_TIMEOUT_SECS")
+        .ok()
+        .map(|value| value.parse::<u64>().expect("proof timeout must be seconds"));
     let config = WorkerConfig {
         executable: env!("CARGO_BIN_EXE_voice-engine").into(),
         args: vec!["--worker".into(), model.into()],
-        startup_timeout: Duration::from_secs(60),
-        audio_timeout: Duration::from_secs(10),
-        finish_timeout: Duration::from_secs(30),
+        startup_timeout: Duration::from_secs(timeout.unwrap_or(60)),
+        audio_timeout: Duration::from_secs(timeout.unwrap_or(10)),
+        finish_timeout: Duration::from_secs(timeout.unwrap_or(30)),
         queue_frames: 16,
     };
     for name in ["negation", "repair", "repeats", "silence", "boundaries"] {

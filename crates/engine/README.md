@@ -105,6 +105,10 @@ cargo run -p voice-engine --example stream -- target/debug/voice-engine \
   "$HOME/.cache/voice-models/engine-proof/repeats.wav" moonshine-small-en
 ```
 
+`VOICE_PROOF_TIMEOUT_SECS` can increase only the golden test's diagnostic
+deadlines on a busy host. It changes no production watchdog setting and does
+not establish latency compliance.
+
 Golden verification compares direct adapter and same-binary worker results byte
 for byte on three synthetic speech clips, silence, and two repeat clips separated by a
 pause. The last clip must produce multiple committed chunks and retain all six
