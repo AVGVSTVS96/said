@@ -66,6 +66,13 @@ impl Api {
                 unsafe { std::mem::transmute::<*mut c_void, $ty>(library.symbol($name)?) }
             };
         }
+        let revision = symbol!(
+            c"moonshine_voice_runtime_version",
+            unsafe extern "C" fn() -> i32
+        );
+        if unsafe { revision() } != 2 {
+            return Err("Moonshine requires the patched voice runtime; run fetch-model.sh".into());
+        }
         let version = symbol!(c"moonshine_get_version", unsafe extern "C" fn() -> i32);
         if unsafe { version() } / 10000 != 3 {
             return Err("Moonshine requires the version 3 transcript ABI".into());
@@ -174,7 +181,7 @@ pub struct Moonshine {
     id: UtteranceId,
     sender: Sender<EngineOutput>,
     tail: Tail,
-    buffered_samples: usize,
+    buffered: Vec<i16>,
 }
 
 impl Moonshine {
@@ -196,6 +203,7 @@ impl Moonshine {
         model: Rc<MoonshineModel>,
     ) -> (Self, Receiver<EngineOutput>) {
         let (sender, receiver) = bounded(64);
+        let buffered = Vec::with_capacity(model.update_samples);
         (
             Self {
                 model,
@@ -204,7 +212,7 @@ impl Moonshine {
                 id,
                 sender,
                 tail: Tail::default(),
-                buffered_samples: 0,
+                buffered,
             },
             receiver,
         )
@@ -245,7 +253,7 @@ impl Moonshine {
             }
             let text = unsafe { CStr::from_ptr(line.text) }.to_str()?;
             if line.complete != 0 {
-                let event = self.tail.commit(index, text);
+                let event = self.tail.commit(index, text, line.start, line.duration)?;
                 self.emit(event);
             } else {
                 if finalizing {
@@ -260,6 +268,26 @@ impl Moonshine {
             self.tail.partial = partial.clone();
             self.emit(EngineEvent::Partial(partial));
         }
+        Ok(())
+    }
+
+    fn add_buffered_audio(&mut self) -> Result<()> {
+        if self.buffered.is_empty() {
+            return Ok(());
+        }
+        let samples = normalize(&self.buffered);
+        let stream = self.stream.ok_or("stream not started")?;
+        self.model.api.check(unsafe {
+            (self.model.api.add)(
+                self.model.transcriber,
+                stream,
+                samples.as_ptr(),
+                samples.len() as u64,
+                16000,
+                0,
+            )
+        })?;
+        self.buffered.clear();
         Ok(())
     }
 
@@ -303,38 +331,22 @@ impl Engine for Moonshine {
         Ok(())
     }
 
-    fn feed(&mut self, pcm16k: &[i16]) {
-        let Some(stream) = self.stream else {
+    fn feed(&mut self, mut pcm16k: &[i16]) {
+        if self.stream.is_none() {
             return;
-        };
-        let handle = self.model.transcriber;
-        let samples: Vec<f32> = pcm16k
-            .iter()
-            .map(|sample| f32::from(*sample) / 32768.0)
-            .collect();
-        let result = self
-            .model
-            .api
-            .check(unsafe {
-                (self.model.api.add)(
-                    handle,
-                    stream,
-                    samples.as_ptr(),
-                    samples.len() as u64,
-                    16000,
-                    0,
-                )
-            })
-            .and_then(|_| {
-                self.buffered_samples += pcm16k.len();
-                if self.buffered_samples >= self.model.update_samples {
-                    self.buffered_samples %= self.model.update_samples;
-                    self.update(false)?;
-                }
-                Ok(())
-            });
-        if let Err(error) = result {
-            self.failed(error);
+        }
+        while !pcm16k.is_empty() {
+            let count = pcm16k
+                .len()
+                .min(self.model.update_samples - self.buffered.len());
+            self.buffered.extend_from_slice(&pcm16k[..count]);
+            pcm16k = &pcm16k[count..];
+            if self.buffered.len() == self.model.update_samples
+                && let Err(error) = self.add_buffered_audio().and_then(|_| self.update(false))
+            {
+                self.failed(error);
+                return;
+            }
         }
     }
 
@@ -344,9 +356,12 @@ impl Engine for Moonshine {
         };
         let handle = self.model.transcriber;
         let result = self
-            .model
-            .api
-            .check(unsafe { (self.model.api.stop)(handle, stream) })
+            .add_buffered_audio()
+            .and_then(|_| {
+                self.model
+                    .api
+                    .check(unsafe { (self.model.api.stop)(handle, stream) })
+            })
             .and_then(|_| self.update(true));
         if let Err(error) = result {
             self.failed(error);
@@ -365,6 +380,22 @@ impl Drop for Moonshine {
     }
 }
 
+fn normalize(samples: &[i16]) -> Vec<f32> {
+    let peak = samples
+        .iter()
+        .map(|sample| f32::from(*sample).abs())
+        .fold(0.0_f32, f32::max);
+    let gain = if peak == 0.0 {
+        1.0
+    } else {
+        (8192.0 / peak).clamp(1.0, 32.0)
+    };
+    samples
+        .iter()
+        .map(|sample| f32::from(*sample) * gain / 32768.0)
+        .collect()
+}
+
 #[derive(Default)]
 struct Tail {
     committed_count: usize,
@@ -381,12 +412,26 @@ impl Tail {
         }
     }
 
-    fn commit(&mut self, index: usize, text: &str) -> EngineEvent {
+    fn commit(
+        &mut self,
+        index: usize,
+        text: &str,
+        start: f32,
+        duration: f32,
+    ) -> Result<EngineEvent> {
+        if text.chars().all(char::is_whitespace) && duration > 0.0 {
+            return Err(format!(
+                "Speech detected at {:.3}–{:.3}s, but recognition returned empty text",
+                start,
+                start + duration
+            )
+            .into());
+        }
         let chunk = self.decorate(text);
         self.committed_count = index + 1;
         self.has_text |= !text.is_empty();
         self.partial.clear();
-        EngineEvent::Committed(chunk)
+        Ok(EngineEvent::Committed(chunk))
     }
 }
 
@@ -395,27 +440,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn quiet_input_is_amplified_without_clipping_or_turning_silence_into_audio() {
+        assert_eq!(normalize(&[0; 1600]), vec![0.0; 1600]);
+        assert_eq!(
+            normalize(&[i16::MIN, i16::MAX]),
+            vec![-1.0, 32767.0 / 32768.0]
+        );
+        assert_eq!(normalize(&[256, -128]), vec![0.25, -0.125]);
+        assert_eq!(normalize(&[1, -1]), vec![32.0 / 32768.0, -32.0 / 32768.0]);
+    }
+
+    #[test]
     fn an_empty_completed_line_clears_the_provisional_tail() {
         let mut tail = Tail {
             partial: "wrong".into(),
             ..Tail::default()
         };
-        assert_eq!(tail.commit(0, ""), EngineEvent::Committed(String::new()));
+        assert_eq!(
+            tail.commit(0, "", 0.0, 0.0).unwrap(),
+            EngineEvent::Committed(String::new())
+        );
         assert!(tail.partial.is_empty());
         assert_eq!(tail.committed_count, 1);
+    }
+
+    #[test]
+    fn detected_speech_without_recognized_words_is_an_error_before_commit() {
+        let mut tail = Tail::default();
+        for text in ["", " \t"] {
+            let error = tail.commit(0, text, 1.25, 0.75).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Speech detected at 1.250–2.000s")
+            );
+            assert_eq!(tail.committed_count, 0);
+            assert!(!tail.has_text);
+        }
     }
 
     #[test]
     fn repeated_words_in_distinct_audio_segments_survive() {
         let mut tail = Tail::default();
         assert_eq!(
-            tail.commit(0, "no no"),
+            tail.commit(0, "no no", 0.0, 1.0).unwrap(),
             EngineEvent::Committed("no no".into())
         );
         assert_eq!(tail.decorate("no"), " no");
-        assert_eq!(tail.commit(1, "no"), EngineEvent::Committed(" no".into()));
         assert_eq!(
-            tail.commit(2, "  café\t"),
+            tail.commit(1, "no", 1.0, 1.0).unwrap(),
+            EngineEvent::Committed(" no".into())
+        );
+        assert_eq!(
+            tail.commit(2, "  café\t", 2.0, 1.0).unwrap(),
             EngineEvent::Committed("   café\t".into())
         );
     }

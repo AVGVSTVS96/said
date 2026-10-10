@@ -117,7 +117,7 @@ struct Recognition {
     events: Vec<Value>,
 }
 
-fn recognize(client: &WorkerClient, path: &Path, finish: Duration) -> Result<Recognition> {
+fn recognize(client: &WorkerClient, path: &Path) -> Result<Recognition> {
     let (mut engine, receiver) = client.engine(UtteranceId::random())?;
     let mut wav = Wav::open(path)?;
     let release = Arc::new(Mutex::new(None));
@@ -163,10 +163,6 @@ fn recognize(client: &WorkerClient, path: &Path, finish: Duration) -> Result<Rec
                 Ok(output) => output,
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                     let released = *release.lock().map_err(|_| "release clock poisoned")?;
-                    if released.is_some_and(|time: Instant| time.elapsed() > finish) {
-                        error = Some("final deadline exceeded".into());
-                        break;
-                    }
                     if feeder.is_finished() && released.is_none() {
                         error = Some("audio feeder failed before release".into());
                         break;
@@ -331,6 +327,7 @@ pub fn run(mut options: Options) -> Result<()> {
         "host": host(), "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
         "engine_crate": env!("CARGO_PKG_VERSION"), "runtime_version": manifest.runtime.version,
         "binary_sha256": corpus::hash(&std::env::current_exe()?)?,
+        "watchdog": {"policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 15), recent peak busy RTF * min(uncommitted seconds, 0.5)))", "runtime_source_revision": manifest.runtime.source.revision, "runtime_source_sha256": manifest.runtime.source.sha256, "runtime_patch_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../crates/engine/moonshine-0.1.5.patch")))},
         "worker_deadlines_seconds": {"startup": options.startup.as_secs(), "audio": options.audio.as_secs(), "finish": options.finish.as_secs()},
         "reference_statuses": clips.iter().fold(BTreeMap::new(), |mut counts, c| { *counts.entry(&c.reference_status).or_insert(0) += 1; counts }),
         "engines": {},
@@ -376,6 +373,7 @@ pub fn run(mut options: Options) -> Result<()> {
         let began = Instant::now();
         let client = WorkerClient::warm(config);
         let cold_ms = began.elapsed().as_secs_f64() * 1000.0;
+        let mut measured_rtf = None;
         let mut scores = Vec::new();
         let mut timings = Vec::new();
         let mut errors = 0;
@@ -384,7 +382,7 @@ pub fn run(mut options: Options) -> Result<()> {
             for clip in &clips {
                 eprintln!("{model}: {}", clip.id);
                 let path = clip.path(&options.manifest, options.audio_root.as_deref());
-                match recognize(&client, &path, options.finish) {
+                match recognize(&client, &path) {
                     Ok(recognition) => {
                         let a = score::normalized_tokens(&clip.reference)
                             .len()
@@ -426,6 +424,7 @@ pub fn run(mut options: Options) -> Result<()> {
                 }
                 records.flush()?;
             }
+            measured_rtf = client.measured_real_time_factor();
         } else if let Err(error) = client {
             errors = clips.len();
             writeln!(
@@ -463,6 +462,7 @@ pub fn run(mut options: Options) -> Result<()> {
         }
         result["strata"] = Value::Object(strata);
         result["cold_load_ms"] = json!(cold_ms);
+        result["measured_busy_real_time_factor"] = json!(measured_rtf);
         result["peak_rss_bytes"] = json!(memory.finish());
         result["successful_clips"] = json!(scores.len());
         result["failed_clips"] = json!(errors);

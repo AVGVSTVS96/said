@@ -269,3 +269,101 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
     }
     assert_eq!(fs::read(starts).unwrap(), b"x");
 }
+
+#[test]
+fn queued_audio_is_not_a_hang_and_measured_work_allows_a_slow_finish() {
+    let fixture = Fixture::new();
+    let script = fixture.directory.join("slow.py");
+    fs::write(&script, r#"import sys, struct, json, time
+r = sys.stdin.buffer
+w = sys.stdout.buffer
+audio = open(sys.argv[1], 'wb')
+def send(value):
+    data = json.dumps(value).encode()
+    w.write(struct.pack('<I', len(data)) + data)
+    w.flush()
+while prefix := r.read(4):
+    value = json.loads(r.read(struct.unpack('<I', prefix)[0]))
+    if value['type'] == 'audio':
+        audio.write(r.read(struct.unpack('<I', r.read(4))[0]))
+        audio.flush()
+        time.sleep(0.02)
+        if value['sequence'] == 0:
+            send({'type': 'event', 'id': value['id'], 'event': {'type': 'partial', 'text': 'no'}})
+        send({'type': 'audio_ack', 'id': value['id'], 'sequence': value['sequence']})
+    elif value['type'] == 'finish':
+        time.sleep(0.15)
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'committed', 'text': 'no no tail'}})
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
+"#).unwrap();
+    for queue_frames in [1, 2] {
+        let config = WorkerConfig {
+            executable: "python3".into(),
+            args: vec![
+                script.display().to_string(),
+                fixture.directory.join("received.pcm").display().to_string(),
+            ],
+            audio_timeout: Duration::from_millis(100),
+            finish_timeout: Duration::from_millis(100),
+            queue_frames,
+            ..fixture.config()
+        };
+        let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config).unwrap();
+        engine.start(&[]).unwrap();
+        let samples: Vec<_> = (0..160000).map(|sample| sample as i16).collect();
+        for block in samples.chunks(1600) {
+            engine.feed(block);
+        }
+        engine.finish();
+        let events: Vec<_> = output.iter().collect();
+        assert_eq!(
+            events
+                .iter()
+                .map(|output| &output.event)
+                .collect::<Vec<_>>(),
+            [
+                &EngineEvent::Partial("no".into()),
+                &EngineEvent::Committed("no no tail".into()),
+                &EngineEvent::Final
+            ]
+        );
+        assert_eq!(
+            fs::read(fixture.directory.join("received.pcm")).unwrap(),
+            samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn accepted_finish_completes_after_the_producer_handle_is_dropped() {
+    let fixture = Fixture::new();
+    let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), fixture.config()).unwrap();
+    engine.start(&[]).unwrap();
+    engine.feed(&[7; 3200]);
+    engine.finish();
+    drop(engine);
+    assert_eq!(
+        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
+        EngineEvent::Committed("no no  café\t\n".into())
+    );
+    assert_eq!(
+        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
+        EngineEvent::Final
+    );
+    assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
+}
+
+#[test]
+fn cancellation_before_start_closes_the_event_stream() {
+    let fixture = Fixture::new();
+    let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), fixture.config()).unwrap();
+    engine.cancel();
+    assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
+    assert_eq!(
+        output.try_recv(),
+        Err(crossbeam_channel::TryRecvError::Disconnected)
+    );
+}

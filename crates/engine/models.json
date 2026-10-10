@@ -4,10 +4,10 @@
     "macos": "moonshine-medium-en"
   },
   "runtime": {
-    "version": "0.1.5",
+    "version": "0.1.5+voice.2",
     "libraries": {
-      "linux": "runtime/moonshine-0.1.5/lib/libmoonshine.so",
-      "macos": "runtime/moonshine-0.1.5/lib/libmoonshine.dylib"
+      "linux": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.so",
+      "macos": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.dylib"
     },
     "artifacts": {
       "linux-x86_64": {
@@ -25,6 +25,11 @@
         "sha256": "9866b1956d12fff11923ad42f1140bcb314bf05bf8d8576fb7b3aa819ec40e51",
         "format": "wheel"
       }
+    },
+    "source": {
+      "url": "https://codeload.github.com/moonshine-ai/moonshine/tar.gz/234f60faa0eb388b01cdf7e60aca232af37aefda",
+      "sha256": "6bd927a48234dced3cc6f208522fe176c248686e9283273c51eddc8d7994e001",
+      "revision": "234f60faa0eb388b01cdf7e60aca232af37aefda"
     }
   },
   "models": {

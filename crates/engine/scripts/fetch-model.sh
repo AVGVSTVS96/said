@@ -38,4 +38,5 @@ while IFS= read -r -d '' source; do
     cp "$source" "$destination.part"
     mv "$destination.part" "$destination"
 done < <(find "$scratch/unpacked" -type f -print0)
+"$(dirname "$manifest")/scripts/build-runtime.sh"
 printf 'Ready: %s (%s), %s\n' "$model" "$directory" "$runtime"
