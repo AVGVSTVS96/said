@@ -1,0 +1,3 @@
+name = "voice"
+bundle_id = "io.github.verbatimdictation.app"
+storage_key = "verbatim-dictation"

@@ -1,0 +1,22 @@
+[package]
+name = "voice-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+ts-rs.workspace = true
+uuid.workspace = true
+
+[build-dependencies]
+serde.workspace = true
+ts-rs.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+voice-audio.workspace = true
+voice-engine.workspace = true
+voice-platform.workspace = true
+rusqlite = { version = "0.40", features = ["bundled"] }

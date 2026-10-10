@@ -1,0 +1,15 @@
+/target/
+/app/node_modules/
+/app/dist/
+/app/src-tauri/tauri.conf.json
+/app/src-tauri/gen/
+/app/src/product.ts
+/app/src/bindings/
+/.build-deps/
+*.wav
+!/bench/clips/*.wav
+*.sqlite
+*.sqlite-*
+.DS_Store
+.env
+.env.*
