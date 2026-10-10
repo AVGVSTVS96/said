@@ -109,7 +109,9 @@ Committed/Final events. Cancellation kills the live child and emits no usable
 late transcript. A failed replay returns an error; it never loops.
 
 `WorkerConfig` retains its existing fields. Startup has a separate cold-load
-budget; audio/finish values seed the no-progress floor. Acknowledgments measure
+budget, retained until the first nonempty transcript proves the decoder has run:
+a warm empty-audio acknowledgment proves model loading, not inference warmup.
+Audio/finish values then seed the no-progress floor. Acknowledgments measure
 busy wall time per half-second of consumed audio, excluding time with no pending
 work. The worker retains the highest measured real-time factor between utterances.
 Its budget is `max(seed floor, 4 × measured RTF × uncommitted audio seconds)`:

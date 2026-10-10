@@ -198,6 +198,7 @@ struct Transport {
     input: Sender<(WorkerRequest, Option<Vec<i16>>)>,
     output: Receiver<std::result::Result<WorkerResponse, String>>,
     watchdog: Watchdog,
+    inference_ready: bool,
 }
 
 impl Transport {
@@ -240,6 +241,7 @@ impl Transport {
             input,
             output,
             watchdog: Watchdog::default(),
+            inference_ready: false,
         })
     }
 
@@ -346,7 +348,7 @@ fn supervise(
                 continue;
             }
         }
-        let timeout = if !loaded {
+        let timeout = if !loaded || !worker.inference_ready {
             config.startup_timeout
         } else if pending.is_empty() {
             worker
@@ -387,6 +389,9 @@ fn supervise(
                 }
                 Ok(Ok(WorkerResponse::Event { id: current, event })) => {
                     if current != id { transport = Err("worker event identity mismatch".into()); continue; }
+                    if matches!(&event, EngineEvent::Partial(text) | EngineEvent::Committed(text) if !text.is_empty()) {
+                        worker.inference_ready = true;
+                    }
                     match &event {
 
                         EngineEvent::Error(error) => { transport = Err(error.clone().into()); continue; }
@@ -454,7 +459,7 @@ fn replay(
         worker.send(WorkerRequest::Audio { id, sequence }, Some(samples))?;
         uncommitted_samples += sample_count;
         let deadline = Instant::now()
-            + if first {
+            + if first || !worker.inference_ready {
                 config.startup_timeout
             } else {
                 worker
@@ -477,10 +482,13 @@ fn replay(
                 }
                 WorkerResponse::Event { id: current, event } if current == id => match event {
                     EngineEvent::Committed(chunk) => {
+                        worker.inference_ready |= !chunk.is_empty();
                         text.push_str(&chunk);
                         uncommitted_samples = 0;
                     }
-                    EngineEvent::Partial(_) => {}
+                    EngineEvent::Partial(text) => {
+                        worker.inference_ready |= !text.is_empty();
+                    }
                     EngineEvent::Error(error) => return Err(error.into()),
                     EngineEvent::Final => return Err("Final before Finish during replay".into()),
                 },
@@ -491,7 +499,7 @@ fn replay(
     }
     worker.send(WorkerRequest::Finish { id }, None)?;
     let deadline = Instant::now()
-        + if first {
+        + if first || !worker.inference_ready {
             config.startup_timeout
         } else {
             worker

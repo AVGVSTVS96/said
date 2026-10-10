@@ -288,6 +288,8 @@ while prefix := r.read(4):
         audio.write(r.read(struct.unpack('<I', r.read(4))[0]))
         audio.flush()
         time.sleep(0.02)
+        if value['sequence'] == 0:
+            send({'type': 'event', 'id': value['id'], 'event': {'type': 'partial', 'text': 'no'}})
         send({'type': 'audio_ack', 'id': value['id'], 'sequence': value['sequence']})
     elif value['type'] == 'finish':
         time.sleep(0.15)
@@ -320,6 +322,7 @@ while prefix := r.read(4):
                 .map(|output| &output.event)
                 .collect::<Vec<_>>(),
             [
+                &EngineEvent::Partial("no".into()),
                 &EngineEvent::Committed("no no tail".into()),
                 &EngineEvent::Final
             ]
