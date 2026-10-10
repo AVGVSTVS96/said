@@ -16,7 +16,7 @@ the checked-in one. Small on Linux and Medium on macOS remain provisional.
 
 ## Native runtime
 
-Moonshine Voice 0.1.5+voice.1's C ABI uses native ONNX Runtime on both platforms.
+Moonshine Voice 0.1.5+voice.2's C ABI uses native ONNX Runtime on both platforms.
 CPU is upstream's recommended default, including Apple Silicon; CoreML is not
 required. `return_audio_data=false` releases completed segment audio; the
 recorder already owns the durable WAV. The official archive/wheel supplies the
@@ -30,6 +30,8 @@ global detector carried one recording's state into the next, suppressing the
 quiet AMI clip after the CI prefix. It replaces the incorrect duration fade with
 a hard 15-second segment bound, removes speech look-behind at forced boundaries,
 clears reused look-behind buffers, and pads VAD/frontend remainders at finish.
+Stop forces final VAD/decoder updates even with no new audio, and encoder
+lookahead is flushed even when all frontend samples were already consumed.
 Forced segments own contiguous, disjoint sample ranges. Padding adds silence
 after the final original sample; it never replaces captured samples. CPU sessions
 use two intra-op threads, one inter-op thread and no busy spinning, avoiding
@@ -167,7 +169,7 @@ adapter-integrity checks, not a fidelity ranking or the full public CI corpus.
 
 The public regression primes both models with the benchmark's CC0 CI clips,
 recognizes the same CC-BY AMI crop twice and requires identical nonempty output,
-then completes the 98-second monologue and checks four occurrences of each passage
+checks the last spoken word of an exact eight-second recording, then completes the 98-second monologue and checks four occurrences of each passage
 anchor. `test-native.sh` checks three minutes of synthetic PCM with five feed sizes
 (including one sample), every original sample exactly once, contiguous times,
 bounded segments and zero-only padding. Supervisor tests verify queued slow audio,

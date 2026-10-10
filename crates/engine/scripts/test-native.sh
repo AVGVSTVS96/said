@@ -2,7 +2,9 @@
 set -euo pipefail
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 cache="$HOME/.cache/voice-models/runtime"
-source="$cache/source-$(jq -r '.runtime.source.revision' "$root/models.json")"
+patch_hash=$(openssl dgst -sha256 "$root/moonshine-0.1.5.patch")
+patch_hash=${patch_hash##* }
+source="$cache/source-$(jq -r '.runtime.source.revision' "$root/models.json")-$patch_hash"
 runtime="$cache/moonshine-$(jq -r '.runtime.version' "$root/models.json")"
 mkdir -p "$cache/native-tests"
 export TMPDIR="$cache/native-tests"

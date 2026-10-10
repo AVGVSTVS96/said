@@ -40,6 +40,53 @@ fn recognize(client: &WorkerClient, path: PathBuf) -> (String, usize) {
     (text, commits)
 }
 
+struct AlignedTail(PathBuf);
+
+impl AlignedTail {
+    fn new(bench: &std::path::Path) -> Self {
+        let mut wav = Wav::open(&bench.join("one-word.wav")).unwrap();
+        let mut speech = Vec::new();
+        while let Some(block) = wav.read().unwrap() {
+            speech.extend(block);
+        }
+        let end = speech
+            .iter()
+            .rposition(|sample| sample.unsigned_abs() > 64)
+            .unwrap();
+        speech.truncate((end + 161).min(speech.len()));
+        let mut samples = vec![0_i16; 8 * 16000 - speech.len()];
+        samples.extend(speech);
+        let data: Vec<_> = samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect();
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend((36 + data.len() as u32).to_le_bytes());
+        bytes.extend(b"WAVEfmt ");
+        bytes.extend(16_u32.to_le_bytes());
+        bytes.extend(1_u16.to_le_bytes());
+        bytes.extend(1_u16.to_le_bytes());
+        bytes.extend(16000_u32.to_le_bytes());
+        bytes.extend(32000_u32.to_le_bytes());
+        bytes.extend(2_u16.to_le_bytes());
+        bytes.extend(16_u16.to_le_bytes());
+        bytes.extend(b"data");
+        bytes.extend((data.len() as u32).to_le_bytes());
+        bytes.extend(data);
+        let directory = model_cache().unwrap().join("engine-tests");
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join(format!("{}.wav", UtteranceId::random().0));
+        std::fs::write(&path, bytes).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for AlignedTail {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 #[test]
 #[ignore = "requires both patched native models and the public benchmark cache"]
 fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() {
@@ -71,6 +118,15 @@ fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() 
                     .is_empty()
             );
         }
+        let tail = AlignedTail::new(&bench);
+        let text = recognize(&client, tail.0.clone()).0;
+        assert_eq!(
+            text.split(|c: char| !c.is_alphabetic())
+                .filter(|word| word.eq_ignore_ascii_case("stop"))
+                .count(),
+            1,
+            "frame-aligned release must flush the spoken last word: {text}"
+        );
         let first = recognize(&client, bench.join("ami-project.wav")).0;
         let second = recognize(&client, bench.join("ami-project.wav")).0;
         assert!(!first.is_empty());

@@ -4,10 +4,10 @@
     "macos": "moonshine-medium-en"
   },
   "runtime": {
-    "version": "0.1.5+voice.1",
+    "version": "0.1.5+voice.2",
     "libraries": {
-      "linux": "runtime/moonshine-0.1.5+voice.1/lib/libmoonshine.so",
-      "macos": "runtime/moonshine-0.1.5+voice.1/lib/libmoonshine.dylib"
+      "linux": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.so",
+      "macos": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.dylib"
     },
     "artifacts": {
       "linux-x86_64": {

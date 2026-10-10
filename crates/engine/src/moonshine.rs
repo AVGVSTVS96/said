@@ -70,7 +70,7 @@ impl Api {
             c"moonshine_voice_runtime_version",
             unsafe extern "C" fn() -> i32
         );
-        if unsafe { revision() } != 1 {
+        if unsafe { revision() } != 2 {
             return Err("Moonshine requires the patched voice runtime; run fetch-model.sh".into());
         }
         let version = symbol!(c"moonshine_get_version", unsafe extern "C" fn() -> i32);
