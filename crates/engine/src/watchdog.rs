@@ -27,13 +27,19 @@ impl Watchdog {
     }
 
     pub fn real_time_factor(&self) -> f64 {
-        self.recent.iter().copied().fold(0.0, f64::max)
+        let mut rates: Vec<_> = self.recent.iter().copied().collect();
+        if rates.is_empty() {
+            return 0.0;
+        }
+        let middle = rates.len() / 2;
+        *rates.select_nth_unstable_by(middle, f64::total_cmp).1
     }
 
     pub fn budget(&self, floor: Duration, samples: u64) -> Duration {
-        floor.max(Duration::from_secs_f64(
-            self.real_time_factor() * samples.min(8000) as f64 / 16000.0 * 4.0,
-        ))
+        let peak = self.recent.iter().copied().fold(0.0, f64::max);
+        let segment_work = self.real_time_factor() * samples.min(240000) as f64 / 16000.0;
+        let update_work = peak * samples.min(8000) as f64 / 16000.0;
+        floor.max(Duration::from_secs_f64(segment_work.max(update_work) * 4.0))
     }
 }
 
@@ -50,16 +56,23 @@ mod tests {
             watchdog.observe(1600, Duration::from_millis(300));
         }
         assert_eq!(watchdog.real_time_factor(), 3.0);
-        assert_eq!(watchdog.budget(floor, 16000), Duration::from_secs(6));
-        assert_eq!(watchdog.budget(floor, 15 * 16000), Duration::from_secs(6));
+        assert_eq!(watchdog.budget(floor, 16000), Duration::from_secs(12));
+        assert_eq!(watchdog.budget(floor, 15 * 16000), Duration::from_secs(180));
+        assert_eq!(
+            watchdog.budget(floor, 600 * 16000),
+            Duration::from_secs(180)
+        );
         watchdog.observe(8000, Duration::from_secs(3));
         assert_eq!(watchdog.real_time_factor(), 6.0);
-        assert_eq!(watchdog.budget(floor, 16000), Duration::from_secs(12));
+        assert_eq!(watchdog.budget(floor, 16000), Duration::from_secs(24));
         assert_eq!(watchdog.budget(floor, 0), floor);
         for _ in 0..32 {
             watchdog.observe(8000, Duration::from_millis(10));
         }
         assert_eq!(watchdog.real_time_factor(), 0.02);
-        assert_eq!(watchdog.budget(floor, 15 * 16000), floor);
+        assert_eq!(
+            watchdog.budget(floor, 15 * 16000),
+            Duration::from_millis(1200)
+        );
     }
 }

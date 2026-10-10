@@ -113,12 +113,13 @@ budget, retained until the first nonempty transcript proves the decoder has run:
 a warm empty-audio acknowledgment proves model loading, not inference warmup.
 Audio/finish values then seed the no-progress floor. Acknowledgments measure
 busy wall time per half-second of consumed audio, excluding time with no pending
-work. The worker retains the highest measured real-time factor over the most recent
-32 half-second windows (16 seconds of consumed audio), including between utterances.
-Its budget is `max(seed floor, 4 × recent peak RTF × min(uncommitted audio seconds, 0.5))`:
-fourfold headroom allows contention above the observed speed. This budgets one
-update until the next progress response, not the entire queued recording. Old
-load spikes age out as more audio is processed. Acknowledgments
+work. The worker retains 32 half-second measurements (16 seconds of consumed
+audio), including between utterances. Its next-progress budget is the larger of
+four times the rolling median RTF for a bounded 15-second speech segment and
+four times the recent peak RTF for one half-second update, with the caller's
+seed floor. Neither term grows with the entire queue. The median handles normal
+work; the peak allows recently observed stalls without multiplying them by every
+queued second. Old load spikes age out as more audio is processed. Acknowledgments
 rearm the progress clock; queue age never consumes a later frame's allowance.
 Finish timing begins after audio has been acknowledged. Partial output cannot
 keep a hung worker alive. The same policy applies to file replay; benchmark does

@@ -147,8 +147,11 @@ A worker stays loaded between clips and is released before the next model.
 Startup and audio/final no-progress floors default to 60/10/30 seconds; override
 with `--startup-seconds`, `--audio-seconds`, `--finish-seconds`. They are not
 production latency recommendations. The engine learns busy real-time factor
-from acknowledgments and uses `max(floor, 4 × recent peak RTF × min(uncommitted audio
-seconds, 0.5))` between progress responses, using the last 16 seconds of consumed audio. Pending queue age does not shorten later
+from acknowledgments. It budgets fourfold measured work: the larger of rolling
+median RTF for a bounded 15-second speech segment and recent peak RTF for one
+half-second update, plus the caller's floor. Measurements cover the last
+16 seconds of consumed audio; the entire queued recording never multiplies a
+stall allowance. Pending queue age does not shorten later
 frames' allowances. The benchmark records learned busy RTF and runtime source/patch
 hashes, and delegates finish supervision entirely to the engine. Engine/model/runtime manifests can be
 selected with `--model-manifest` and `--model-cache`; model hashes are verified.
