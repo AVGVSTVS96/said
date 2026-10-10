@@ -113,9 +113,12 @@ budget, retained until the first nonempty transcript proves the decoder has run:
 a warm empty-audio acknowledgment proves model loading, not inference warmup.
 Audio/finish values then seed the no-progress floor. Acknowledgments measure
 busy wall time per half-second of consumed audio, excluding time with no pending
-work. The worker retains the highest measured real-time factor between utterances.
-Its budget is `max(seed floor, 4 × measured RTF × uncommitted audio seconds)`:
-fourfold headroom allows contention above the observed speed. Acknowledgments
+work. The worker retains the highest measured real-time factor over the most recent
+32 half-second windows (16 seconds of consumed audio), including between utterances.
+Its budget is `max(seed floor, 4 × recent peak RTF × min(uncommitted audio seconds, 0.5))`:
+fourfold headroom allows contention above the observed speed. This budgets one
+update until the next progress response, not the entire queued recording. Old
+load spikes age out as more audio is processed. Acknowledgments
 rearm the progress clock; queue age never consumes a later frame's allowance.
 Finish timing begins after audio has been acknowledged. Partial output cannot
 keep a hung worker alive. The same policy applies to file replay; benchmark does
@@ -143,7 +146,7 @@ CARGO_BUILD_JOBS=2 cargo test -p voice-engine --test public_regressions -- --ign
 
 The suite includes 50,000 deterministic mutated protocol inputs with fragmented
 reads; framing limits/truncation; lifecycle/identity/sequence validation; literal
-fake traces; crashes, hangs and malformed stdout; cancellation; and recovery
+fake traces; crashes, hangs and malformed stdout; cancellation before start; accepted finish surviving producer drop; and recovery
 fresh replay identity and isolation from failed live text. It adds no runtime dependency or test-only dependency.
 
 Generate the public synthetic clips on macOS, then copy only these WAVs to the

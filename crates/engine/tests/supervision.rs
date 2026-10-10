@@ -336,3 +336,34 @@ while prefix := r.read(4):
         );
     }
 }
+
+#[test]
+fn accepted_finish_completes_after_the_producer_handle_is_dropped() {
+    let fixture = Fixture::new();
+    let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), fixture.config()).unwrap();
+    engine.start(&[]).unwrap();
+    engine.feed(&[7; 3200]);
+    engine.finish();
+    drop(engine);
+    assert_eq!(
+        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
+        EngineEvent::Committed("no no  café\t\n".into())
+    );
+    assert_eq!(
+        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
+        EngineEvent::Final
+    );
+    assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
+}
+
+#[test]
+fn cancellation_before_start_closes_the_event_stream() {
+    let fixture = Fixture::new();
+    let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), fixture.config()).unwrap();
+    engine.cancel();
+    assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
+    assert_eq!(
+        output.try_recv(),
+        Err(crossbeam_channel::TryRecvError::Disconnected)
+    );
+}

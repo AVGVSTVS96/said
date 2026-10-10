@@ -270,15 +270,27 @@ fn emit(events: &Sender<EngineOutput>, id: UtteranceId, event: EngineEvent) -> b
 fn supervise(
     id: UtteranceId,
     config: WorkerConfig,
-    requests: Receiver<Input>,
-    failures: Receiver<String>,
+    mut requests: Receiver<Input>,
+    mut failures: Receiver<String>,
     events: Sender<EngineOutput>,
     spool: Arc<Spool>,
     cancellation: (Receiver<()>, Arc<AtomicBool>, Option<IdleWorker>),
 ) {
-    let (cancellation, cancelled, idle) = cancellation;
-    let Ok(Input::Start(vocabulary)) = requests.recv() else {
-        return;
+    let (mut cancellation, cancelled, idle) = cancellation;
+    let vocabulary = loop {
+        if cancelled.load(Ordering::Acquire) {
+            return;
+        }
+        select! {
+            recv(cancellation) -> signal => {
+                if signal.is_ok() { return; }
+                cancellation = crossbeam_channel::never();
+            }
+            recv(requests) -> input => match input {
+                Ok(Input::Start(vocabulary)) => break vocabulary,
+                _ => return,
+            }
+        }
     };
     let existing = idle.as_ref().and_then(|idle| idle.lock().ok()?.take());
     let existing_is_warm = existing.is_some();
@@ -363,15 +375,21 @@ fn supervise(
             .map(|since: Instant| timeout.saturating_sub(since.elapsed()))
             .unwrap_or(Duration::from_secs(3600));
         select! {
-            recv(cancellation) -> _ => return,
+            recv(cancellation) -> signal => {
+                if signal.is_ok() { return; }
+                cancellation = crossbeam_channel::never();
+            },
             recv(failures) -> failure => {
                 if let Ok(error) = failure { transport = Err(error.into()); }
-                else { return; }
+                else { failures = crossbeam_channel::never(); }
             }
             recv(requests) -> input => match input {
                 Ok(Input::AudioAvailable) => {}
                 Ok(Input::Finish) => { finish_requested = true; }
-                Err(_) => { return; }
+                Err(_) => {
+                    if !finish_requested { return; }
+                    requests = crossbeam_channel::never();
+                }
                 Ok(Input::Start(_)) => { transport = Err("duplicate Start".into()); }
             },
             recv(worker.output) -> response => match response {
