@@ -4,6 +4,18 @@ use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use super::ffi::{self, Ref};
 
+pub struct Retained(pub Ref);
+impl Retained {
+    pub unsafe fn new(object: Ref) -> Self {
+        Self(unsafe { send(object, c"retain") })
+    }
+}
+impl Drop for Retained {
+    fn drop(&mut self) {
+        unsafe { send::<()>(self.0, c"release") };
+    }
+}
+
 pub unsafe fn class(name: &CStr) -> Ref {
     unsafe { ffi::objc_getClass(name.as_ptr()) }
 }

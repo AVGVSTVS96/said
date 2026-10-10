@@ -12,6 +12,7 @@ struct WindowIdentity {
     pid: i32,
     target: Target,
     element: Owned,
+    application: objc::Retained,
 }
 // AX references may cross threads; all registry and AppKit work is serialized on the main queue.
 unsafe impl Send for WindowIdentity {}
@@ -60,6 +61,7 @@ impl Desktop {
             let mut registry = self.registry.lock().unwrap();
             if let Some(existing) = registry.windows.iter().find(|entry| {
                 entry.pid == pid
+                    && !objc::send::<bool>(entry.application.0, c"isTerminated")
                     && entry.target.app_id == app_id
                     && ffi::CFEqual(entry.element.0, window.0)
             }) {
@@ -78,6 +80,7 @@ impl Desktop {
                 pid,
                 target: target.clone(),
                 element: window,
+                application: objc::Retained::new(app),
             });
             Ok(target)
         }
@@ -104,23 +107,18 @@ impl Desktop {
     pub fn focus(&self, target: &Target) -> Result<()> {
         objc::main_thread(|| {
             objc::autorelease(|| unsafe {
-                let (pid, window) = {
+                let (pid, window, running) = {
                     let registry = self.registry.lock().unwrap();
                     let entry = registry
                         .windows
                         .iter()
                         .find(|entry| entry.target.same_window(target))
                         .ok_or("Target window is no longer known")?;
-                    (entry.pid, entry.element.0)
+                    (entry.pid, entry.element.0, entry.application.0)
                 };
                 if !ffi::AXIsProcessTrusted() {
                     return Err("Accessibility is required to refocus the target window".into());
                 }
-                let running = objc::send1::<_, Ref>(
-                    objc::class(c"NSRunningApplication"),
-                    c"runningApplicationWithProcessIdentifier:",
-                    pid,
-                );
                 if running.is_null() || objc::send::<bool>(running, c"isTerminated") {
                     return Err("Target app closed".into());
                 }
