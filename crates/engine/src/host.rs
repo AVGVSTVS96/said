@@ -111,7 +111,7 @@ impl WorkerEngine {
         config.validate()?;
         let (input, requests) = bounded(config.queue_frames);
         let (overflow, failures) = bounded(1);
-        let (events, output) = bounded(config.queue_frames * 4);
+        let (events, output) = bounded(64);
         let (cancel_signal, cancellation) = bounded(1);
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel_flag = cancelled.clone();
@@ -199,7 +199,7 @@ impl Transport {
         let mut stdin = child.stdin.take().ok_or("worker stdin unavailable")?;
         let mut stdout = child.stdout.take().ok_or("worker stdout unavailable")?;
         let (input, requests) = bounded::<(WorkerRequest, Option<Vec<i16>>)>(config.queue_frames);
-        let (responses, output) = bounded(config.queue_frames * 4);
+        let (responses, output) = bounded(64);
         let errors = responses.clone();
         thread::spawn(move || {
             for (message, pcm) in requests {

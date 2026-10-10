@@ -53,7 +53,9 @@ upstream transcript composition convention. All text inside each line remains
 unchanged. Vocabulary explicitly enables native keyterm biasing; commas/NUL in
 individual terms are rejected because upstream's keyterm interface uses commas.
 
-Host request, transport and event queues are bounded. PCM is sent in blocks of
+Host request and transport queues are bounded; response/event queues hold at
+most 64 frames. A receiver closing before Final is an engine failure, including
+an event consumer that has stopped draining its queue. PCM is sent in blocks of
 at most 1,600 samples. Audio acknowledgments must match the utterance and next
 sequence. Malformed output, native exit, queue overflow or a missed deadline
 kills the worker and emits Error without Final for that identity. Capture
