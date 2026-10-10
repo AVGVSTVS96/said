@@ -1,6 +1,6 @@
 use std::ptr::null_mut;
 use std::sync::Mutex;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use voice_core::{Result, Target};
 
@@ -137,7 +137,17 @@ impl Desktop {
                 if !objc::send1::<_, bool>(running, c"activateWithOptions:", 2_usize) {
                     return Err("Target app refused activation".into());
                 }
-                self.check_focus(target)
+                let deadline = Instant::now() + Duration::from_millis(500);
+                loop {
+                    if self.check_focus(target).is_ok() {
+                        return Ok(());
+                    }
+                    if Instant::now() >= deadline {
+                        return Err("Target window did not gain focus. Select it manually, then insert again.".into());
+                    }
+                    // Activation completes asynchronously; service the main loop until actual window focus changes.
+                    ffi::CFRunLoopRunInMode(ffi::kCFRunLoopDefaultMode, 0.01, true);
+                }
             })
         })
     }

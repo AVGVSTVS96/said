@@ -8,7 +8,7 @@ failure provides the precise Settings path. Microphone checks belong to setup;
 the adapter does not request any permission or capture audio.
 
 The host supplies `configure_overlay: fn(&tauri::Window) -> voice_core::Result<()>`.
-On Tauri's main thread, obtain `window.ns_window()`, convert it to `NonNull<c_void>`,
+The adapter calls it on Tauri's main thread. Obtain `window.ns_window()`, convert it to `NonNull<c_void>`,
 and call `unsafe { macos::overlay::configure(pointer) }` **before the first show**.
 Create the window hidden, undecorated, transparent and unfocusable. Keep Tauri's
 native window alive. Show via `overlay::show(pointer)` on the main thread; do not
@@ -46,7 +46,9 @@ valid for this adapter's lifetime; recovered recordings never auto-paste. The
 host must feed `FocusChanged` for desktop focus changes, including switching
 windows in one app, to preserve core's inhibition after an away-and-back change.
 `focus()` raises the remembered window, activates its app and verifies focus;
-activation that has not completed is reported as failure, with no paste.
+the main loop is serviced until actual focus arrives, with a 500 ms failure
+bound and no paste on failure. The host AppKit main loop must be running when
+calling desktop methods or configuring the panel from a worker thread.
 
 Paste rechecks window identity before posting, resolves Command+V against the
 current command-modified Unicode keyboard layout, and writes an NSString from

@@ -50,7 +50,7 @@ impl<W> MacosPlatform<W> {
         self.desktop.copy(text)
     }
 }
-impl<W> Platform for MacosPlatform<W> {
+impl<W: Sync> Platform for MacosPlatform<W> {
     type Window = W;
     fn hotkeys(&self) -> Receiver<Hotkey> {
         self.input.hotkeys()
@@ -65,7 +65,7 @@ impl<W> Platform for MacosPlatform<W> {
         self.desktop.paste(target, text, send)
     }
     fn make_overlay(&self, window: &W) {
-        if let Err(error) = (self.overlay)(window) {
+        if let Err(error) = objc::main_thread(|| (self.overlay)(window)) {
             let _ = self.overlay_errors.send(error.to_string());
         }
     }
