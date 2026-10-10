@@ -10,6 +10,7 @@ pub struct FakeHistory {
 
 impl History for FakeHistory {
     fn insert(&mut self, utterance: &Utterance) -> Result<()> {
+        crate::history::validate(utterance)?;
         if self.rows.contains_key(&utterance.id) {
             return Err("utterance already exists".into());
         }
@@ -19,11 +20,19 @@ impl History for FakeHistory {
     }
 
     fn finish(&mut self, utterance: &Utterance) -> Result<()> {
+        crate::history::validate(utterance)?;
+        if utterance.raw_text.is_none() {
+            return Err("recognition has not finished".into());
+        }
         let row = self
             .rows
             .get_mut(&utterance.id)
             .ok_or("unknown utterance")?;
-        if row.raw_text.is_some() || row.audio_id != utterance.audio_id {
+        if row.raw_text.is_some()
+            || row.audio_id != utterance.audio_id
+            || row.engine != utterance.engine
+            || row.started_at != utterance.started_at
+        {
             return Err("original text and audio identity are immutable".into());
         }
         *row = utterance.clone();
@@ -69,6 +78,9 @@ impl History for FakeHistory {
 
     fn record_delivery(&mut self, id: UtteranceId, target: &Target, at: i64) -> Result<()> {
         let row = self.rows.get_mut(&id).ok_or("unknown utterance")?;
+        if row.raw_text.is_none() {
+            return Err("recognition has not finished".into());
+        }
         row.pasted_to = Some(target.clone());
         row.pasted_at = Some(at);
         Ok(())
@@ -81,5 +93,35 @@ impl History for FakeHistory {
             .values()
             .any(|other| other.audio_id == row.audio_id))
         .then_some(row.audio_id))
+    }
+}
+
+impl FakeHistory {
+    pub fn last(&self) -> Option<Utterance> {
+        self.rows
+            .values()
+            .filter(|row| row.raw_text.is_some())
+            .max_by_key(|row| {
+                (
+                    row.started_at,
+                    self.saves.iter().rposition(|id| *id == row.id),
+                )
+            })
+            .cloned()
+    }
+
+    pub fn set_status(&mut self, id: UtteranceId, status: crate::UtteranceStatus) -> Result<()> {
+        if !matches!(
+            status,
+            crate::UtteranceStatus::Canceled | crate::UtteranceStatus::Discarded
+        ) {
+            return Err("only cancellation or discard may change a completed status".into());
+        }
+        let row = self.rows.get_mut(&id).ok_or("unknown utterance")?;
+        if row.raw_text.is_none() {
+            return Err("recognition has not finished".into());
+        }
+        row.status = Some(status);
+        Ok(())
     }
 }
