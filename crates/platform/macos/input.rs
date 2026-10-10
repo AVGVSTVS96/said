@@ -224,36 +224,49 @@ mod tests {
     use super::super::decoder::{CONTROL, OPTION};
     use super::*;
     #[test]
-    fn quartz_event_fields_feed_the_production_decoder_without_installing_a_tap() {
-        let mut decoder = Decoder::new(Shortcut::default());
+    fn quartz_events_run_the_production_callback_without_installing_a_tap() {
+        let (hotkeys, receiver) = unbounded();
+        let (statuses, _) = unbounded();
+        let mut tap = Tap {
+            decoder: Decoder::new(Shortcut::default()),
+            hotkeys,
+            statuses,
+            recording: Arc::new(AtomicBool::new(false)),
+            status: InputStatus::Available,
+        };
+        let context = (&mut tap as *mut Tap).cast();
         let down =
             Owned::new(unsafe { ffi::CGEventCreateKeyboardEvent(std::ptr::null_mut(), 49, true) })
                 .unwrap();
         unsafe {
             ffi::CGEventSetFlags(down.0, CONTROL | OPTION);
         }
-        assert_eq!(
-            decoder
-                .decode(unsafe { key_event(10, down.0) }, false)
-                .hotkey,
-            Some(Hotkey::Down)
-        );
+        assert!(unsafe { callback(std::ptr::null_mut(), 10, down.0, context) }.is_null());
+        assert_eq!(receiver.try_recv().unwrap(), Hotkey::Down);
         unsafe {
             ffi::CGEventSetIntegerValueField(down.0, 8, 1);
         }
-        assert_eq!(
-            decoder
-                .decode(unsafe { key_event(10, down.0) }, false)
-                .hotkey,
-            None
-        );
+        assert!(unsafe { callback(std::ptr::null_mut(), 10, down.0, context) }.is_null());
+        assert!(receiver.is_empty());
         let up =
             Owned::new(unsafe { ffi::CGEventCreateKeyboardEvent(std::ptr::null_mut(), 49, false) })
                 .unwrap();
+        unsafe {
+            ffi::CGEventSetFlags(up.0, 0);
+        }
+        assert!(unsafe { callback(std::ptr::null_mut(), 11, up.0, context) }.is_null());
+        assert_eq!(receiver.try_recv().unwrap(), Hotkey::Up);
+        let escape =
+            Owned::new(unsafe { ffi::CGEventCreateKeyboardEvent(std::ptr::null_mut(), 53, true) })
+                .unwrap();
         assert_eq!(
-            decoder.decode(unsafe { key_event(11, up.0) }, false).hotkey,
-            Some(Hotkey::Up)
+            unsafe { callback(std::ptr::null_mut(), 10, escape.0, context) },
+            escape.0
         );
+        assert!(receiver.is_empty());
+        tap.recording.store(true, Ordering::Release);
+        assert!(unsafe { callback(std::ptr::null_mut(), 10, escape.0, context) }.is_null());
+        assert_eq!(receiver.try_recv().unwrap(), Hotkey::Cancel);
     }
     #[test]
     fn interrupted_tap_publishes_unavailability_and_resets_edges() {

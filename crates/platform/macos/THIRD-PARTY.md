@@ -1,7 +1,7 @@
 # References and adapted behavior
 
 Command-modified layout scanning follows Handy's MIT macOS input implementation:
-https://github.com/cjpais/Handy (src-tauri/src/input.rs).
+https://github.com/cjpais/Handy/blob/48a3d8e9ee456c1c6a3b7223779271c457890b4d/src-tauri/src/input.rs.
 
 MIT License
 
@@ -26,7 +26,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 NSPanel class conversion and activation-tag synchronization follow tauri-nspanel:
-https://github.com/ahkohd/tauri-nspanel/tree/v2.1 (src/panel.rs).
+https://github.com/ahkohd/tauri-nspanel/blob/ef6e3090a6083c653955ca0b6e7f6c6ae1453d40/src/panel.rs.
 The MIT license is selected from its MIT/Apache-2.0 dual license.
 
 MIT License
