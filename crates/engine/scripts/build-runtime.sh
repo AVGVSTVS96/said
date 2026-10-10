@@ -3,11 +3,11 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "$0")/.." && pwd)
 manifest="$root/models.json"
 cache="$HOME/.cache/voice-models"
-runtime="$cache/runtime/moonshine-$(jq -r '.runtime.version' "$manifest")"
+runtime="$cache/runtime/moonshine-$(jq -r '.runtimes.moonshine.version' "$manifest")"
 patch_hash=$(openssl dgst -sha256 "$root/moonshine-0.1.5.patch")
 patch_hash=${patch_hash##* }
-source="$cache/runtime/source-$(jq -r '.runtime.source.revision' "$manifest")-$patch_hash"
-build="$cache/runtime/build-$(jq -r '.runtime.version' "$manifest")-$patch_hash"
+source="$cache/runtime/source-$(jq -r '.runtimes.moonshine.source.revision' "$manifest")-$patch_hash"
+build="$cache/runtime/build-$(jq -r '.runtimes.moonshine.version' "$manifest")-$patch_hash"
 case "$(uname -s)" in
     Linux) library=libmoonshine.so; ort=libonnxruntime.so.1; platform=linux ;;
     Darwin) library=libmoonshine.dylib; ort=libonnxruntime.1.23.2.dylib; platform=macos ;;
@@ -18,10 +18,10 @@ if test "$platform" = linux && test "$arch" = arm64; then arch=aarch64; fi
 mkdir -p "$source" "$build"
 if ! test -f "$source/.voice-ready"; then
     archive="$cache/runtime/moonshine-source.tar.gz"
-    expected=$(jq -r '.runtime.source.sha256' "$manifest")
+    expected=$(jq -r '.runtimes.moonshine.source.sha256' "$manifest")
     actual=$(openssl dgst -sha256 "$archive" 2>/dev/null || true)
     if test "${actual##* }" != "$expected"; then
-        curl -fsSL "$(jq -r '.runtime.source.url' "$manifest")" -o "$archive.part"
+        curl -fsSL "$(jq -r '.runtimes.moonshine.source.url' "$manifest")" -o "$archive.part"
         actual=$(openssl dgst -sha256 "$archive.part")
         test "${actual##* }" = "$expected"
         mv "$archive.part" "$archive"

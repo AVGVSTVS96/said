@@ -30,6 +30,7 @@ pub struct Options {
     pub engines: Vec<String>,
     pub all: bool,
     pub ci: bool,
+    pub unpaced: bool,
     pub audio_root: Option<PathBuf>,
     pub output: PathBuf,
     pub trace: Option<PathBuf>,
@@ -48,6 +49,7 @@ impl Options {
             engines: Vec::new(),
             all: false,
             ci: false,
+            unpaced: false,
             audio_root: None,
             output: model_cache()?.join(format!("bench-runs/{stamp}-{}", std::process::id())),
             trace: None,
@@ -61,6 +63,7 @@ impl Options {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--ci" => options.ci = true,
+                "--unpaced" => options.unpaced = true,
                 "--all" => options.all = true,
                 "--engine" => options
                     .engines
@@ -117,7 +120,7 @@ struct Recognition {
     events: Vec<Value>,
 }
 
-fn recognize(client: &WorkerClient, path: &Path) -> Result<Recognition> {
+fn recognize(client: &WorkerClient, path: &Path, unpaced: bool) -> Result<Recognition> {
     let (mut engine, receiver) = client.engine(UtteranceId::random())?;
     let mut wav = Wav::open(path)?;
     let release = Arc::new(Mutex::new(None));
@@ -145,10 +148,12 @@ fn recognize(client: &WorkerClient, path: &Path) -> Result<Recognition> {
                     return Err("replay stopped after engine failure".into());
                 }
                 samples += block.len() as u64;
-                thread::sleep(
-                    (began + Duration::from_secs_f64(samples as f64 / 16000.0))
-                        .saturating_duration_since(Instant::now()),
-                );
+                if !unpaced {
+                    thread::sleep(
+                        (began + Duration::from_secs_f64(samples as f64 / 16000.0))
+                            .saturating_duration_since(Instant::now()),
+                    );
+                }
                 engine.feed(&block);
             }
             *release_signal
@@ -318,16 +323,16 @@ pub fn run(mut options: Options) -> Result<()> {
     let mut report = json!({
         "schema": 1, "started_unix_ms": SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
         "corpus_sha256": corpus::hash(&options.manifest)?, "clips": clips.len(),
-        "mode": "real_time",
+        "mode": if options.unpaced { "unpaced" } else { "real_time" },
         "ci": options.ci, "vocabulary": [], "postprocessing": "none",
         "requested_engines": options.engines,
         "model_manifest_sha256": options.model_manifest.as_ref().map(|p| corpus::hash(p)).transpose()?.unwrap_or_else(|| format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../crates/engine/models.json")))),
         "build": {"rust": std::process::Command::new("rustc").arg("--version").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned()),
         "dependency_lock_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../Cargo.lock")))},
         "host": host(), "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
-        "engine_crate": env!("CARGO_PKG_VERSION"), "runtime_version": manifest.runtime.version,
+        "engine_crate": env!("CARGO_PKG_VERSION"), "runtimes": manifest.runtimes.iter().map(|(name, runtime)| (name, &runtime.version)).collect::<BTreeMap<_, _>>(),
         "binary_sha256": corpus::hash(&std::env::current_exe()?)?,
-        "watchdog": {"policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 15), recent peak busy RTF * min(uncommitted seconds, 0.5)))", "runtime_source_revision": manifest.runtime.source.revision, "runtime_source_sha256": manifest.runtime.source.sha256, "runtime_patch_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../crates/engine/moonshine-0.1.5.patch")))},
+        "watchdog": {"policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 15), recent peak busy RTF * min(uncommitted seconds, 0.5)))", "runtime_patch_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../crates/engine/moonshine-0.1.5.patch")))},
         "worker_deadlines_seconds": {"startup": options.startup.as_secs(), "audio": options.audio.as_secs(), "finish": options.finish.as_secs()},
         "reference_statuses": clips.iter().fold(BTreeMap::new(), |mut counts, c| { *counts.entry(&c.reference_status).or_insert(0) += 1; counts }),
         "engines": {},
@@ -382,7 +387,7 @@ pub fn run(mut options: Options) -> Result<()> {
             for clip in &clips {
                 eprintln!("{model}: {}", clip.id);
                 let path = clip.path(&options.manifest, options.audio_root.as_deref());
-                match recognize(&client, &path) {
+                match recognize(&client, &path, options.unpaced) {
                     Ok(recognition) => {
                         let a = score::normalized_tokens(&clip.reference)
                             .len()
@@ -505,14 +510,14 @@ fn verify_model(manifest: &Manifest, model: &str, cache: &Path, trace: bool) -> 
         }
         files.insert(name, actual);
     }
-    let library_hash = manifest
-        .runtime
+    let runtime = manifest.runtime(config)?;
+    let library_hash = runtime
         .libraries
         .get(std::env::consts::OS)
         .map(|library| corpus::hash(&cache.join(library)))
         .transpose()?;
     let mut runtime_files = BTreeMap::new();
-    if let Some(library) = manifest.runtime.libraries.get(std::env::consts::OS) {
+    if let Some(library) = runtime.libraries.get(std::env::consts::OS) {
         let directory = cache
             .join(library)
             .parent()
@@ -527,7 +532,7 @@ fn verify_model(manifest: &Manifest, model: &str, cache: &Path, trace: bool) -> 
         }
     }
     Ok(
-        json!({"adapter": config.adapter, "ranking_candidate": config.adapter != "fake", "runtime_files_sha256": runtime_files, "architecture": config.architecture, "update_samples": config.update_samples,
+        json!({"adapter": config.adapter, "ranking_candidate": config.adapter != "fake", "runtime_files_sha256": runtime_files, "runtime_version": runtime.version, "runtime_source_revision": runtime.source.revision, "runtime_source_sha256": runtime.source.sha256, "threads": config.threads, "provider": config.provider, "chunk_seconds": if config.adapter == "parakeet" { Some(30) } else { None }, "overlap_seconds": if config.adapter == "parakeet" { Some(5) } else { None }, "architecture": config.architecture, "update_samples": config.update_samples,
         "source": config.source, "license": config.license, "files": files, "runtime_library_sha256": library_hash}),
     )
 }

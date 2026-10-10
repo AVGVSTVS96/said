@@ -7,6 +7,7 @@ use voice_core::{Result, UtteranceId};
 use crate::{
     fake::{FakeEngine, Trace},
     moonshine::{Moonshine, MoonshineModel},
+    parakeet::{Parakeet, ParakeetModel},
     worker::Adapter,
 };
 
@@ -14,7 +15,7 @@ use crate::{
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub defaults: BTreeMap<String, String>,
-    pub runtime: Runtime,
+    pub runtimes: BTreeMap<String, Runtime>,
     pub models: BTreeMap<String, Model>,
 }
 
@@ -49,6 +50,8 @@ pub struct Model {
     pub adapter: String,
     pub architecture: u32,
     pub update_samples: usize,
+    pub threads: i32,
+    pub provider: String,
     pub directory: String,
     pub license: String,
     pub source: String,
@@ -56,6 +59,11 @@ pub struct Model {
 }
 
 impl Manifest {
+    pub fn runtime(&self, model: &Model) -> Result<&Runtime> {
+        self.runtimes
+            .get(&model.adapter)
+            .ok_or_else(|| "adapter runtime missing".into())
+    }
     pub fn bundled() -> Result<Self> {
         Ok(serde_json::from_str(include_str!("../models.json"))?)
     }
@@ -76,7 +84,7 @@ impl Manifest {
         match config.adapter.as_str() {
             "moonshine" => {
                 let library = self
-                    .runtime
+                    .runtime(config)?
                     .libraries
                     .get(std::env::consts::OS)
                     .ok_or("no runtime library for this platform")?;
@@ -87,6 +95,21 @@ impl Manifest {
                     config.architecture,
                     config.update_samples,
                 )?;
+                Ok((Box::new(engine), output))
+            }
+            "parakeet" => {
+                let library = self
+                    .runtime(config)?
+                    .libraries
+                    .get(std::env::consts::OS)
+                    .ok_or("no Parakeet runtime for this platform")?;
+                let loaded = ParakeetModel::load(
+                    &cache.join(library),
+                    &cache.join(&config.directory),
+                    config.threads,
+                    &config.provider,
+                )?;
+                let (engine, output) = Parakeet::from_model(id, loaded);
                 Ok((Box::new(engine), output))
             }
             "fake" => {
@@ -116,7 +139,7 @@ pub fn worker_main(model: Option<&str>, manifest: &Manifest, cache: &Path) -> Re
     let config = manifest.models.get(model).ok_or("unknown model")?;
     if config.adapter == "moonshine" {
         let library = manifest
-            .runtime
+            .runtime(config)?
             .libraries
             .get(std::env::consts::OS)
             .ok_or("no runtime for platform")?;
@@ -128,6 +151,22 @@ pub fn worker_main(model: Option<&str>, manifest: &Manifest, cache: &Path) -> Re
         )?;
         crate::worker::run(std::io::stdin().lock(), std::io::stdout().lock(), |id| {
             let (engine, output) = Moonshine::from_model(id, loaded.clone());
+            Ok((Box::new(engine), output))
+        })
+    } else if config.adapter == "parakeet" {
+        let library = manifest
+            .runtime(config)?
+            .libraries
+            .get(std::env::consts::OS)
+            .ok_or("no Parakeet runtime for this platform")?;
+        let loaded = ParakeetModel::load(
+            &cache.join(library),
+            &cache.join(&config.directory),
+            config.threads,
+            &config.provider,
+        )?;
+        crate::worker::run(std::io::stdin().lock(), std::io::stdout().lock(), |id| {
+            let (engine, output) = Parakeet::from_model(id, loaded.clone());
             Ok((Box::new(engine), output))
         })
     } else {

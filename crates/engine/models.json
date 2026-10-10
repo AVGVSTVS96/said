@@ -3,35 +3,6 @@
     "linux": "moonshine-small-en",
     "macos": "moonshine-medium-en"
   },
-  "runtime": {
-    "version": "0.1.5+voice.2",
-    "libraries": {
-      "linux": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.so",
-      "macos": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.dylib"
-    },
-    "artifacts": {
-      "linux-x86_64": {
-        "url": "https://github.com/moonshine-ai/moonshine/releases/download/v0.1.5/moonshine-voice-linux-x86_64.tar.gz",
-        "sha256": "9c3a87fea93ff2ad957938868f95a0a366dce9ff8ad86bde6cdcf5a4cadb51df",
-        "format": "tar"
-      },
-      "linux-aarch64": {
-        "url": "https://github.com/moonshine-ai/moonshine/releases/download/v0.1.5/moonshine-voice-linux-arm64.tar.gz",
-        "sha256": "1600c80a0806b7a2582307c98e7a56f4072e4b060498b08a0b75eb20af42def2",
-        "format": "tar"
-      },
-      "macos-aarch64": {
-        "url": "https://files.pythonhosted.org/packages/86/2a/9eca2f000e4990315d18aa360c6eb679417b29252e6307c273bcbef38461/moonshine_voice-0.1.5-py3-none-macosx_15_0_arm64.whl",
-        "sha256": "9866b1956d12fff11923ad42f1140bcb314bf05bf8d8576fb7b3aa819ec40e51",
-        "format": "wheel"
-      }
-    },
-    "source": {
-      "url": "https://codeload.github.com/moonshine-ai/moonshine/tar.gz/234f60faa0eb388b01cdf7e60aca232af37aefda",
-      "sha256": "6bd927a48234dced3cc6f208522fe176c248686e9283273c51eddc8d7994e001",
-      "revision": "234f60faa0eb388b01cdf7e60aca232af37aefda"
-    }
-  },
   "models": {
     "moonshine-small-en": {
       "adapter": "moonshine",
@@ -49,7 +20,9 @@
         "streaming_config.json": "26f02b6afb22d60871a5efd85c3d38e569cc0ddb6c5eb6e93d3260152ae8a47a",
         "tokenizer.bin": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d"
       },
-      "update_samples": 8000
+      "update_samples": 8000,
+      "threads": 2,
+      "provider": "cpu"
     },
     "moonshine-medium-en": {
       "adapter": "moonshine",
@@ -67,7 +40,81 @@
         "streaming_config.json": "28e83b7a28e91472692a035e0dae3116422ae43aeb2bef5ed822c44ce89b88af",
         "tokenizer.bin": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d"
       },
-      "update_samples": 8000
+      "update_samples": 8000,
+      "threads": 2,
+      "provider": "cpu"
+    },
+    "parakeet-v3-fp32": {
+      "adapter": "parakeet",
+      "architecture": 0,
+      "update_samples": 32000,
+      "threads": 4,
+      "provider": "cpu:EnableCpuMemArena=0|EnableMemPattern=0|SessionConfig.session.intra_op.allow_spinning=0|SessionConfig.session.inter_op.allow_spinning=0",
+      "directory": "parakeet-v3-fp32",
+      "license": "CC-BY-4.0",
+      "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/1a468a35cbba69418f126de829e75261dea4a4e4/",
+      "files": {
+        "decoder.onnx": "d593cdb0e571f5a457ec2219af9968cbf6b0e8198e8f7839b40a8754593bf68c",
+        "encoder.onnx": "3eed7ce424bf8339ad09233533c687e2dbd07e74ccf5027b5e7344019ea373b0",
+        "encoder.weights": "3af3f51af5f2d01dbbf5af47d42c7962a2c205f11004254bb4f2b979862f39a8",
+        "joiner.onnx": "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63",
+        "tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+      }
+    }
+  },
+  "runtimes": {
+    "moonshine": {
+      "version": "0.1.5+voice.2",
+      "libraries": {
+        "linux": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.so",
+        "macos": "runtime/moonshine-0.1.5+voice.2/lib/libmoonshine.dylib"
+      },
+      "artifacts": {
+        "linux-x86_64": {
+          "url": "https://github.com/moonshine-ai/moonshine/releases/download/v0.1.5/moonshine-voice-linux-x86_64.tar.gz",
+          "sha256": "9c3a87fea93ff2ad957938868f95a0a366dce9ff8ad86bde6cdcf5a4cadb51df",
+          "format": "tar"
+        },
+        "linux-aarch64": {
+          "url": "https://github.com/moonshine-ai/moonshine/releases/download/v0.1.5/moonshine-voice-linux-arm64.tar.gz",
+          "sha256": "1600c80a0806b7a2582307c98e7a56f4072e4b060498b08a0b75eb20af42def2",
+          "format": "tar"
+        },
+        "macos-aarch64": {
+          "url": "https://files.pythonhosted.org/packages/86/2a/9eca2f000e4990315d18aa360c6eb679417b29252e6307c273bcbef38461/moonshine_voice-0.1.5-py3-none-macosx_15_0_arm64.whl",
+          "sha256": "9866b1956d12fff11923ad42f1140bcb314bf05bf8d8576fb7b3aa819ec40e51",
+          "format": "wheel"
+        }
+      },
+      "source": {
+        "url": "https://codeload.github.com/moonshine-ai/moonshine/tar.gz/234f60faa0eb388b01cdf7e60aca232af37aefda",
+        "sha256": "6bd927a48234dced3cc6f208522fe176c248686e9283273c51eddc8d7994e001",
+        "revision": "234f60faa0eb388b01cdf7e60aca232af37aefda"
+      }
+    },
+    "parakeet": {
+      "version": "1.13.8",
+      "libraries": {
+        "linux": "runtime/sherpa-onnx-1.13.8/lib/libsherpa-onnx-c-api.so",
+        "macos": "runtime/sherpa-onnx-1.13.8/lib/libsherpa-onnx-c-api.dylib"
+      },
+      "artifacts": {
+        "linux-x86_64": {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-x64-shared-no-tts-lib.tar.bz2",
+          "sha256": "bf2d998c8b07012cd5098f3b92673bc1333fd9b927767d7cb664be8190d8bc0b",
+          "format": "tar.bz2"
+        },
+        "macos-aarch64": {
+          "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-osx-arm64-shared-no-tts-lib.tar.bz2",
+          "sha256": "f3e0cbd86cc3f38dad30c97921b40e9a8bcc6f2c943777eb76ad77176993e417",
+          "format": "tar.bz2"
+        }
+      },
+      "source": {
+        "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf",
+        "sha256": "0a8db6c55dd318f4a688faba85f7760b99a6c92e8ef8864479d418531bee1ac2",
+        "revision": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf"
+      }
     }
   }
 }

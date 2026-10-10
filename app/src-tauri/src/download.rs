@@ -88,13 +88,13 @@ pub fn install(
             &mut progress,
         )?;
     }
+    let selected = manifest.runtime(model)?;
     let key = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-    let artifact = manifest
-        .runtime
+    let artifact = selected
         .artifacts
         .get(&key)
         .ok_or("no native runtime for this architecture")?;
-    let archive = directory.join(format!("runtime-{}.archive", manifest.runtime.version));
+    let archive = directory.join(format!("runtime-{}.archive", selected.version));
     fetch(
         &client,
         &artifact.url,
@@ -102,13 +102,24 @@ pub fn install(
         &artifact.sha256,
         &mut progress,
     )?;
-    let runtime = directory.join(format!(
-        "runtime/moonshine-{}/lib",
-        manifest.runtime.version
-    ));
+    let library = selected
+        .libraries
+        .get(std::env::consts::OS)
+        .ok_or("no native runtime for this platform")?;
+    let runtime = directory
+        .join(library)
+        .parent()
+        .ok_or("runtime directory missing")?
+        .to_owned();
     private_dir(&runtime)?;
-    if artifact.format == "tar" {
-        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(File::open(&archive)?));
+    if matches!(artifact.format.as_str(), "tar" | "tar.bz2") {
+        let input = File::open(&archive)?;
+        let decoder: Box<dyn Read> = if artifact.format == "tar.bz2" {
+            Box::new(bzip2::read::BzDecoder::new(input))
+        } else {
+            Box::new(flate2::read::GzDecoder::new(input))
+        };
+        let mut archive = tar::Archive::new(decoder);
         for entry in archive.entries()? {
             let mut entry = entry?;
             let path = entry.path()?.into_owned();
@@ -116,7 +127,7 @@ pub fn install(
                 continue;
             };
             if !entry.header().entry_type().is_file()
-                || !(name.ends_with(".so") || name.contains(".so."))
+                || !(name.ends_with(".so") || name.contains(".so.") || name.ends_with(".dylib"))
             {
                 continue;
             }
@@ -138,16 +149,7 @@ pub fn install(
     } else {
         return Err("unsupported runtime archive".into());
     }
-    if !directory
-        .join(
-            manifest
-                .runtime
-                .libraries
-                .get(std::env::consts::OS)
-                .ok_or("missing runtime library")?,
-        )
-        .is_file()
-    {
+    if !directory.join(library).is_file() {
         return Err("runtime archive omitted its library".into());
     }
     Ok(())
