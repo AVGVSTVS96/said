@@ -39,6 +39,7 @@ pub struct Artifact {
 pub struct Model {
     pub adapter: String,
     pub architecture: u32,
+    pub update_samples: usize,
     pub directory: String,
     pub license: String,
     pub source: String,
@@ -75,6 +76,7 @@ impl Manifest {
                     &cache.join(library),
                     &cache.join(&config.directory),
                     config.architecture,
+                    config.update_samples,
                 )?;
                 Ok((Box::new(engine), output))
             }
@@ -113,6 +115,7 @@ pub fn worker_main(model: Option<&str>, manifest: &Manifest, cache: &Path) -> Re
             &cache.join(library),
             &cache.join(&config.directory),
             config.architecture,
+            config.update_samples,
         )?;
         crate::worker::run(std::io::stdin().lock(), std::io::stdout().lock(), |id| {
             let (engine, output) = Moonshine::from_model(id, loaded.clone());

@@ -115,13 +115,22 @@ impl Api {
 pub struct MoonshineModel {
     api: Api,
     transcriber: i32,
+    update_samples: usize,
 }
 
 impl MoonshineModel {
-    pub fn load(library: &Path, model: &Path, arch: u32) -> Result<Rc<Self>> {
+    pub fn load(
+        library: &Path,
+        model: &Path,
+        arch: u32,
+        update_samples: usize,
+    ) -> Result<Rc<Self>> {
         use std::os::unix::ffi::OsStrExt;
         if !matches!(arch, 2 | 4 | 5) {
             return Err("Moonshine requires a published streaming architecture".into());
+        }
+        if update_samples == 0 {
+            return Err("Moonshine update_samples must be positive".into());
         }
         let api = Api::open(library)?;
         let path = CString::new(model.as_os_str().as_bytes())?;
@@ -144,7 +153,11 @@ impl MoonshineModel {
                 30000,
             )
         })?;
-        Ok(Rc::new(Self { api, transcriber }))
+        Ok(Rc::new(Self {
+            api,
+            transcriber,
+            update_samples,
+        }))
     }
 }
 
@@ -170,10 +183,11 @@ impl Moonshine {
         library: &Path,
         model: &Path,
         arch: u32,
+        update_samples: usize,
     ) -> Result<(Self, Receiver<EngineOutput>)> {
         Ok(Self::from_model(
             id,
-            MoonshineModel::load(library, model, arch)?,
+            MoonshineModel::load(library, model, arch, update_samples)?,
         ))
     }
 
@@ -313,8 +327,8 @@ impl Engine for Moonshine {
             })
             .and_then(|_| {
                 self.buffered_samples += pcm16k.len();
-                if self.buffered_samples >= 8000 {
-                    self.buffered_samples %= 8000;
+                if self.buffered_samples >= self.model.update_samples {
+                    self.buffered_samples %= self.model.update_samples;
                     self.update(false)?;
                 }
                 Ok(())
