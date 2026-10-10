@@ -2,6 +2,8 @@ pub mod bindings;
 pub mod fake;
 pub mod history;
 pub mod session;
+pub mod settings;
+pub mod storage;
 pub mod types;
 
 pub use history::History;

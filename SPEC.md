@@ -78,7 +78,7 @@ A small panel, about 480 px wide, bottom center of the monitor with the focused 
 | Hotkey pressed while the previous utterance is still finishing | Start the new recording at once. Utterances finish and paste in order, each checked against the app that had focus when it started. |
 | Focus moved during recording or finishing | Do not paste. Save, show the "Insert last" hint. |
 | Target app closed | Same as focus moved. |
-| Mic unplugged | Stop at the last frame, finish normally with what was captured, overlay: "Mic disconnected". No silent switch to another mic. |
+| Mic unplugged | An explicitly selected non-default mic stops at the last frame, finishes normally with what was captured, and shows "Mic disconnected". On Linux, the default input follows PipeWire and may continue from a new source after unplug. |
 | Engine crash or hang | Keep recording to disk. On release, restart the worker and recognize from the file. Overlay: "Recognizer restarted". |
 | App crash | Audio on disk is complete up to the last flush (every 250 ms). On next start, recordings without text are recognized and shown in history as "Recovered". They are never auto-pasted. |
 | Cancel | Click the ✕ on the overlay, or press Escape where the hotkey adapter can see it (macOS, Linux with evdev). The utterance stays in history marked canceled. |
