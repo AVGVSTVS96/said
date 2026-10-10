@@ -5,7 +5,7 @@ use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId};
 
 use crate::Engine;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize, Clone)]
 pub struct Trace {
     pub start: Vec<EngineEvent>,
     pub feeds: VecDeque<Vec<EngineEvent>>,
