@@ -1,0 +1,406 @@
+{
+  "binary_sha256": "4c2414941a10b06a2216a00d16342febed8d2369c2fdad206b2e66efb1dbb5d3",
+  "build": {
+    "dependency_lock_sha256": "bf204270d08b74ee08af0a82532898dfc93260f9edc5510b4e24638a7b3ba659",
+    "rust": "rustc 1.89.0 (29483883e 2025-08-04) (Homebrew)"
+  },
+  "ci": false,
+  "clips": 28,
+  "corpus_sha256": "650c19b6436e8840c0f01d02fb2d8546e364c275d4761847268b017f132cbb6c",
+  "engine_crate": "0.0.0",
+  "engines": {
+    "moonshine-medium-en": {
+      "cold_load_ms": 252.582166,
+      "failed_clips": 0,
+      "filler": {
+        "matched": 10,
+        "opportunities": 18,
+        "precision": 0.9090909090909091,
+        "predicted": 11,
+        "recall": 0.5555555555555556
+      },
+      "hallucinated_words": 0,
+      "identifiers": {
+        "matched": 1,
+        "opportunities": 8,
+        "precision": 1.0,
+        "predicted": 1,
+        "recall": 0.125
+      },
+      "latency": {
+        "audio_seconds": 208.336875,
+        "first_partial_missing": 2,
+        "first_partial_p50_ms": 596.499458,
+        "first_partial_p95_ms": 2188.4895420000003,
+        "first_partial_samples": 26,
+        "first_text_p50_ms": 596.499458,
+        "first_text_p95_ms": 2188.4895420000003,
+        "max_replay_lag_ms": 5.147457999999915,
+        "release_5_to_20s_p50_ms": 239.908334,
+        "release_5_to_20s_p95_ms": 961.335167,
+        "release_5_to_20s_samples": 8,
+        "release_to_final_p50_ms": 194.298,
+        "release_to_final_p95_ms": 786.172584
+      },
+      "literal": {
+        "deletions": 35,
+        "hypothesis_words": 564,
+        "insertions": 11,
+        "reference_words": 588,
+        "substitutions": 85
+      },
+      "literal_wer": 0.2227891156462585,
+      "measured_busy_real_time_factor": 0.308290582,
+      "negation": {
+        "matched": 29,
+        "opportunities": 31,
+        "precision": 1.0,
+        "predicted": 29,
+        "recall": 0.9354838709677419
+      },
+      "negations_added": 0,
+      "negations_changed": 0,
+      "negations_dropped": 2,
+      "normalized": {
+        "deletions": 28,
+        "hypothesis_words": 573,
+        "insertions": 9,
+        "reference_words": 592,
+        "substitutions": 37
+      },
+      "normalized_wer": 0.125,
+      "peak_rss_bytes": 2276474880,
+      "pins": {
+        "adapter": "moonshine",
+        "architecture": 5,
+        "files": {
+          "adapter.ort": "3f2a287def57cc094367a0eec3c4f5fc36a32ec420e86764b696920991b20281",
+          "cross_kv.ort": "642f6e21cd305be79342207c6f9e6b681d469d55bc48c72b27b84846fb71fd1e",
+          "decoder_kv.ort": "193bb366492b74fc4ad338c6778e8d8eb916aaa11b5aa264f9057f4db7759486",
+          "encoder.ort": "12915e76ebac7dd287c5ea63965d06103a53ba1ce242a4a34f318f3958c60c37",
+          "frontend.model.ort": "95768855c70c8251eeecc05fedf69999da1b8ab16f605c9f457fd3354b0ad6b5",
+          "frontend.weights.ort": "5ac941f490cbe035b335b99a414cc393d62d4c6f9f2423495b286870d271d709",
+          "streaming_config.json": "28e83b7a28e91472692a035e0dae3116422ae43aeb2bef5ed822c44ce89b88af",
+          "tokenizer.bin": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d"
+        },
+        "license": "MIT",
+        "ranking_candidate": true,
+        "runtime_files_sha256": {
+          "libmoonshine.dylib": "c155062407b41082e7309dd046977fc880bb017279e90da3d01b8b77eba652cc",
+          "libonnxruntime.1.23.2.dylib": "480790a978a48ad3e06ce86b6025e037bd70221637f5c104a8dde19617364cf4"
+        },
+        "runtime_library_sha256": "c155062407b41082e7309dd046977fc880bb017279e90da3d01b8b77eba652cc",
+        "source": "https://download.moonshine.ai/model/medium-streaming-en/quantized_26_08_21/",
+        "update_samples": 8000
+      },
+      "repetition": {
+        "matched": 7,
+        "opportunities": 14,
+        "precision": 0.7777777777777778,
+        "predicted": 9,
+        "recall": 0.5
+      },
+      "strata": {
+        "filler": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 27,
+          "reference_words": 317
+        },
+        "flag": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 23
+        },
+        "identifier": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 2,
+          "reference_words": 8
+        },
+        "long": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 23,
+          "reference_words": 304
+        },
+        "natural": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 24,
+          "reference_words": 111
+        },
+        "negation": {
+          "clips": 11,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 36,
+          "reference_words": 401
+        },
+        "noise": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "path": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 23
+        },
+        "repetition": {
+          "clips": 3,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 27,
+          "reference_words": 327
+        },
+        "silence": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "technical": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 36,
+          "reference_words": 345
+        }
+      },
+      "successful_clips": 28,
+      "technical": {
+        "matched": 15,
+        "opportunities": 18,
+        "precision": 0.9375,
+        "predicted": 16,
+        "recall": 0.8333333333333334
+      }
+    },
+    "moonshine-small-en": {
+      "cold_load_ms": 117.462417,
+      "failed_clips": 0,
+      "filler": {
+        "matched": 8,
+        "opportunities": 18,
+        "precision": 1.0,
+        "predicted": 8,
+        "recall": 0.4444444444444444
+      },
+      "hallucinated_words": 0,
+      "identifiers": {
+        "matched": 1,
+        "opportunities": 8,
+        "precision": 1.0,
+        "predicted": 1,
+        "recall": 0.125
+      },
+      "latency": {
+        "audio_seconds": 208.336875,
+        "first_partial_missing": 2,
+        "first_partial_p50_ms": 577.642792,
+        "first_partial_p95_ms": 2082.892417,
+        "first_partial_samples": 26,
+        "first_text_p50_ms": 577.642792,
+        "first_text_p95_ms": 2082.892417,
+        "max_replay_lag_ms": 5.162916999999652,
+        "release_5_to_20s_p50_ms": 123.80275,
+        "release_5_to_20s_p95_ms": 732.853833,
+        "release_5_to_20s_samples": 8,
+        "release_to_final_p50_ms": 123.80275,
+        "release_to_final_p95_ms": 312.535666
+      },
+      "literal": {
+        "deletions": 32,
+        "hypothesis_words": 567,
+        "insertions": 11,
+        "reference_words": 588,
+        "substitutions": 97
+      },
+      "literal_wer": 0.23809523809523808,
+      "measured_busy_real_time_factor": 0.187888164,
+      "negation": {
+        "matched": 28,
+        "opportunities": 31,
+        "precision": 1.0,
+        "predicted": 28,
+        "recall": 0.9032258064516129
+      },
+      "negations_added": 0,
+      "negations_changed": 0,
+      "negations_dropped": 3,
+      "normalized": {
+        "deletions": 30,
+        "hypothesis_words": 573,
+        "insertions": 11,
+        "reference_words": 592,
+        "substitutions": 50
+      },
+      "normalized_wer": 0.15371621621621623,
+      "peak_rss_bytes": 2149908480,
+      "pins": {
+        "adapter": "moonshine",
+        "architecture": 4,
+        "files": {
+          "adapter.ort": "c665f742364febad597cc9ac1e0b341ffbee0e24a1466e2f3bde95e6e4771762",
+          "cross_kv.ort": "e2d3417144e9514055ebfefe8dcc4c0a55a55adcb8530435844c75c53e352bf6",
+          "decoder_kv.ort": "1a05465b1dd955858dfcbee039c0020fb5dd982b0f5094c34e61735d518d771b",
+          "encoder.ort": "2d4d973e91e8aca08c51e7e7efa28a46ab265b63d809d5294d18b86bcd85b993",
+          "frontend.model.ort": "09b1210ae30dc5f0f3e45f0ebab914c254741323114f53fbbe5ae62cca35058f",
+          "frontend.weights.ort": "7ef97521bd4bad3928f5bb6808586f4fcc6e92bd5990394112eed7d4052ec338",
+          "streaming_config.json": "26f02b6afb22d60871a5efd85c3d38e569cc0ddb6c5eb6e93d3260152ae8a47a",
+          "tokenizer.bin": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d"
+        },
+        "license": "MIT",
+        "ranking_candidate": true,
+        "runtime_files_sha256": {
+          "libmoonshine.dylib": "c155062407b41082e7309dd046977fc880bb017279e90da3d01b8b77eba652cc",
+          "libonnxruntime.1.23.2.dylib": "480790a978a48ad3e06ce86b6025e037bd70221637f5c104a8dde19617364cf4"
+        },
+        "runtime_library_sha256": "c155062407b41082e7309dd046977fc880bb017279e90da3d01b8b77eba652cc",
+        "source": "https://download.moonshine.ai/model/small-streaming-en/quantized_26_08_21/",
+        "update_samples": 8000
+      },
+      "repetition": {
+        "matched": 7,
+        "opportunities": 14,
+        "precision": 1.0,
+        "predicted": 7,
+        "recall": 0.5
+      },
+      "strata": {
+        "filler": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 25,
+          "reference_words": 317
+        },
+        "flag": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 9,
+          "reference_words": 23
+        },
+        "identifier": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 8
+        },
+        "long": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 21,
+          "reference_words": 304
+        },
+        "natural": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 34,
+          "reference_words": 111
+        },
+        "negation": {
+          "clips": 11,
+          "negations_added": 0,
+          "negations_dropped": 2,
+          "normalized_errors": 41,
+          "reference_words": 401
+        },
+        "noise": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "path": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 9,
+          "reference_words": 23
+        },
+        "repetition": {
+          "clips": 3,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 25,
+          "reference_words": 327
+        },
+        "silence": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "technical": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 35,
+          "reference_words": 345
+        }
+      },
+      "successful_clips": 28,
+      "technical": {
+        "matched": 14,
+        "opportunities": 18,
+        "precision": 1.0,
+        "predicted": 14,
+        "recall": 0.7777777777777778
+      }
+    }
+  },
+  "host": {
+    "architecture": "aarch64",
+    "cpu": "Apple M1 Max",
+    "kernel": "25.6.0",
+    "logical_cpus": 10,
+    "os": "macos"
+  },
+  "mode": "real_time",
+  "model_manifest_sha256": "01df609adfb1e735597926cd02d00322b5a8584cfd9db843b5c3c65c0e5eab61",
+  "postprocessing": "none",
+  "reference_statuses": {
+    "authored_unreviewed": 21,
+    "deterministic": 2,
+    "upstream_verbatim": 5
+  },
+  "requested_engines": [
+    "moonshine-medium-en",
+    "moonshine-small-en"
+  ],
+  "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
+  "runtime_version": "0.1.5+voice.2",
+  "schema": 1,
+  "started_unix_ms": 1791674803323,
+  "vocabulary": [],
+  "watchdog": {
+    "policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 15), recent peak busy RTF * min(uncommitted seconds, 0.5)))",
+    "runtime_patch_sha256": "f1a1ddee0656583a65feb2c410f3cffc24d24e98e31aa0b5a024f22c5c2c7bc9",
+    "runtime_source_revision": "234f60faa0eb388b01cdf7e60aca232af37aefda",
+    "runtime_source_sha256": "6bd927a48234dced3cc6f208522fe176c248686e9283273c51eddc8d7994e001"
+  },
+  "worker_deadlines_seconds": {
+    "audio": 10,
+    "finish": 30,
+    "startup": 60
+  }
+}
