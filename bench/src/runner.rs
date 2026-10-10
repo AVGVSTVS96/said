@@ -117,7 +117,7 @@ struct Recognition {
     events: Vec<Value>,
 }
 
-fn recognize(client: &WorkerClient, path: &Path, finish: Duration) -> Result<Recognition> {
+fn recognize(client: &WorkerClient, path: &Path) -> Result<Recognition> {
     let (mut engine, receiver) = client.engine(UtteranceId::random())?;
     let mut wav = Wav::open(path)?;
     let release = Arc::new(Mutex::new(None));
@@ -163,10 +163,6 @@ fn recognize(client: &WorkerClient, path: &Path, finish: Duration) -> Result<Rec
                 Ok(output) => output,
                 Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                     let released = *release.lock().map_err(|_| "release clock poisoned")?;
-                    if released.is_some_and(|time: Instant| time.elapsed() > finish) {
-                        error = Some("final deadline exceeded".into());
-                        break;
-                    }
                     if feeder.is_finished() && released.is_none() {
                         error = Some("audio feeder failed before release".into());
                         break;
@@ -384,7 +380,7 @@ pub fn run(mut options: Options) -> Result<()> {
             for clip in &clips {
                 eprintln!("{model}: {}", clip.id);
                 let path = clip.path(&options.manifest, options.audio_root.as_deref());
-                match recognize(&client, &path, options.finish) {
+                match recognize(&client, &path) {
                     Ok(recognition) => {
                         let a = score::normalized_tokens(&clip.reference)
                             .len()

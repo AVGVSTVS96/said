@@ -24,6 +24,15 @@ pub struct Runtime {
     pub version: String,
     pub libraries: BTreeMap<String, String>,
     pub artifacts: BTreeMap<String, Artifact>,
+    pub source: Source,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Source {
+    pub url: String,
+    pub sha256: String,
+    pub revision: String,
 }
 
 #[derive(Debug, Deserialize)]

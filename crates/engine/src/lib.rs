@@ -4,6 +4,7 @@ pub mod manifest;
 pub mod moonshine;
 mod native;
 pub mod protocol;
+mod watchdog;
 pub mod wav;
 pub mod worker;
 

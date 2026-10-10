@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded, select};
 use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId, WorkerRequest, WorkerResponse};
 
-use crate::{Engine, protocol, wav::Wav};
+use crate::{Engine, protocol, watchdog::Watchdog, wav::Wav};
 
 #[derive(Clone, Debug)]
 pub struct WorkerConfig {
@@ -186,6 +186,7 @@ struct Transport {
     child: Child,
     input: Sender<(WorkerRequest, Option<Vec<i16>>)>,
     output: Receiver<std::result::Result<WorkerResponse, String>>,
+    watchdog: Watchdog,
 }
 
 impl Transport {
@@ -226,6 +227,7 @@ impl Transport {
             child,
             input,
             output,
+            watchdog: Watchdog::default(),
         })
     }
 
@@ -264,6 +266,7 @@ fn supervise(
         return;
     };
     let existing = idle.as_ref().and_then(|idle| idle.lock().ok()?.take());
+    let existing_is_warm = existing.is_some();
     let mut transport = existing
         .map(Ok)
         .unwrap_or_else(|| Transport::spawn(&config))
@@ -280,7 +283,10 @@ fn supervise(
     let mut pending = VecDeque::new();
     let mut sequence = 0;
     let mut finishing = None;
-    let mut loaded = false;
+    let mut loaded = existing_is_warm;
+    let mut progress = None;
+    let mut uncommitted_samples = 0_u64;
+    let never = crossbeam_channel::never();
     loop {
         if cancelled.load(Ordering::Acquire) {
             return;
@@ -295,31 +301,43 @@ fn supervise(
             }
             return;
         }
-        let worker = transport.as_ref().unwrap();
-        let deadline = pending
-            .front()
-            .map(|(_, deadline)| *deadline)
-            .into_iter()
-            .chain(finishing)
-            .min();
-        let wait = deadline
-            .map(|deadline: Instant| deadline.saturating_duration_since(Instant::now()))
+        let worker = transport.as_mut().unwrap();
+        let timeout = if !loaded {
+            config.startup_timeout
+        } else if pending.is_empty() {
+            worker
+                .watchdog
+                .budget(config.finish_timeout, uncommitted_samples)
+        } else {
+            worker
+                .watchdog
+                .budget(config.audio_timeout, uncommitted_samples)
+        };
+        let wait = progress
+            .map(|since: Instant| timeout.saturating_sub(since.elapsed()))
             .unwrap_or(Duration::from_secs(3600));
+        let incoming = if pending.len() < config.queue_frames {
+            &requests
+        } else {
+            &never
+        };
         select! {
             recv(cancellation) -> _ => return,
             recv(failures) -> failure => {
                 if failure.is_ok() { transport = Err("host input queue overflow; audio remains on disk".into()); }
                 else { return; }
             }
-            recv(requests) -> input => match input {
+            recv(incoming) -> input => match input {
                 Ok(Input::Audio(pcm)) => {
-                    let timeout = if !loaded { config.startup_timeout } else { config.audio_timeout };
-                    pending.push_back((sequence, Instant::now() + timeout));
+                    if pending.is_empty() { progress = Some(Instant::now()); }
+                    uncommitted_samples += pcm.len() as u64;
+                    pending.push_back((sequence, pcm.len() as u64));
                     if let Err(error) = worker.send(WorkerRequest::Audio { id, sequence }, Some(pcm)) { transport = Err(error); }
                     sequence += 1;
                 }
                 Ok(Input::Finish) => {
-                    finishing = Some(Instant::now() + if !loaded { config.startup_timeout } else { config.finish_timeout });
+                    finishing = Some(());
+                    if pending.is_empty() { progress = Some(Instant::now()); }
                     if let Err(error) = worker.send(WorkerRequest::Finish { id }, None) { transport = Err(error); }
                 }
                 Err(_) => { return; }
@@ -327,11 +345,15 @@ fn supervise(
             },
             recv(worker.output) -> response => match response {
                 Ok(Ok(WorkerResponse::AudioAck { id: current, sequence: ack })) => {
-                    loaded = true;
-                    if current != id || pending.pop_front().map(|(sequence, _)| sequence) != Some(ack) {
+                    let completed = pending.pop_front();
+                    if current != id || completed.map(|(sequence, _)| sequence) != Some(ack) {
                         transport = Err("worker acknowledgment mismatch".into());
-                    } else if pending.is_empty() && finishing.is_some() {
-                        finishing = Some(Instant::now() + config.finish_timeout);
+                    } else {
+                        if loaded && let Some(since) = progress {
+                            worker.watchdog.observe(completed.unwrap().1, since.elapsed());
+                        }
+                        loaded = true;
+                        progress = (!pending.is_empty() || finishing.is_some()).then(Instant::now);
                     }
                 }
                 Ok(Ok(WorkerResponse::Event { id: current, event })) => {
@@ -349,6 +371,10 @@ fn supervise(
                             emit(&events, id, event);
                             return;
                         }
+                        EngineEvent::Committed(_) => {
+                            uncommitted_samples = pending.iter().map(|(_, samples)| samples).sum();
+                            if finishing.is_some() && pending.is_empty() { progress = Some(Instant::now()); }
+                        }
                         _ => {}
                     }
                     if !emit(&events, id, event) { transport = Err("host event queue overflow".into()); }
@@ -356,7 +382,9 @@ fn supervise(
                 Ok(Err(error)) => { transport = Err(error.into()); }
                 Err(_) => { transport = Err("worker reader closed".into()); }
             },
-            default(wait) => { transport = Err("worker acknowledgment or final deadline exceeded".into()); }
+            default(wait) => {
+                transport = Err(format!("worker made no acknowledgment/final progress for {:.3}s (measured RTF {:.3}, {} uncommitted samples)", timeout.as_secs_f64(), worker.watchdog.real_time_factor(), uncommitted_samples).into());
+            }
         }
     }
 }
@@ -378,7 +406,7 @@ fn replay(
     vocabulary: &[String],
     cancellation: Option<&Receiver<()>>,
 ) -> Result<String> {
-    let worker = Transport::spawn(config)?;
+    let mut worker = Transport::spawn(config)?;
     worker.send(
         WorkerRequest::Start {
             id,
@@ -390,14 +418,21 @@ fn replay(
     let mut text = String::new();
     let mut sequence = 0;
     let mut first = true;
+    let mut uncommitted_samples = 0;
     while let Some(samples) = wav.read()? {
+        let sample_count = samples.len() as u64;
+        let began = Instant::now();
         worker.send(WorkerRequest::Audio { id, sequence }, Some(samples))?;
+        uncommitted_samples += sample_count;
         let deadline = Instant::now()
             + if first {
                 config.startup_timeout
             } else {
-                config.audio_timeout
+                worker
+                    .watchdog
+                    .budget(config.audio_timeout, uncommitted_samples)
             };
+        let cold = first;
         first = false;
         loop {
             let response = receive(&worker, deadline, cancellation)?;
@@ -405,9 +440,17 @@ fn replay(
                 WorkerResponse::AudioAck {
                     id: current,
                     sequence: ack,
-                } if current == id && ack == sequence => break,
+                } if current == id && ack == sequence => {
+                    if !cold {
+                        worker.watchdog.observe(sample_count, began.elapsed());
+                    }
+                    break;
+                }
                 WorkerResponse::Event { id: current, event } if current == id => match event {
-                    EngineEvent::Committed(chunk) => text.push_str(&chunk),
+                    EngineEvent::Committed(chunk) => {
+                        text.push_str(&chunk);
+                        uncommitted_samples = 0;
+                    }
                     EngineEvent::Partial(_) => {}
                     EngineEvent::Error(error) => return Err(error.into()),
                     EngineEvent::Final => return Err("Final before Finish during replay".into()),
@@ -422,7 +465,9 @@ fn replay(
         + if first {
             config.startup_timeout
         } else {
-            config.finish_timeout
+            worker
+                .watchdog
+                .budget(config.finish_timeout, uncommitted_samples)
         };
     loop {
         match receive(&worker, deadline, cancellation)? {

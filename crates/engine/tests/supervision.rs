@@ -269,3 +269,52 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
     }
     assert_eq!(fs::read(starts).unwrap(), b"x");
 }
+
+#[test]
+fn queued_audio_is_not_a_hang_and_measured_work_allows_a_slow_finish() {
+    let fixture = Fixture::new();
+    let script = fixture.directory.join("slow.py");
+    fs::write(&script, r#"import sys, struct, json, time
+r = sys.stdin.buffer
+w = sys.stdout.buffer
+def send(value):
+    data = json.dumps(value).encode()
+    w.write(struct.pack('<I', len(data)) + data)
+    w.flush()
+while prefix := r.read(4):
+    value = json.loads(r.read(struct.unpack('<I', prefix)[0]))
+    if value['type'] == 'audio':
+        r.read(struct.unpack('<I', r.read(4))[0])
+        time.sleep(0.02)
+        send({'type': 'audio_ack', 'id': value['id'], 'sequence': value['sequence']})
+    elif value['type'] == 'finish':
+        time.sleep(0.15)
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'committed', 'text': 'no no tail'}})
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
+"#).unwrap();
+    let config = WorkerConfig {
+        executable: "python3".into(),
+        args: vec![script.display().to_string()],
+        audio_timeout: Duration::from_millis(100),
+        finish_timeout: Duration::from_millis(100),
+        queue_frames: 64,
+        ..fixture.config()
+    };
+    let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config).unwrap();
+    engine.start(&[]).unwrap();
+    for _ in 0..30 {
+        engine.feed(&[0; 1600]);
+    }
+    engine.finish();
+    let events: Vec<_> = output.iter().collect();
+    assert_eq!(
+        events
+            .iter()
+            .map(|output| &output.event)
+            .collect::<Vec<_>>(),
+        [
+            &EngineEvent::Committed("no no tail".into()),
+            &EngineEvent::Final
+        ]
+    );
+}

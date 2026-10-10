@@ -1,0 +1,170 @@
+diff --git a/core/moonshine-c-api.cpp b/core/moonshine-c-api.cpp
+index b5effa3..280d9a6 100644
+--- a/core/moonshine-c-api.cpp
++++ b/core/moonshine-c-api.cpp
+@@ -2934,4 +2934,5 @@ int32_t moonshine_text_to_phonemes(int32_t grapheme_to_phonemizer_handle,
+     return MOONSHINE_ERROR_UNKNOWN;
+   }
+   return MOONSHINE_ERROR_NONE;
+-}
+\ No newline at end of file
++}
++extern "C" MOONSHINE_EXPORT int32_t moonshine_voice_runtime_version() { return 1; }
+diff --git a/core/moonshine-c-api.h b/core/moonshine-c-api.h
+index 0547c1a..799e2a2 100644
+--- a/core/moonshine-c-api.h
++++ b/core/moonshine-c-api.h
+@@ -1406,6 +1406,8 @@ MOONSHINE_EXPORT int32_t moonshine_text_to_phonemes(
+     const struct moonshine_option_t *options, uint64_t options_count,
+     const char **out_phonemes, uint64_t *out_phonemes_count);
+ 
++MOONSHINE_EXPORT int32_t moonshine_voice_runtime_version();
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/core/moonshine-streaming-model.cpp b/core/moonshine-streaming-model.cpp
+index 4257df6..f8b7d05 100644
+--- a/core/moonshine-streaming-model.cpp
++++ b/core/moonshine-streaming-model.cpp
+@@ -209,6 +209,9 @@ MoonshineStreamingModel::MoonshineStreamingModel(
+ 
+   LOG_ORT_ERROR(ort_api, ort_api->CreateSessionOptions(&ort_session_options));
+   ort_maybe_force_single_thread(ort_api, ort_session_options);
++  LOG_ORT_ERROR(ort_api, ort_api->SetIntraOpNumThreads(ort_session_options, 2));
++  LOG_ORT_ERROR(ort_api, ort_api->SetInterOpNumThreads(ort_session_options, 1));
++  LOG_ORT_ERROR(ort_api, ort_api->AddSessionConfigEntry(ort_session_options, "session.intra_op.allow_spinning", "0"));
+   ort_configure_ort_file_session(ort_api, ort_session_options);
+   ort_configure_execution_providers(ort_api, ort_session_options,
+                                     ort_provider_names, coreml_cache_dir);
+diff --git a/core/transcriber.cpp b/core/transcriber.cpp
+index 35c7c09..a7374df 100644
+--- a/core/transcriber.cpp
++++ b/core/transcriber.cpp
+@@ -1381,6 +1381,13 @@ std::string *Transcriber::transcribe_segment_with_streaming_model(
+     // chunk sizes needs to do its own aligning here rather than assume the
+     // graph will.
+     const int chunk_size = 1280;
++    std::vector<float> padded_audio;
++    if (is_final && new_audio_length % chunk_size != 0) {
++      padded_audio.assign(new_audio_data, new_audio_data + new_audio_length);
++      padded_audio.resize(((new_audio_length + chunk_size - 1) / chunk_size) * chunk_size, 0.0f);
++      new_audio_data = padded_audio.data();
++      new_audio_length = padded_audio.size();
++    }
+     const size_t chunk_count = new_audio_length / chunk_size;
+ 
+     for (size_t chunk_index = 0; chunk_index < chunk_count; chunk_index++) {
+diff --git a/core/voice-activity-detector.cpp b/core/voice-activity-detector.cpp
+index dcb96d6..9cf9d7e 100644
+--- a/core/voice-activity-detector.cpp
++++ b/core/voice-activity-detector.cpp
+@@ -17,10 +17,6 @@ float seconds_from_sample_count(size_t sample_count) {
+ }
+ }  // namespace
+ 
+-// Intentionally leaked to avoid static destruction order issues with ONNX
+-// Runtime
+-SileroVad *VoiceActivityDetector::silero_vad = nullptr;
+-
+ VoiceActivityDetector::VoiceActivityDetector(float threshold,
+                                              int32_t window_size,
+                                              int32_t hop_size,
+@@ -31,10 +27,7 @@ VoiceActivityDetector::VoiceActivityDetector(float threshold,
+       hop_size(hop_size),
+       look_behind_sample_count(look_behind_sample_count),
+       max_segment_sample_count(max_segment_sample_count) {
+-  // We only want a single, global instance of silero_vad
+-  if (VoiceActivityDetector::silero_vad == nullptr) {
+-    VoiceActivityDetector::silero_vad = new SileroVad();
+-  }
++  silero_vad = new SileroVad();
+ 
+   probability_window.resize(window_size);
+   probability_window_index = 0;
+@@ -45,16 +38,16 @@ VoiceActivityDetector::VoiceActivityDetector(float threshold,
+   _is_active = false;
+ }
+ 
+-VoiceActivityDetector::~VoiceActivityDetector() {}
++VoiceActivityDetector::~VoiceActivityDetector() { delete silero_vad; }
+ 
+ void VoiceActivityDetector::start() {
+   _is_active = true;
+   samples_processed_count = 0;
+   segments.clear();
+   current_segment_audio_buffer.resize(0);
+-  look_behind_audio_buffer.resize(look_behind_sample_count, 0.0f);
++  std::fill(look_behind_audio_buffer.begin(), look_behind_audio_buffer.end(), 0.0f);
+   processing_remainder_audio_buffer.resize(0);
+-  probability_window.resize(window_size, 0.0f);
++  std::fill(probability_window.begin(), probability_window.end(), 0.0f);
+   probability_window_index = 0;
+   previous_is_voice = false;
+ }
+@@ -74,6 +67,12 @@ void VoiceActivityDetector::flush(const float *audio_data,
+   if (audio_data != nullptr && audio_data_size > 0) {
+     process_audio(audio_data, audio_data_size, sample_rate);
+   }
++  if (!processing_remainder_audio_buffer.empty()) {
++    std::vector<float> tail = processing_remainder_audio_buffer;
++    tail.resize(hop_size, 0.0f);
++    process_audio_chunk(tail.data(), tail.size());
++    processing_remainder_audio_buffer.clear();
++  }
+   stop();
+ }
+ 
+@@ -166,20 +165,15 @@ void VoiceActivityDetector::process_audio_chunk(const float *audio_data,
+     // max_segment_sample_count
+     smoothed_probability = 1.0f;
+   }
+-  // If the voice audio buffer is too long, linearly decrease the effective
+-  // score so that it reaches 0 at the max_segment_sample_count, and so ensures
+-  // that the voice end event is triggered.
+-  const size_t fade_sample_count = (max_segment_sample_count * 2) / 3;
+-  if (max_segment_sample_count &&
+-      (current_segment_audio_buffer.size() > fade_sample_count)) {
+-    const float fade_factor =
+-        static_cast<float>(current_segment_audio_buffer.size() -
+-                           fade_sample_count) /
+-        fade_sample_count;
+-    smoothed_probability = smoothed_probability * fade_factor;
+-  }
+   bool current_is_voice = smoothed_probability > threshold;
+-  if (current_is_voice && !previous_is_voice) {
++  if (current_is_voice && previous_is_voice && max_segment_sample_count &&
++      current_segment_audio_buffer.size() + audio_data_size > max_segment_sample_count) {
++    samples_processed_count -= audio_data_size;
++    on_voice_end();
++    samples_processed_count += audio_data_size;
++    current_segment_audio_buffer.assign(audio_data, audio_data + audio_data_size);
++    on_voice_start();
++  } else if (current_is_voice && !previous_is_voice) {
+     // Make sure we don't "look back" to before the start of the stream.
+     const size_t look_behind_size =
+         std::min(look_behind_sample_count, samples_processed_count);
+@@ -194,7 +188,7 @@ void VoiceActivityDetector::process_audio_chunk(const float *audio_data,
+                                         audio_data + audio_data_size);
+     on_voice_end();
+     current_segment_audio_buffer.resize(0);
+-    look_behind_audio_buffer.resize(look_behind_sample_count, 0.0f);
++    std::fill(look_behind_audio_buffer.begin(), look_behind_audio_buffer.end(), 0.0f);
+   } else if (current_is_voice && previous_is_voice) {
+     current_segment_audio_buffer.insert(current_segment_audio_buffer.end(),
+                                         audio_data,
+diff --git a/core/voice-activity-detector.h b/core/voice-activity-detector.h
+index 8b26642..c6c5103 100644
+--- a/core/voice-activity-detector.h
++++ b/core/voice-activity-detector.h
+@@ -27,9 +27,7 @@ class VoiceActivityDetector {
+   const size_t look_behind_sample_count;
+   const size_t max_segment_sample_count;
+ 
+-  // Raw pointer intentionally not deleted to avoid static destruction order
+-  // issues
+-  static SileroVad *silero_vad;
++  SileroVad *silero_vad;
+ 
+   bool _is_active;
+   std::vector<float> probability_window;

@@ -66,6 +66,13 @@ impl Api {
                 unsafe { std::mem::transmute::<*mut c_void, $ty>(library.symbol($name)?) }
             };
         }
+        let revision = symbol!(
+            c"moonshine_voice_runtime_version",
+            unsafe extern "C" fn() -> i32
+        );
+        if unsafe { revision() } != 1 {
+            return Err("Moonshine requires the patched voice runtime; run fetch-model.sh".into());
+        }
         let version = symbol!(c"moonshine_get_version", unsafe extern "C" fn() -> i32);
         if unsafe { version() } / 10000 != 3 {
             return Err("Moonshine requires the version 3 transcript ABI".into());
@@ -245,7 +252,7 @@ impl Moonshine {
             }
             let text = unsafe { CStr::from_ptr(line.text) }.to_str()?;
             if line.complete != 0 {
-                let event = self.tail.commit(index, text);
+                let event = self.tail.commit(index, text, line.start, line.duration)?;
                 self.emit(event);
             } else {
                 if finalizing {
@@ -381,12 +388,26 @@ impl Tail {
         }
     }
 
-    fn commit(&mut self, index: usize, text: &str) -> EngineEvent {
+    fn commit(
+        &mut self,
+        index: usize,
+        text: &str,
+        start: f32,
+        duration: f32,
+    ) -> Result<EngineEvent> {
+        if text.chars().all(char::is_whitespace) && duration > 0.0 {
+            return Err(format!(
+                "Speech detected at {:.3}–{:.3}s, but recognition returned empty text",
+                start,
+                start + duration
+            )
+            .into());
+        }
         let chunk = self.decorate(text);
         self.committed_count = index + 1;
         self.has_text |= !text.is_empty();
         self.partial.clear();
-        EngineEvent::Committed(chunk)
+        Ok(EngineEvent::Committed(chunk))
     }
 }
 
@@ -400,22 +421,43 @@ mod tests {
             partial: "wrong".into(),
             ..Tail::default()
         };
-        assert_eq!(tail.commit(0, ""), EngineEvent::Committed(String::new()));
+        assert_eq!(
+            tail.commit(0, "", 0.0, 0.0).unwrap(),
+            EngineEvent::Committed(String::new())
+        );
         assert!(tail.partial.is_empty());
         assert_eq!(tail.committed_count, 1);
+    }
+
+    #[test]
+    fn detected_speech_without_recognized_words_is_an_error_before_commit() {
+        let mut tail = Tail::default();
+        for text in ["", " \t"] {
+            let error = tail.commit(0, text, 1.25, 0.75).unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("Speech detected at 1.250–2.000s")
+            );
+            assert_eq!(tail.committed_count, 0);
+            assert!(!tail.has_text);
+        }
     }
 
     #[test]
     fn repeated_words_in_distinct_audio_segments_survive() {
         let mut tail = Tail::default();
         assert_eq!(
-            tail.commit(0, "no no"),
+            tail.commit(0, "no no", 0.0, 1.0).unwrap(),
             EngineEvent::Committed("no no".into())
         );
         assert_eq!(tail.decorate("no"), " no");
-        assert_eq!(tail.commit(1, "no"), EngineEvent::Committed(" no".into()));
         assert_eq!(
-            tail.commit(2, "  café\t"),
+            tail.commit(1, "no", 1.0, 1.0).unwrap(),
+            EngineEvent::Committed(" no".into())
+        );
+        assert_eq!(
+            tail.commit(2, "  café\t", 2.0, 1.0).unwrap(),
             EngineEvent::Committed("   café\t".into())
         );
     }
