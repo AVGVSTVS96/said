@@ -3,12 +3,34 @@ use std::ffi::{c_char, c_int, c_void};
 pub type Ref = *mut c_void;
 pub type TapCallback = unsafe extern "C" fn(Ref, u32, Ref, Ref) -> Ref;
 
+#[cfg(test)]
+#[repr(C)]
+pub struct Range {
+    pub location: isize,
+    pub length: isize,
+}
+
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
     pub fn CFRelease(value: Ref);
     pub fn CFEqual(a: Ref, b: Ref) -> bool;
     pub fn CFDictionaryGetValue(dictionary: Ref, key: Ref) -> Ref;
     pub fn CFBooleanGetValue(value: Ref) -> bool;
+    pub fn CFGetTypeID(value: Ref) -> usize;
+    pub fn CFBooleanGetTypeID() -> usize;
+    #[cfg(test)]
+    pub fn CFStringGetLength(value: Ref) -> isize;
+    #[cfg(test)]
+    pub fn CFStringGetBytes(
+        value: Ref,
+        range: Range,
+        encoding: u32,
+        loss: u8,
+        external: bool,
+        buffer: *mut u8,
+        capacity: isize,
+        used: *mut isize,
+    ) -> isize;
     pub fn CFStringCreateWithBytes(
         allocator: Ref,
         bytes: *const u8,
@@ -78,7 +100,9 @@ unsafe extern "C" {
 #[link(name = "AppKit", kind = "framework")]
 unsafe extern "C" {}
 #[link(name = "AVFoundation", kind = "framework")]
-unsafe extern "C" {}
+unsafe extern "C" {
+    pub static AVMediaTypeAudio: Ref;
+}
 
 #[link(name = "objc")]
 unsafe extern "C" {
@@ -99,7 +123,7 @@ unsafe extern "C" {
 
 unsafe extern "C" {
     pub fn pthread_main_np() -> c_int;
-    pub fn dispatch_get_main_queue() -> Ref;
+    pub static _dispatch_main_q: c_void;
     pub fn dispatch_sync_f(queue: Ref, context: Ref, work: unsafe extern "C" fn(Ref));
 }
 
@@ -129,5 +153,38 @@ impl Drop for Owned {
         if !self.0.is_null() {
             unsafe { CFRelease(self.0) };
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn clipboard_string_conversion_preserves_every_utf8_byte() {
+        let text = "  no no, um actually no\t--no-verify\n\n猫 e\u{301}\0  ";
+        let value = Owned::string(text);
+        let mut bytes = vec![0; text.len()];
+        let mut used = 0;
+        let length = unsafe { CFStringGetLength(value.0) };
+        assert_eq!(
+            unsafe {
+                CFStringGetBytes(
+                    value.0,
+                    Range {
+                        location: 0,
+                        length,
+                    },
+                    0x08000100,
+                    0,
+                    false,
+                    bytes.as_mut_ptr(),
+                    bytes.len() as isize,
+                    &mut used,
+                )
+            },
+            length
+        );
+        assert_eq!(used as usize, text.len());
+        assert_eq!(bytes, text.as_bytes());
     }
 }

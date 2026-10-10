@@ -17,11 +17,10 @@ pub struct Permissions {
 impl Permissions {
     pub fn check() -> Self {
         let microphone = objc::autorelease(|| unsafe {
-            let audio = ffi::Owned::string("soun");
             match objc::send1::<_, isize>(
                 objc::class(c"AVCaptureDevice"),
                 c"authorizationStatusForMediaType:",
-                audio.0,
+                ffi::AVMediaTypeAudio,
             ) {
                 3 => MicrophonePermission::Authorized,
                 2 => MicrophonePermission::Denied,
@@ -64,19 +63,38 @@ pub fn session_locked() -> bool {
         return true;
     }
     let session = ffi::Owned(session);
-    let locked = ffi::Owned::string("CGSSessionScreenIsLocked");
-    let console = ffi::Owned::string("kCGSessionOnConsoleKey");
-    unsafe {
-        let locked = ffi::CFDictionaryGetValue(session.0, locked.0);
-        let console = ffi::CFDictionaryGetValue(session.0, console.0);
-        (!locked.is_null() && ffi::CFBooleanGetValue(locked))
-            || (!console.is_null() && !ffi::CFBooleanGetValue(console))
-    }
+    session_unavailable(|key| unsafe {
+        let key = ffi::Owned::string(key);
+        let value = ffi::CFDictionaryGetValue(session.0, key.0);
+        if value.is_null() || ffi::CFGetTypeID(value) != ffi::CFBooleanGetTypeID() {
+            None
+        } else {
+            Some(ffi::CFBooleanGetValue(value))
+        }
+    })
+}
+
+fn session_unavailable(mut value: impl FnMut(&str) -> Option<bool>) -> bool {
+    // The public macro kCGSessionOnConsoleKey expands to this differently named CFString.
+    value("CGSSessionScreenIsLocked") == Some(true)
+        || value("kCGSSessionOnConsoleKey") == Some(false)
+        || value("kCGSessionLoginDoneKey") == Some(false)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn lock_logout_and_console_switch_each_make_input_unavailable() {
+        assert!(!session_unavailable(|_| None));
+        for (key, state) in [
+            ("CGSSessionScreenIsLocked", true),
+            ("kCGSSessionOnConsoleKey", false),
+            ("kCGSessionLoginDoneKey", false),
+        ] {
+            assert!(session_unavailable(|name| (name == key).then_some(state)));
+        }
+    }
     #[test]
     fn recovery_distinguishes_denial_restriction_and_first_use() {
         let mut permissions = Permissions {

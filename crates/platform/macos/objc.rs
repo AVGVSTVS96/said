@@ -52,7 +52,8 @@ pub fn main_thread<F: FnOnce() -> R + Send, R: Send>(work: F) -> R {
     };
     unsafe {
         ffi::dispatch_sync_f(
-            ffi::dispatch_get_main_queue(),
+            // dispatch_get_main_queue is an inline C accessor for this queue object.
+            (&raw const ffi::_dispatch_main_q).cast_mut(),
             (&mut job as *mut Job<_, R>).cast::<c_void>(),
             run::<F, R>,
         );

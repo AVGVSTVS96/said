@@ -6,8 +6,6 @@ mod objc;
 pub mod overlay;
 pub mod permissions;
 
-use std::marker::PhantomData;
-
 use crossbeam_channel::Receiver;
 use voice_core::{Hotkey, Result, Target};
 
@@ -24,7 +22,6 @@ pub struct MacosPlatform<W> {
     overlay: fn(&W) -> Result<()>,
     overlay_errors: crossbeam_channel::Sender<String>,
     errors: Receiver<String>,
-    window: PhantomData<fn(&W)>,
 }
 impl<W> MacosPlatform<W> {
     pub fn start(shortcut: Shortcut, configure_overlay: fn(&W) -> Result<()>) -> Result<Self> {
@@ -35,7 +32,6 @@ impl<W> MacosPlatform<W> {
             overlay: configure_overlay,
             overlay_errors,
             errors,
-            window: PhantomData,
         })
     }
     pub fn input_statuses(&self) -> Receiver<InputStatus> {
