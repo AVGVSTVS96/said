@@ -71,6 +71,7 @@ unsafe extern "C" {
     pub fn CGEventGetIntegerValueField(event: Ref, field: u32) -> i64;
     pub fn CGEventGetFlags(event: Ref) -> u64;
     pub fn CGEventSetFlags(event: Ref, flags: u64);
+    #[cfg(test)]
     pub fn CGEventSetIntegerValueField(event: Ref, field: u32, value: i64);
     pub fn CGEventCreateKeyboardEvent(source: Ref, key: u16, down: bool) -> Ref;
     pub fn CGEventPostToPid(pid: c_int, event: Ref);
