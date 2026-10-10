@@ -210,7 +210,8 @@ impl Transport {
             .spawn()?;
         let mut stdin = child.stdin.take().ok_or("worker stdin unavailable")?;
         let mut stdout = child.stdout.take().ok_or("worker stdout unavailable")?;
-        let (input, requests) = bounded::<(WorkerRequest, Option<Vec<i16>>)>(config.queue_frames);
+        let (input, requests) =
+            bounded::<(WorkerRequest, Option<Vec<i16>>)>(config.queue_frames + 2);
         let (responses, output) = bounded(64);
         let errors = responses.clone();
         thread::spawn(move || {

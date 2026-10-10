@@ -85,7 +85,8 @@ Live audio is spooled in order to a 0600 temporary PCM file created inside a 070
 `~/.cache/voice-models/audio-spool` directory. Only published complete writes are
 read, in at most 1,600-sample frames. Bounded queues hold notifications and frames,
 so a slow recognizer cannot overflow capture's backlog into lost words. Finish is
-sent after the spool is consumed and all audio is acknowledged. The file is unlinked immediately after opening: the engine can still read/write
+sent after the spool is consumed and all audio is acknowledged. The file is
+unlinked immediately after opening: the engine can still read/write
 its handle, and the OS removes its audio when the handles close, including after
 a process crash. The recorder's durable WAV remains authoritative. Spool I/O
 failure is explicit.

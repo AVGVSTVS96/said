@@ -294,40 +294,42 @@ while prefix := r.read(4):
         send({'type': 'event', 'id': value['id'], 'event': {'type': 'committed', 'text': 'no no tail'}})
         send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
 "#).unwrap();
-    let config = WorkerConfig {
-        executable: "python3".into(),
-        args: vec![
-            script.display().to_string(),
-            fixture.directory.join("received.pcm").display().to_string(),
-        ],
-        audio_timeout: Duration::from_millis(100),
-        finish_timeout: Duration::from_millis(100),
-        queue_frames: 2,
-        ..fixture.config()
-    };
-    let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config).unwrap();
-    engine.start(&[]).unwrap();
-    let samples: Vec<_> = (0..160000).map(|sample| sample as i16).collect();
-    for block in samples.chunks(1600) {
-        engine.feed(block);
+    for queue_frames in [1, 2] {
+        let config = WorkerConfig {
+            executable: "python3".into(),
+            args: vec![
+                script.display().to_string(),
+                fixture.directory.join("received.pcm").display().to_string(),
+            ],
+            audio_timeout: Duration::from_millis(100),
+            finish_timeout: Duration::from_millis(100),
+            queue_frames,
+            ..fixture.config()
+        };
+        let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config).unwrap();
+        engine.start(&[]).unwrap();
+        let samples: Vec<_> = (0..160000).map(|sample| sample as i16).collect();
+        for block in samples.chunks(1600) {
+            engine.feed(block);
+        }
+        engine.finish();
+        let events: Vec<_> = output.iter().collect();
+        assert_eq!(
+            events
+                .iter()
+                .map(|output| &output.event)
+                .collect::<Vec<_>>(),
+            [
+                &EngineEvent::Committed("no no tail".into()),
+                &EngineEvent::Final
+            ]
+        );
+        assert_eq!(
+            fs::read(fixture.directory.join("received.pcm")).unwrap(),
+            samples
+                .iter()
+                .flat_map(|sample| sample.to_le_bytes())
+                .collect::<Vec<_>>()
+        );
     }
-    engine.finish();
-    let events: Vec<_> = output.iter().collect();
-    assert_eq!(
-        fs::read(fixture.directory.join("received.pcm")).unwrap(),
-        samples
-            .iter()
-            .flat_map(|sample| sample.to_le_bytes())
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(
-        events
-            .iter()
-            .map(|output| &output.event)
-            .collect::<Vec<_>>(),
-        [
-            &EngineEvent::Committed("no no tail".into()),
-            &EngineEvent::Final
-        ]
-    );
 }
