@@ -224,9 +224,7 @@ impl Moonshine {
             let text = unsafe { CStr::from_ptr(line.text) }.to_str()?;
             if line.complete != 0 {
                 let event = self.tail.commit(index, text);
-                if let Some(event) = event {
-                    self.emit(event);
-                }
+                self.emit(event);
             } else {
                 if finalizing {
                     return Err("Moonshine left an incomplete line after stop".into());
@@ -354,12 +352,12 @@ impl Tail {
         }
     }
 
-    fn commit(&mut self, index: usize, text: &str) -> Option<EngineEvent> {
+    fn commit(&mut self, index: usize, text: &str) -> EngineEvent {
         let chunk = self.decorate(text);
         self.committed_count = index + 1;
         self.has_text |= !text.is_empty();
         self.partial.clear();
-        (!chunk.is_empty()).then_some(EngineEvent::Committed(chunk))
+        EngineEvent::Committed(chunk)
     }
 }
 
@@ -368,20 +366,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn an_empty_completed_line_clears_the_provisional_tail() {
+        let mut tail = Tail {
+            partial: "wrong".into(),
+            ..Tail::default()
+        };
+        assert_eq!(tail.commit(0, ""), EngineEvent::Committed(String::new()));
+        assert!(tail.partial.is_empty());
+        assert_eq!(tail.committed_count, 1);
+    }
+
+    #[test]
     fn repeated_words_in_distinct_audio_segments_survive() {
         let mut tail = Tail::default();
         assert_eq!(
             tail.commit(0, "no no"),
-            Some(EngineEvent::Committed("no no".into()))
+            EngineEvent::Committed("no no".into())
         );
         assert_eq!(tail.decorate("no"), " no");
-        assert_eq!(
-            tail.commit(1, "no"),
-            Some(EngineEvent::Committed(" no".into()))
-        );
+        assert_eq!(tail.commit(1, "no"), EngineEvent::Committed(" no".into()));
         assert_eq!(
             tail.commit(2, "  café\t"),
-            Some(EngineEvent::Committed("   café\t".into()))
+            EngineEvent::Committed("   café\t".into())
         );
     }
 }

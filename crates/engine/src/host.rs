@@ -171,6 +171,9 @@ impl Engine for WorkerEngine {
     }
     fn feed(&mut self, pcm16k: &[i16]) {
         if self.started {
+            if pcm16k.is_empty() {
+                self.send(Input::Audio(vec![]));
+            }
             for chunk in pcm16k.chunks(1600) {
                 self.send(Input::Audio(chunk.to_vec()));
             }
