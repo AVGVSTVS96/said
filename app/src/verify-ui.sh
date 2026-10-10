@@ -29,7 +29,7 @@ JS
 for event in 1 2 3 4 5 6; do browser find role button click --name 'Next event'; done
 browser eval --stdin <<'JS'
 (() => {
-  if (document.querySelector('textarea').value !== '  my edit stays  \n') throw Error('Late recognition overwrote the draft');
+  if (document.querySelector('textarea').value !== "  my edit stays  \nuse cache_key, no no don't rename it.") throw Error('Late recognition overwrote the draft');
   return {pass: 'Draft survives late partials, commits and final'};
 })()
 JS
@@ -45,14 +45,14 @@ browser find label 'Search history' fill 'my edit'
 browser wait --fn "document.querySelectorAll('.history-entry').length === 1"
 browser eval --stdin <<'JS'
 (() => {
-  if (document.querySelector('.history-text').textContent !== '  my edit stays  \n') throw Error('History lost the edited bytes');
+  if (document.querySelector('.history-text').textContent !== "  my edit stays  \nuse cache_key, no no don't rename it.") throw Error('History lost the edited bytes');
   return {pass: 'History searches edited text'};
 })()
 JS
 browser find role button click --name 'Edit'
 browser eval --stdin <<'JS'
 (() => {
-  if (document.activeElement !== document.querySelector('textarea') || document.querySelector('textarea').value !== '  my edit stays  \n') throw Error('Edit did not restore and focus the draft');
+  if (document.activeElement !== document.querySelector('textarea') || document.querySelector('textarea').value !== "  my edit stays  \nuse cache_key, no no don't rename it.") throw Error('Edit did not restore and focus the draft');
   return {pass: 'History editor restores and focuses the saved draft'};
 })()
 JS
@@ -75,6 +75,27 @@ browser press Control+Enter
 browser wait --fn "document.querySelector('.action-feedback')?.textContent.includes('insert action recorded')"
 browser eval "({pass: 'Ctrl+Enter explicitly requests insertion'})"
 
+browser eval --stdin <<'JS'
+document.querySelector('textarea').dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+JS
+browser press Control+Enter
+browser eval --stdin <<'JS'
+(() => {
+  if (document.querySelector('.action-feedback')) throw Error('A composition shortcut inserted text');
+  document.querySelector('textarea').dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+  return {pass: 'Composition shortcuts do not insert'};
+})()
+JS
+browser find role button click --name Interactive
+browser set media light reduced-motion
+browser eval --stdin <<'JS'
+(() => {
+  if (getComputedStyle(document.querySelector('.status')).animationName !== 'none') throw Error('Reduced motion still animates');
+  return {pass: 'Reduced motion disables status animation'};
+})()
+JS
+browser set media light
+
 browser set viewport 1280 800
 for theme in light dark; do
   browser set media "$theme"
@@ -90,7 +111,7 @@ JS
     browser screenshot --full "$evidence/$screen-$theme.png"
     browser a11y --tags wcag2a,wcag2aa --json > "$evidence/$screen-$theme-a11y.json"
   done
- done
+done
 
 browser set viewport 390 844
 for screen in overlay interactive history settings setup; do
@@ -105,3 +126,18 @@ JS
   browser screenshot --full "$evidence/$screen-narrow.png"
 done
 browser errors --json > "$evidence/browser-errors.json"
+
+bun - "$evidence" <<'JS'
+const evidence = process.argv.at(-1);
+let reports = 0;
+let incomplete = 0;
+for (const name of new Bun.Glob("*-a11y.json").scanSync(evidence)) {
+  const report = await Bun.file(`${evidence}/${name}`).json();
+  if (!report.success || report.data.counts.violations !== 0) throw Error(`Accessibility check failed: ${name}`);
+  reports++;
+  incomplete += report.data.counts.incomplete;
+}
+const errors = await Bun.file(`${evidence}/browser-errors.json`).json();
+if (!errors.success || errors.data.errors.length !== 0) throw Error("Browser reported an error");
+console.log(JSON.stringify({reports, violations: 0, incomplete, browserErrors: 0}));
+JS

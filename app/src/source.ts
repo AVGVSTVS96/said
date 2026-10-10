@@ -16,9 +16,7 @@ export type {
 } from "./contracts";
 
 export function userText(session?: SessionView) {
-  return session && "edited" in session && typeof session.edited === "string"
-    ? session.edited
-    : null;
+  return session?.edited ?? null;
 }
 
 export type CoreSnapshot = Readonly<{

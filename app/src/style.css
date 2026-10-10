@@ -968,3 +968,22 @@ html[data-screen="overlay"][data-demo="false"] body {
 .setup-screen .unavailable {
   margin-top: 0.8rem;
 }
+@media (max-width: 450px) {
+  .sidebar nav button {
+    flex: 1;
+    justify-content: center;
+    padding-inline: 0.4rem;
+  }
+  .sidebar nav svg {
+    display: none;
+  }
+}
+@media (forced-colors: active) {
+  .editor-mirror {
+    display: none;
+  }
+  .editor-surface textarea {
+    color: CanvasText;
+    -webkit-text-fill-color: CanvasText;
+  }
+}

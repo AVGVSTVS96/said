@@ -48,7 +48,9 @@ test("the fake saves original and edited text separately without desktop side ef
   expect(row.raw_text).toBe(
     "um, no, keep the the old value, actually no, use cache_key, no no don't rename it.",
   );
-  expect(row.text).toBe("  manual edit\n\n");
+  expect(row.text).toBe(
+    "  manual edit\n\nuse cache_key, no no don't rename it.",
+  );
   await fake.dispatch({ type: "copy", id });
   await fake.dispatch({ type: "insert", id });
   expect(fake.actions.at(-1)).toEqual({ type: "insert", id });

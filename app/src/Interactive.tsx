@@ -35,20 +35,23 @@ export function Interactive({
       ? editDraft(savedEdit)
       : null);
   const text = editorText(protectedDraft, committed, partial);
+  const liveTail = !draft && partial && text.endsWith(partial) ? partial : "";
   const recording =
     session?.phase === "recording" ||
     session?.phase === "finishing" ||
     session?.phase === "saving";
   const ready =
+    !session || session.phase === "reviewing" || session.phase === "pasted";
+  const editable =
     !session ||
-    session.phase === "reviewing" ||
-    session.phase === "saved" ||
-    session.phase === "pasted";
+    ["recording", "finishing", "saving", "reviewing", "pasted"].includes(
+      session.phase,
+    );
   const insertable = Boolean(
     id && ready && source.connected && text.length > 0,
   );
 
-  async function act(type: "insert" | "copy" | "discard") {
+  async function act(type: "insert" | "copy" | "discard" | "cancel") {
     if (!id || pending) return;
     setPending(true);
     try {
@@ -95,17 +98,17 @@ export function Interactive({
         </div>
         <div className="editor-surface">
           <div className="editor-mirror" aria-hidden="true">
-            <span>{protectedDraft?.edited ? text : committed}</span>
-            {protectedDraft?.edited ? null : (
-              <span className="provisional">{partial}</span>
-            )}
+            <span>
+              {liveTail ? text.slice(0, text.length - liveTail.length) : text}
+            </span>
+            <span className="provisional">{liveTail}</span>
             {text.endsWith("\n") ? "\n" : ""}
           </div>
           <textarea
             aria-label="Dictation text"
             placeholder="Your words will appear here. You can edit at any time."
             value={text}
-            disabled={!id || !source.connected}
+            disabled={!id || !source.connected || !editable}
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
@@ -147,7 +150,7 @@ export function Interactive({
         <div className="editor-caption">
           <span>
             {protectedDraft?.edited
-              ? "Your edits are protected. Live recognition continues under Original."
+              ? "Your edits stay yours. New words keep streaming."
               : "Underlined words are provisional."}
           </span>
           <button
@@ -173,9 +176,9 @@ export function Interactive({
           <div className="button-group">
             <button
               disabled={!id || !source.connected || pending}
-              onClick={() => void act("discard")}
+              onClick={() => void act(recording ? "cancel" : "discard")}
             >
-              Discard
+              {recording ? "Cancel recording" : "Discard"}
             </button>
             <button
               disabled={

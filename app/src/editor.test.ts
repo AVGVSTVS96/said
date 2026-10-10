@@ -27,11 +27,36 @@ test("a user's draft survives late partials, commits and an empty edit", () => {
   }
 });
 
-test("the adapter reads the incoming core-owned edited field, including empty text", () => {
+test("the adapter reads core-owned edited text, including empty text", () => {
   const session = createFakeSource().getSnapshot().sessions[0];
   const edited = { ...session, edited: "user-owned" };
   const empty = { ...session, edited: "" };
   expect(userText(edited)).toBe("user-owned");
   expect(userText(empty)).toBe("");
   expect(userText(session)).toBeNull();
+});
+
+test("core-owned editor snapshots preserve the edit while later words stream", async () => {
+  const fake = createFakeSource();
+  const id = fake.getSnapshot().sessions[0].id;
+  await fake.dispatch({ type: "edit", id, text: "  my edit stays  \n" });
+  for (let step = 0; step < 6; step++) fake.next();
+  expect(userText(fake.getSnapshot().sessions[0])).toBe(
+    "  my edit stays  \nuse cache_key, no no don't rename it.",
+  );
+});
+
+test("editing committed words leaves the unedited provisional tail live", async () => {
+  const fake = createFakeSource();
+  const id = fake.getSnapshot().sessions[0].id;
+  await fake.dispatch({
+    type: "edit",
+    id,
+    text: "edited prefix the the old value",
+  });
+  fake.next();
+  fake.next();
+  expect(userText(fake.getSnapshot().sessions[0])).toBe(
+    "edited prefix the the old value, actually",
+  );
 });

@@ -1,6 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { product } from "./product";
-import { type CoreSource, type UiAction, disconnectedSource } from "./source";
+import {
+  type CoreSource,
+  type UiAction,
+  disconnectedSource,
+  userText,
+} from "./source";
 import type { createFakeSource } from "./fake";
 import { Icon } from "./components";
 import { Overlay } from "./Overlay";
@@ -43,7 +48,12 @@ export function App({
   const [feedback, setFeedback] = useState("");
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const snapshot = useSyncExternalStore(source.subscribe, source.getSnapshot);
-  const session = snapshot.sessions.at(-1);
+  const session =
+    screen === "interactive"
+      ? [...snapshot.sessions]
+          .reverse()
+          .find((session) => session.mode === "interactive")
+      : snapshot.sessions.at(-1);
   const utterance = selected
     ? snapshot.history.find((row) => row.id === selected)
     : snapshot.history.find((row) => row.id === session?.id);
@@ -59,6 +69,23 @@ export function App({
     setFeedback("");
     try {
       await source.dispatch(action);
+      if (action.type === "edit") {
+        const current = source.getSnapshot();
+        const accepted =
+          userText(
+            current.sessions.find((session) => session.id === action.id),
+          ) !== null ||
+          current.history.some(
+            (row) => row.id === action.id && row.text === action.text,
+          );
+        if (accepted)
+          setDrafts((drafts) => {
+            if (drafts[action.id]?.text !== action.text) return drafts;
+            const next = { ...drafts };
+            delete next[action.id];
+            return next;
+          });
+      }
       if (action.type !== "edit")
         setFeedback(
           demo

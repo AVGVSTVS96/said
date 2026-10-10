@@ -67,12 +67,6 @@ const phaseLabels: Record<Phase, string> = {
 };
 
 export function sessionLabel(session: SessionView) {
-  if (
-    session.phase === "saved" &&
-    session.committed === "" &&
-    session.partial === ""
-  )
-    return "No speech recognized";
   return session.phase === "recording" && session.level === null
     ? "Waiting for microphone"
     : phaseLabels[session.phase];

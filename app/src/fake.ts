@@ -63,7 +63,8 @@ export function createFakeSource() {
   let session: SessionView;
   let history: Utterance[];
   let step = 0;
-  const edits = new Map<string, string>();
+  let editorTail = 0;
+  let ownedTail = false;
   const actions: UiAction[] = [];
   const source = createCoreSource(async (action) => {
     actions.push(action);
@@ -71,7 +72,30 @@ export function createFakeSource() {
     if (!actionId) return;
     const row = history.find((row) => row.id === actionId);
     if (action.type === "edit") {
-      edits.set(action.id, action.text);
+      if (action.id === session.id) {
+        const previous = session.edited ?? session.committed + session.partial;
+        if (session.edited === null) editorTail = session.committed.length;
+        let prefix = 0;
+        while (
+          prefix < previous.length &&
+          previous[prefix] === action.text[prefix]
+        )
+          prefix++;
+        let suffix = 0;
+        while (
+          suffix < Math.min(previous.length, action.text.length) - prefix &&
+          previous[previous.length - suffix - 1] ===
+            action.text[action.text.length - suffix - 1]
+        )
+          suffix++;
+        if (
+          previous.length - suffix > editorTail ||
+          (prefix >= editorTail && session.partial !== "")
+        )
+          ownedTail = true;
+        else editorTail += action.text.length - previous.length;
+        session = { ...session, edited: action.text };
+      }
       if (row)
         history = history.map((row) =>
           row.id === action.id ? { ...row, text: action.text } : row,
@@ -110,7 +134,8 @@ export function createFakeSource() {
 
   function reset() {
     step = 0;
-    edits.clear();
+    editorTail = 0;
+    ownedTail = false;
     actions.length = 0;
     history = fixtures();
     session = {
@@ -121,6 +146,7 @@ export function createFakeSource() {
       committed: "um, no, keep ",
       partial: "the the old value",
       level: 0.42,
+      edited: null,
     };
     publish();
   }
@@ -128,6 +154,21 @@ export function createFakeSource() {
   function next() {
     const event = trace[step++];
     if (!event || session.phase !== "recording") return;
+    if (
+      (event.type === "partial" || event.type === "committed") &&
+      session.edited !== null
+    ) {
+      session = {
+        ...session,
+        edited: ownedTail
+          ? session.edited
+          : session.edited.slice(0, editorTail) + event.text,
+      };
+      if (event.type === "committed") {
+        editorTail = session.edited!.length;
+        ownedTail = false;
+      }
+    }
     if (event.type === "partial")
       session = {
         ...session,
@@ -151,7 +192,7 @@ export function createFakeSource() {
           duration_ms: 9800,
           engine: settings.engine,
           raw_text: session.committed,
-          text: edits.get(id) ?? session.committed,
+          text: session.edited ?? session.committed,
           status: "done",
           pasted_to: null,
           pasted_at: null,
