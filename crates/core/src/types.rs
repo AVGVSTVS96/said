@@ -175,6 +175,7 @@ pub struct SessionView {
     pub committed: String,
     pub partial: String,
     pub level: Option<f32>,
+    pub edited: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -192,6 +193,31 @@ pub struct StartContext {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum SessionEvent {
+    ReplayReady {
+        id: UtteranceId,
+        recognition_id: UtteranceId,
+    },
+    FocusChanged {
+        target: Option<Target>,
+    },
+    Ui(UiAction),
+    Recover {
+        utterance: Utterance,
+    },
+    InsertLast {
+        utterance: Option<Utterance>,
+    },
+    SessionUnavailable {
+        reason: String,
+    },
+    SessionAvailable,
+    EditSaved {
+        id: UtteranceId,
+    },
+    EditFailed {
+        id: UtteranceId,
+        message: String,
+    },
     HotkeyDown(StartContext),
     HotkeyUp {
         id: UtteranceId,
@@ -226,6 +252,32 @@ pub enum SessionEvent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Effect {
+    AllocateReplay {
+        id: UtteranceId,
+    },
+    RecognizeFile {
+        id: UtteranceId,
+        audio_id: UtteranceId,
+        engine: String,
+        vocabulary: Vec<String>,
+    },
+    FocusTarget {
+        id: UtteranceId,
+        target: Target,
+    },
+    Copy {
+        id: UtteranceId,
+        text: String,
+    },
+    EditHistory {
+        id: UtteranceId,
+        text: String,
+    },
+    SetStatus {
+        id: UtteranceId,
+        status: UtteranceStatus,
+    },
+    LoadLast,
     StartCapture {
         id: UtteranceId,
     },
