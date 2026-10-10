@@ -5,6 +5,13 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+native = ["dep:cpal"]
+
 [dependencies]
 voice-core.workspace = true
 crossbeam-channel.workspace = true
+cpal = { version = "0.17.3", optional = true }
+rtrb = "0.3.4"
+rubato = "3.0.0"
+audioadapter-buffers = "3.0.0"

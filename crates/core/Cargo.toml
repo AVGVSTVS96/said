@@ -9,6 +9,9 @@ rust-version.workspace = true
 serde.workspace = true
 ts-rs.workspace = true
 uuid.workspace = true
+serde_json.workspace = true
+rusqlite = { version = "0.40", features = ["bundled"] }
+toml = "0.9"
 
 [build-dependencies]
 serde.workspace = true
@@ -16,7 +19,7 @@ ts-rs.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
+crossbeam-channel.workspace = true
 voice-audio.workspace = true
 voice-engine.workspace = true
 voice-platform.workspace = true
-rusqlite = { version = "0.40", features = ["bundled"] }
