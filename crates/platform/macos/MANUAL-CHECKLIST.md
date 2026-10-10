@@ -3,7 +3,8 @@
 Pending: run after the host wires the adapter and produces the app bundle.
 Use a separate macOS test account and scratch documents, never live conversations.
 The automatic checks require no TCC grants. Keep the bundle ID from product.toml
-and the same signing identity/build location throughout these checks.
+and the same signing identity/build location throughout these checks. Re-signing
+an ad-hoc build can invalidate grants; test one unchanged bundle.
 
 1. Build the host's app bundle. Ad-hoc sign that bundle once with
    `codesign --force --deep --sign - target/release/bundle/macos/voice.app`, then
