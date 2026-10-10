@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded, select};
 use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId, WorkerRequest, WorkerResponse};
 
-use crate::{Engine, protocol, watchdog::Watchdog, wav::Wav};
+use crate::{Engine, protocol, spool::Spool, watchdog::Watchdog, wav::Wav};
 
 #[derive(Clone, Debug)]
 pub struct WorkerConfig {
@@ -39,7 +39,7 @@ impl WorkerConfig {
 
 enum Input {
     Start(Vec<String>),
-    Audio(Vec<i16>),
+    AudioAvailable,
     Finish,
 }
 
@@ -99,7 +99,8 @@ impl WorkerClient {
 
 pub struct WorkerEngine {
     input: Sender<Input>,
-    overflow: Sender<()>,
+    failures: Sender<String>,
+    spool: Arc<Spool>,
     started: bool,
     used: bool,
     cancel_signal: Sender<()>,
@@ -118,7 +119,9 @@ impl WorkerEngine {
     ) -> Result<(Self, Receiver<EngineOutput>)> {
         config.validate()?;
         let (input, requests) = bounded(config.queue_frames);
-        let (overflow, failures) = bounded(1);
+        let (failures, errors) = bounded(1);
+        let spool = Arc::new(Spool::new(id)?);
+        let audio = spool.clone();
         let (events, output) = bounded(64);
         let (cancel_signal, cancellation) = bounded(1);
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -130,15 +133,17 @@ impl WorkerEngine {
                     id,
                     config,
                     requests,
-                    failures,
+                    errors,
                     events,
+                    audio,
                     (cancellation, cancel_flag, idle),
                 );
             })?;
         Ok((
             Self {
                 input,
-                overflow,
+                failures,
+                spool,
                 started: false,
                 used: false,
                 cancel_signal,
@@ -146,12 +151,6 @@ impl WorkerEngine {
             },
             output,
         ))
-    }
-
-    fn send(&self, input: Input) {
-        if self.input.try_send(input).is_err() {
-            let _ = self.overflow.try_send(());
-        }
     }
 }
 
@@ -168,14 +167,18 @@ impl Engine for WorkerEngine {
         Ok(())
     }
     fn feed(&mut self, pcm16k: &[i16]) {
-        if self.started {
-            if pcm16k.is_empty() {
-                self.send(Input::Audio(vec![]));
-            }
-            for chunk in pcm16k.chunks(1600) {
-                self.send(Input::Audio(chunk.to_vec()));
+        if !self.started || pcm16k.is_empty() {
+            return;
+        }
+        for samples in pcm16k.chunks(1600) {
+            if let Err(error) = self.spool.append(samples) {
+                let _ = self.failures.try_send(format!(
+                    "audio spool failed: {error}; capture remains on disk"
+                ));
+                return;
             }
         }
+        let _ = self.input.try_send(Input::AudioAvailable);
     }
     fn finish(&mut self) {
         if self.started {
@@ -265,8 +268,9 @@ fn supervise(
     id: UtteranceId,
     config: WorkerConfig,
     requests: Receiver<Input>,
-    failures: Receiver<()>,
+    failures: Receiver<String>,
     events: Sender<EngineOutput>,
+    spool: Arc<Spool>,
     cancellation: (Receiver<()>, Arc<AtomicBool>, Option<IdleWorker>),
 ) {
     let (cancellation, cancelled, idle) = cancellation;
@@ -291,10 +295,11 @@ fn supervise(
     let mut pending = VecDeque::new();
     let mut sequence = 0;
     let mut finishing = None;
+    let mut finish_requested = false;
+    let mut offset = 0;
     let mut loaded = existing_is_warm;
     let mut progress = None;
     let mut uncommitted_samples = 0_u64;
-    let never = crossbeam_channel::never();
     loop {
         if cancelled.load(Ordering::Acquire) {
             return;
@@ -310,6 +315,36 @@ fn supervise(
             return;
         }
         let worker = transport.as_mut().unwrap();
+        if pending.len() < config.queue_frames && !spool.consumed(offset) {
+            match spool.read(&mut offset) {
+                Ok(Some(pcm)) => {
+                    if pending.is_empty() {
+                        progress = Some(Instant::now());
+                    }
+                    uncommitted_samples += pcm.len() as u64;
+                    pending.push_back((sequence, pcm.len() as u64));
+                    if let Err(error) =
+                        worker.send(WorkerRequest::Audio { id, sequence }, Some(pcm))
+                    {
+                        transport = Err(error);
+                    }
+                    sequence += 1;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    transport = Err(error);
+                }
+            }
+            continue;
+        }
+        if finish_requested && finishing.is_none() && pending.is_empty() && spool.consumed(offset) {
+            finishing = Some(());
+            progress = Some(Instant::now());
+            if let Err(error) = worker.send(WorkerRequest::Finish { id }, None) {
+                transport = Err(error);
+                continue;
+            }
+        }
         let timeout = if !loaded {
             config.startup_timeout
         } else if pending.is_empty() {
@@ -324,30 +359,15 @@ fn supervise(
         let wait = progress
             .map(|since: Instant| timeout.saturating_sub(since.elapsed()))
             .unwrap_or(Duration::from_secs(3600));
-        let incoming = if pending.len() < config.queue_frames {
-            &requests
-        } else {
-            &never
-        };
         select! {
             recv(cancellation) -> _ => return,
             recv(failures) -> failure => {
-                if failure.is_ok() { transport = Err("host input queue overflow; audio remains on disk".into()); }
+                if let Ok(error) = failure { transport = Err(error.into()); }
                 else { return; }
             }
-            recv(incoming) -> input => match input {
-                Ok(Input::Audio(pcm)) => {
-                    if pending.is_empty() { progress = Some(Instant::now()); }
-                    uncommitted_samples += pcm.len() as u64;
-                    pending.push_back((sequence, pcm.len() as u64));
-                    if let Err(error) = worker.send(WorkerRequest::Audio { id, sequence }, Some(pcm)) { transport = Err(error); }
-                    sequence += 1;
-                }
-                Ok(Input::Finish) => {
-                    finishing = Some(());
-                    if pending.is_empty() { progress = Some(Instant::now()); }
-                    if let Err(error) = worker.send(WorkerRequest::Finish { id }, None) { transport = Err(error); }
-                }
+            recv(requests) -> input => match input {
+                Ok(Input::AudioAvailable) => {}
+                Ok(Input::Finish) => { finish_requested = true; }
                 Err(_) => { return; }
                 Ok(Input::Start(_)) => { transport = Err("duplicate Start".into()); }
             },

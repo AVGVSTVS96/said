@@ -144,9 +144,13 @@ An incomplete run exits nonzero; failed clips never masquerade as empty success.
   Model hashing and warm inference are separate from cold load.
 
 A worker stays loaded between clips and is released before the next model.
-Diagnostic startup/audio/final deadlines default to 60/10/30 seconds; override
+Startup and audio/final no-progress floors default to 60/10/30 seconds; override
 with `--startup-seconds`, `--audio-seconds`, `--finish-seconds`. They are not
-production watchdog recommendations. Engine/model/runtime manifests can be
+production latency recommendations. The engine learns busy real-time factor
+from acknowledgments and uses `max(floor, 4 × measured RTF × uncommitted audio
+seconds)` between progress responses. Pending queue age does not shorten later
+frames' allowances. The benchmark records learned busy RTF and runtime source/patch
+hashes, and delegates finish supervision entirely to the engine. Engine/model/runtime manifests can be
 selected with `--model-manifest` and `--model-cache`; model hashes are verified.
 Alignment uses two cost rows and a byte per traceback cell. A score exceeding
 64 million cells fails explicitly; split extremely long reference material into
@@ -163,11 +167,18 @@ bench/scripts/ci.sh
 
 The scorer checks run without corpus/audio integration; the external-manifest
 check proves worker use, raw byte preservation and hash rejection. `ci.sh`
-executes the real public subset and verifies regression counts, not transcript
+runs the three-minute native synthetic segmentation regression, then executes the real public subset and verifies regression counts, not transcript
 strings. Its smoke gate permits at most three lost and one changed negation
 across the subset (current recognizer limitations), requires clean clear
-negative/affirmative twins, normalized WER ≤35%, some filler retention and no
-control hallucinations. This gate detects regressions; it does not certify the
+negative/affirmative twins, normalized WER ≤30% for eight synthetic speech clips
+and ≤40% for two AMI clips, nonempty text for every speech clip, some filler
+retention and no control hallucinations. Small's completed baseline CI subsets
+had 16/64 errors (25%) on synthetic speech and 12/42 (28.6%) on AMI. These ceilings
+give each subset limited regression headroom without letting one subsidize the
+other; their combined allowance is slightly stricter than the old pooled 35%
+gate. Empty speech fails independently. AMI uses headset-channel meeting audio,
+not far-field microphones; spontaneous disfluencies and background leakage make
+it a separate stress subset. Thresholds were set before the patched run. This gate detects regressions; it does not certify the
 verbatim promise or select a release engine. Model provisioning is a separate CI/cache step.
 
 The integrator owns root manifests, the application CLI and CI wiring:

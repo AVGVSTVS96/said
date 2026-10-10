@@ -277,6 +277,7 @@ fn queued_audio_is_not_a_hang_and_measured_work_allows_a_slow_finish() {
     fs::write(&script, r#"import sys, struct, json, time
 r = sys.stdin.buffer
 w = sys.stdout.buffer
+audio = open(sys.argv[1], 'wb')
 def send(value):
     data = json.dumps(value).encode()
     w.write(struct.pack('<I', len(data)) + data)
@@ -284,7 +285,8 @@ def send(value):
 while prefix := r.read(4):
     value = json.loads(r.read(struct.unpack('<I', prefix)[0]))
     if value['type'] == 'audio':
-        r.read(struct.unpack('<I', r.read(4))[0])
+        audio.write(r.read(struct.unpack('<I', r.read(4))[0]))
+        audio.flush()
         time.sleep(0.02)
         send({'type': 'audio_ack', 'id': value['id'], 'sequence': value['sequence']})
     elif value['type'] == 'finish':
@@ -294,19 +296,30 @@ while prefix := r.read(4):
 "#).unwrap();
     let config = WorkerConfig {
         executable: "python3".into(),
-        args: vec![script.display().to_string()],
+        args: vec![
+            script.display().to_string(),
+            fixture.directory.join("received.pcm").display().to_string(),
+        ],
         audio_timeout: Duration::from_millis(100),
         finish_timeout: Duration::from_millis(100),
-        queue_frames: 64,
+        queue_frames: 2,
         ..fixture.config()
     };
     let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config).unwrap();
     engine.start(&[]).unwrap();
-    for _ in 0..30 {
-        engine.feed(&[0; 1600]);
+    let samples: Vec<_> = (0..160000).map(|sample| sample as i16).collect();
+    for block in samples.chunks(1600) {
+        engine.feed(block);
     }
     engine.finish();
     let events: Vec<_> = output.iter().collect();
+    assert_eq!(
+        fs::read(fixture.directory.join("received.pcm")).unwrap(),
+        samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect::<Vec<_>>()
+    );
     assert_eq!(
         events
             .iter()

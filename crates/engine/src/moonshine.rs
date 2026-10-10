@@ -341,11 +341,11 @@ impl Engine for Moonshine {
                 .min(self.model.update_samples - self.buffered.len());
             self.buffered.extend_from_slice(&pcm16k[..count]);
             pcm16k = &pcm16k[count..];
-            if self.buffered.len() == self.model.update_samples {
-                if let Err(error) = self.add_buffered_audio().and_then(|_| self.update(false)) {
-                    self.failed(error);
-                    return;
-                }
+            if self.buffered.len() == self.model.update_samples
+                && let Err(error) = self.add_buffered_audio().and_then(|_| self.update(false))
+            {
+                self.failed(error);
+                return;
             }
         }
     }
