@@ -181,7 +181,7 @@ pub struct Moonshine {
     id: UtteranceId,
     sender: Sender<EngineOutput>,
     tail: Tail,
-    buffered_samples: usize,
+    buffered: Vec<i16>,
 }
 
 impl Moonshine {
@@ -203,6 +203,7 @@ impl Moonshine {
         model: Rc<MoonshineModel>,
     ) -> (Self, Receiver<EngineOutput>) {
         let (sender, receiver) = bounded(64);
+        let buffered = Vec::with_capacity(model.update_samples);
         (
             Self {
                 model,
@@ -211,7 +212,7 @@ impl Moonshine {
                 id,
                 sender,
                 tail: Tail::default(),
-                buffered_samples: 0,
+                buffered,
             },
             receiver,
         )
@@ -270,6 +271,26 @@ impl Moonshine {
         Ok(())
     }
 
+    fn add_buffered_audio(&mut self) -> Result<()> {
+        if self.buffered.is_empty() {
+            return Ok(());
+        }
+        let samples = normalize(&self.buffered);
+        let stream = self.stream.ok_or("stream not started")?;
+        self.model.api.check(unsafe {
+            (self.model.api.add)(
+                self.model.transcriber,
+                stream,
+                samples.as_ptr(),
+                samples.len() as u64,
+                16000,
+                0,
+            )
+        })?;
+        self.buffered.clear();
+        Ok(())
+    }
+
     fn close_stream(&mut self) {
         if let Some(stream) = self.stream.take() {
             unsafe { (self.model.api.free_stream)(self.model.transcriber, stream) };
@@ -310,38 +331,22 @@ impl Engine for Moonshine {
         Ok(())
     }
 
-    fn feed(&mut self, pcm16k: &[i16]) {
-        let Some(stream) = self.stream else {
+    fn feed(&mut self, mut pcm16k: &[i16]) {
+        if self.stream.is_none() {
             return;
-        };
-        let handle = self.model.transcriber;
-        let samples: Vec<f32> = pcm16k
-            .iter()
-            .map(|sample| f32::from(*sample) / 32768.0)
-            .collect();
-        let result = self
-            .model
-            .api
-            .check(unsafe {
-                (self.model.api.add)(
-                    handle,
-                    stream,
-                    samples.as_ptr(),
-                    samples.len() as u64,
-                    16000,
-                    0,
-                )
-            })
-            .and_then(|_| {
-                self.buffered_samples += pcm16k.len();
-                if self.buffered_samples >= self.model.update_samples {
-                    self.buffered_samples %= self.model.update_samples;
-                    self.update(false)?;
+        }
+        while !pcm16k.is_empty() {
+            let count = pcm16k
+                .len()
+                .min(self.model.update_samples - self.buffered.len());
+            self.buffered.extend_from_slice(&pcm16k[..count]);
+            pcm16k = &pcm16k[count..];
+            if self.buffered.len() == self.model.update_samples {
+                if let Err(error) = self.add_buffered_audio().and_then(|_| self.update(false)) {
+                    self.failed(error);
+                    return;
                 }
-                Ok(())
-            });
-        if let Err(error) = result {
-            self.failed(error);
+            }
         }
     }
 
@@ -351,9 +356,12 @@ impl Engine for Moonshine {
         };
         let handle = self.model.transcriber;
         let result = self
-            .model
-            .api
-            .check(unsafe { (self.model.api.stop)(handle, stream) })
+            .add_buffered_audio()
+            .and_then(|_| {
+                self.model
+                    .api
+                    .check(unsafe { (self.model.api.stop)(handle, stream) })
+            })
             .and_then(|_| self.update(true));
         if let Err(error) = result {
             self.failed(error);
@@ -370,6 +378,22 @@ impl Drop for Moonshine {
     fn drop(&mut self) {
         self.close_stream();
     }
+}
+
+fn normalize(samples: &[i16]) -> Vec<f32> {
+    let peak = samples
+        .iter()
+        .map(|sample| f32::from(*sample).abs())
+        .fold(0.0_f32, f32::max);
+    let gain = if peak == 0.0 {
+        1.0
+    } else {
+        (8192.0 / peak).clamp(1.0, 32.0)
+    };
+    samples
+        .iter()
+        .map(|sample| f32::from(*sample) * gain / 32768.0)
+        .collect()
 }
 
 #[derive(Default)]
@@ -414,6 +438,17 @@ impl Tail {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quiet_input_is_amplified_without_clipping_or_turning_silence_into_audio() {
+        assert_eq!(normalize(&[0; 1600]), vec![0.0; 1600]);
+        assert_eq!(
+            normalize(&[i16::MIN, i16::MAX]),
+            vec![-1.0, 32767.0 / 32768.0]
+        );
+        assert_eq!(normalize(&[256, -128]), vec![0.25, -0.125]);
+        assert_eq!(normalize(&[1, -1]), vec![32.0 / 32768.0, -32.0 / 32768.0]);
+    }
 
     #[test]
     fn an_empty_completed_line_clears_the_provisional_tail() {

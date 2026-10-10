@@ -84,6 +84,14 @@ impl WorkerClient {
         })
     }
 
+    pub fn measured_real_time_factor(&self) -> Option<f64> {
+        self.idle
+            .lock()
+            .ok()?
+            .as_ref()
+            .map(|worker| worker.watchdog.real_time_factor())
+    }
+
     pub fn engine(&self, id: UtteranceId) -> Result<(WorkerEngine, Receiver<EngineOutput>)> {
         WorkerEngine::launch(id, self.config.clone(), Some(self.idle.clone()))
     }
