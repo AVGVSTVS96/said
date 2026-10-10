@@ -143,6 +143,9 @@ impl Desktop {
             })
         })
     }
+    pub fn copy(&self, text: &str) -> Result<()> {
+        objc::main_thread(|| objc::autorelease(|| write_clipboard(text)))
+    }
     pub fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
         if text.is_empty() {
             return Ok(());
@@ -165,19 +168,7 @@ impl Desktop {
                 } else {
                     None
                 };
-                let clipboard =
-                    objc::send::<Ref>(objc::class(c"NSPasteboard"), c"generalPasteboard");
-                let payload = Owned::string(text);
-                let plain_text = Owned::string("public.utf8-plain-text");
-                objc::send::<isize>(clipboard, c"clearContents");
-                if !objc::send2::<_, _, bool>(
-                    clipboard,
-                    c"setString:forType:",
-                    payload.0,
-                    plain_text.0,
-                ) {
-                    return Err("Cannot write clipboard. Text is saved; use Copy again.".into());
-                }
+                write_clipboard(text)?;
                 self.check_focus(target)?;
                 if permissions::secure_input_enabled() || permissions::session_locked() {
                     return Err("Input became unavailable. Text remains on the clipboard.".into());
@@ -198,6 +189,20 @@ impl Desktop {
                 Ok(())
             })
         })
+    }
+}
+
+fn write_clipboard(text: &str) -> Result<()> {
+    unsafe {
+        let clipboard = objc::send::<Ref>(objc::class(c"NSPasteboard"), c"generalPasteboard");
+        let payload = Owned::string(text);
+        let plain_text = Owned::string("public.utf8-plain-text");
+        objc::send::<isize>(clipboard, c"clearContents");
+        if objc::send2::<_, _, bool>(clipboard, c"setString:forType:", payload.0, plain_text.0) {
+            Ok(())
+        } else {
+            Err("Cannot write clipboard. Text is saved; use Copy again.".into())
+        }
     }
 }
 

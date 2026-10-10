@@ -50,6 +50,9 @@ impl<W> MacosPlatform<W> {
     pub fn focused_target(&self) -> Result<Target> {
         self.desktop.focused()
     }
+    pub fn copy(&self, text: &str) -> Result<()> {
+        self.desktop.copy(text)
+    }
 }
 impl<W> Platform for MacosPlatform<W> {
     type Window = W;

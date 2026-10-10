@@ -83,6 +83,9 @@ impl Input {
         if shortcut.keycode >= 128
             || shortcut.modifiers & super::decoder::SHIFT != 0
             || shortcut.modifiers == 0
+            || shortcut.keycode == 53
+            || (shortcut.keycode == 9
+                && shortcut.modifiers == super::decoder::CONTROL | super::decoder::OPTION)
             || shortcut.modifiers
                 & !(super::decoder::CONTROL | super::decoder::OPTION | super::decoder::COMMAND)
                 != 0
