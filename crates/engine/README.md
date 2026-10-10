@@ -46,7 +46,9 @@ Setup can use the same manifest hashes in its own downloader.
 Moonshine's stable line indexes identify audio segments. Completed lines append
 once; the incomplete tail replaces its previous value. No word overlap test,
 trimming, case conversion, punctuation changes or spelling fusion is used.
-The adapter supplies one space between nonempty model lines, following the
+Decoding updates use 8,000 incoming samples (500 ms at 16 kHz), matching the
+bake-off harness's streaming cadence. Finish drains immediately, including any
+short tail. The adapter supplies one space between nonempty model lines, following the
 upstream transcript composition convention. All text inside each line remains
 unchanged. Vocabulary explicitly enables native keyterm biasing; commas/NUL in
 individual terms are rejected because upstream's keyterm interface uses commas.

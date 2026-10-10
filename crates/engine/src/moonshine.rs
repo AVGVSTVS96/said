@@ -161,6 +161,7 @@ pub struct Moonshine {
     id: UtteranceId,
     sender: Sender<EngineOutput>,
     tail: Tail,
+    buffered_samples: usize,
 }
 
 impl Moonshine {
@@ -189,6 +190,7 @@ impl Moonshine {
                 id,
                 sender,
                 tail: Tail::default(),
+                buffered_samples: 0,
             },
             receiver,
         )
@@ -309,7 +311,14 @@ impl Engine for Moonshine {
                     0,
                 )
             })
-            .and_then(|_| self.update(false));
+            .and_then(|_| {
+                self.buffered_samples += pcm16k.len();
+                if self.buffered_samples >= 8000 {
+                    self.buffered_samples %= 8000;
+                    self.update(false)?;
+                }
+                Ok(())
+            });
         if let Err(error) = result {
             self.failed(error);
         }
