@@ -117,7 +117,14 @@ fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() 
             assert!(!warm.is_empty());
             if name == "dont-delete" {
                 assert!(warm.to_lowercase().starts_with("don't delete"));
-                assert!(client.unload_if_idle(Duration::ZERO));
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                while !client.unload_if_idle(Duration::ZERO) {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "worker lease must return after Final"
+                    );
+                    std::thread::sleep(Duration::from_millis(1));
+                }
                 assert_eq!(
                     recognize(&client, path).0,
                     warm,

@@ -1,13 +1,13 @@
-use said_core::{EngineEvent, History, UtteranceId, history::SqliteHistory};
+use said_core::{History, UtteranceId, history::SqliteHistory};
 use said_engine::{
+    host::{WorkerConfig, recognize_file},
     manifest::{Manifest, model_cache},
-    wav::Wav,
 };
-use std::{fs, process::Command};
+use std::{fs, process::Command, time::Duration};
 
 #[test]
-#[ignore = "requires hash-verified Moonshine runtime/model and public synthetic engine-proof WAVs"]
-fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
+#[ignore = "requires hash-verified Parakeet runtime/model and public synthetic engine-proof WAVs"]
+fn parakeet_worker_host_history_and_paste_preserve_exact_bytes() {
     let cache = model_cache().unwrap();
     let root = cache
         .join("app-proof")
@@ -17,29 +17,25 @@ fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
     let model = manifest.default_model().unwrap();
     for clip in ["negation", "repair", "boundaries", "silence"] {
         let input = cache.join("engine-proof").join(format!("{clip}.wav"));
-        let (mut recognizer, output) = manifest
-            .create(UtteranceId::random(), model, &cache)
-            .unwrap();
-        recognizer.start(&[]).unwrap();
-        let mut wav = Wav::open(&input).unwrap();
-        while let Some(samples) = wav.read().unwrap() {
-            for frame in samples.chunks(320) {
-                recognizer.feed(frame);
-            }
-        }
-        recognizer.finish();
-        let mut expected = String::new();
-        let mut finals = 0;
-        for event in output.try_iter() {
-            match event.event {
-                EngineEvent::Committed(text) => expected.push_str(&text),
-                EngineEvent::Final => finals += 1,
-                EngineEvent::Error(error) => panic!("{error}"),
-                _ => {}
-            }
-        }
-        assert_eq!(finals, 1);
-        drop(recognizer);
+        let expected = recognize_file(
+            UtteranceId::random(),
+            &WorkerConfig {
+                executable: env!("CARGO_BIN_EXE_said").into(),
+                args: vec![
+                    "--worker".into(),
+                    model.into(),
+                    "--models".into(),
+                    cache.to_string_lossy().into(),
+                ],
+                startup_timeout: Duration::from_secs(60),
+                audio_timeout: Duration::from_secs(10),
+                finish_timeout: Duration::from_secs(30),
+                queue_frames: 256,
+            },
+            &input,
+            &[],
+        )
+        .unwrap();
         let data = root.join(clip);
         let result = Command::new(env!("CARGO_BIN_EXE_said"))
             .args([
