@@ -5,6 +5,7 @@ import { App } from "./App";
 import { createCoreSource } from "./source";
 import type { HostSnapshot } from "./contracts";
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import "./tokens.css";
 import "./style.css";
 
@@ -29,6 +30,7 @@ if (
   const updates = new Channel<HostSnapshot>();
   updates.onmessage = (snapshot) => source.receive(snapshot);
   try {
+    await listen<string>("host-error", (event) => source.disconnect(event.payload));
     source.receive(await invoke<HostSnapshot>("connect", { updates }));
     root.render(<StrictMode><App source={source} /></StrictMode>);
   } catch (error) {

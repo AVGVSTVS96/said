@@ -82,7 +82,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
     let (sender, requests) = bounded(32);
     let (ready, started) = bounded(1);
     std::thread::spawn(move || {
-        let result: Result<()> = (|| {
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
             let recorder = CpalRecorder::new(paths.data.join("audio"));
             let mut host = Host::open(Desktop::default(), recorder, paths)?;
             host.install()?;
@@ -279,7 +279,8 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                 }
             }
             Ok(())
-        })();
+        }))
+        .unwrap_or_else(|_| Err("host actor panicked".into()));
         if let Err(error) = result {
             let _ = ready.send(Err(error.to_string()));
             eprintln!("host stopped: {error}");

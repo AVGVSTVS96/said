@@ -72,3 +72,33 @@ test("snapshot listeners unsubscribe and the idle snapshot is stable", () => {
   fake.next();
   expect(updates).toBe(1);
 });
+
+test("host termination invalidates live state and rejects queued and future actions", async () => {
+  const calls: AppAction[] = [];
+  let release: (() => void) | undefined;
+  const source = createCoreSource(async (action) => {
+    calls.push(action);
+    await new Promise<void>((resolve) => { release = resolve; });
+  });
+  let changes = 0;
+  source.subscribe(() => { changes++; });
+  source.receive({ sessions: [], history: [], settings: null, devices: [], sequence: 1 });
+  const first = source.dispatch({ type: "insert_last" });
+  const queued = source.dispatch({ type: "insert_last" });
+  await Promise.resolve();
+  await Promise.resolve();
+  const before = source.getSnapshot();
+  source.disconnect("capture actor stopped");
+  expect(source.connected).toBe(false);
+  expect(source.getSnapshot()).not.toBe(before);
+  expect(source.getSnapshot().connectionError).toBe("capture actor stopped");
+  expect(source.getSnapshot().sessions).toEqual([]);
+  expect(changes).toBe(2);
+  release!();
+  await first;
+  await expect(queued).rejects.toThrow("capture actor stopped");
+  await expect(source.dispatch({ type: "insert_last" })).rejects.toThrow("capture actor stopped");
+  source.receive({ ...before, sequence: 2 });
+  expect(source.getSnapshot().connectionError).toBe("capture actor stopped");
+  expect(calls).toHaveLength(1);
+});

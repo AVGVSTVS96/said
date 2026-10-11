@@ -15,7 +15,6 @@ export function Settings({
 }) {
   const [draft, setDraft] = useState<SettingsValue | null>(null);
   const value = draft ?? settings;
-  const [vocabulary, setVocabulary] = useState(host?.vocabulary_text ?? "");
   const [before, setBefore] = useState("");
   const [appId, setAppId] = useState("");
   if (!value) return <p className="quiet">Waiting for settings.</p>;
@@ -52,52 +51,9 @@ export function Settings({
             onChange={(event) => update({ hotkey: event.target.value })}
           />
         </label>
-        <label className="setting-row">
+        <div className="setting-row">
           <span>Engine</span>
-          <select
-            value={value.engine}
-            onChange={(event) => update({ engine: event.target.value })}
-          >
-            {(host?.models ?? [{ id: value.engine }]).map((model) => (
-              <option key={model.id}>{model.id}</option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="group">
-        <h2>Vocabulary</h2>
-        <label className="setting-row">
-          <span>
-            Bias recognition toward these terms
-            <small>Engine support varies.</small>
-          </span>
-          <input
-            className="switch"
-            type="checkbox"
-            role="switch"
-            checked={value.vocabulary}
-            onChange={(event) => update({ vocabulary: event.target.checked })}
-          />
-        </label>
-        <textarea
-          className="terms"
-          aria-label="Vocabulary terms, one per line"
-          placeholder="One term per line"
-          value={vocabulary}
-          onChange={(event) => setVocabulary(event.target.value)}
-          spellCheck={false}
-        />
-        <div className="actions">
-          <button
-            disabled={!host}
-            onClick={() =>
-              void send({ type: "vocabulary_save", text: vocabulary }).catch(
-                () => {},
-              )
-            }
-          >
-            Save vocabulary
-          </button>
+          <span>{value.engine}</span>
         </div>
       </div>
       <div className="group">
@@ -165,7 +121,10 @@ export function Settings({
           <span>
             Recordings stay until deleted
             {host ? (
-              <small>{(host.disk_bytes / 1048576).toFixed(1)} MiB on disk</small>
+              <small>{(host.disk_bytes / 1048576).toFixed(1)} MiB on disk{host.disk_error ? " (last known)" : ""}</small>
+            ) : null}
+            {host?.disk_error ? (
+              <small role="status">Disk usage unavailable: {host.disk_error}</small>
             ) : null}
           </span>
           <span className="actions">

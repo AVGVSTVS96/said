@@ -85,7 +85,6 @@ pub enum Hotkey {
 pub enum WorkerRequest {
     Start {
         id: UtteranceId,
-        vocabulary: Vec<String>,
     },
     Audio {
         id: UtteranceId,
@@ -186,7 +185,6 @@ pub struct StartContext {
     pub engine: String,
     pub target: Option<Target>,
     pub mode: Mode,
-    pub vocabulary: Vec<String>,
     pub send: bool,
 }
 
@@ -263,7 +261,6 @@ pub enum Effect {
         id: UtteranceId,
         audio_id: UtteranceId,
         engine: String,
-        vocabulary: Vec<String>,
     },
     FocusTarget {
         id: UtteranceId,
@@ -290,7 +287,6 @@ pub enum Effect {
     },
     StartEngine {
         id: UtteranceId,
-        vocabulary: Vec<String>,
     },
     FeedEngine {
         id: UtteranceId,
@@ -350,7 +346,6 @@ pub struct AppSettings {
 pub struct Settings {
     pub hotkey: String,
     pub engine: String,
-    pub vocabulary: bool,
     pub microphone: Option<String>,
     pub apps: BTreeMap<String, AppSettings>,
 }
@@ -360,9 +355,6 @@ pub struct Settings {
 pub enum HostAction {
     SettingsSave {
         settings: Settings,
-    },
-    VocabularySave {
-        text: String,
     },
     DownloadModel,
     Permission {
@@ -394,8 +386,6 @@ pub struct ModelInfo {
     pub id: String,
     pub license: String,
     pub source: String,
-    pub cloud: bool,
-    pub vocabulary: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -416,9 +406,9 @@ pub struct HostState {
     pub permissions: BTreeMap<String, String>,
     pub instructions: Vec<String>,
     pub notifications: BTreeMap<UtteranceId, String>,
-    pub vocabulary_text: String,
     #[ts(type = "number")]
     pub disk_bytes: u64,
+    pub disk_error: Option<String>,
     pub unavailable: Option<String>,
     pub scratch: Option<UtteranceId>,
     pub setup_complete: bool,

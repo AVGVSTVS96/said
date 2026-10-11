@@ -147,14 +147,6 @@ fn run() -> Result<()> {
         }
     }
     if !args.is_empty() {
-        if args[0] == "import-vocabulary" {
-            let source = args.get(1).ok_or("specify wispr or codex")?;
-            let path = match args.get(2) {
-                Some(path) => PathBuf::from(path),
-                None => said_app::cli::vocabulary_source(source)?,
-            };
-            return said_app::cli::import_vocabulary(&paths, source, &path);
-        }
         #[cfg(target_os = "linux")]
         {
             let runtime =

@@ -15,9 +15,8 @@ const target = {
 };
 const settings: Settings = {
   hotkey: "ctrl+alt+space",
-  engine: "moonshine-small-en",
+  engine: "parakeet-v3-fp32",
   microphone: null,
-  vocabulary: false,
   apps: {
     "example.terminal": { paste: "ctrl+shift+v", send: false },
     "example.editor": { paste: "ctrl+v", send: false },

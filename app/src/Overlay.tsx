@@ -19,9 +19,6 @@ export function Overlay({
 }) {
   const snapshot = source.getSnapshot();
   const settings = snapshot.settings;
-  const cloud = snapshot.host?.models.find(
-    (model) => model.id === settings?.engine,
-  )?.cloud;
   const autoSend =
     session?.target && settings?.apps[session.target.app_id]?.send;
   const notification = session && snapshot.host?.notifications[session.id];
@@ -41,10 +38,6 @@ export function Overlay({
           <>
             <div className="row">
               <Status session={session}>
-                {cloud ? <span className="quiet">cloud</span> : null}
-                {settings?.vocabulary ? (
-                  <span className="quiet">vocabulary</span>
-                ) : null}
                 {autoSend ? <span className="quiet">auto-send</span> : null}
               </Status>
               <Target

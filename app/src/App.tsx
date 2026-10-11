@@ -118,7 +118,7 @@ export function App({
         const accepted =
           userText(
             current.sessions.find((session) => session.id === action.id),
-          ) !== null ||
+          ) === action.text ||
           current.history.some(
             (row) => row.id === action.id && row.text === action.text,
           );
@@ -182,6 +182,10 @@ export function App({
       note={note}
     />
   );
+
+  if (!source.connected) {
+    return <main className="window" role="alert">Host disconnected: {snapshot.connectionError ?? "The core connection is not available."} Restart {product.name} to reconnect.</main>;
+  }
 
   return (
     <>

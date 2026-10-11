@@ -19,7 +19,6 @@ struct KeyPress {
 struct Entry {
     view: SessionView,
     utterance: Utterance,
-    vocabulary: Vec<String>,
     send: bool,
     pending: bool,
     capture_started: bool,
@@ -48,6 +47,15 @@ impl Session {
 
     pub fn views(&self) -> impl Iterator<Item = &SessionView> {
         self.entries.iter().map(|entry| &entry.view)
+    }
+
+    pub fn history_edited(&mut self, id: UtteranceId, text: String) {
+        if let Some(entry) = self.entries.iter_mut().find(|entry| entry.view.id == id) {
+            entry.view.edited = Some(text.clone());
+            entry.utterance.text = Some(text);
+            entry.edited_version += 1;
+            entry.saved_edit_version = entry.edited_version;
+        }
     }
 
     pub fn dismiss(&mut self, id: UtteranceId) {
@@ -389,17 +397,10 @@ impl Session {
                         id,
                         audio_id: entry.utterance.audio_id,
                         engine: entry.utterance.engine.clone(),
-                        vocabulary: entry.vocabulary.clone(),
                     });
                 } else {
                     entry.capture_started = true;
-                    effects.extend([
-                        Effect::StartEngine {
-                            id,
-                            vocabulary: entry.vocabulary.clone(),
-                        },
-                        Effect::StartCapture { id },
-                    ]);
+                    effects.extend([Effect::StartEngine { id }, Effect::StartCapture { id }]);
                     if entry.view.phase == Phase::Finishing {
                         effects.push(Effect::StopCapture { id });
                     }
@@ -588,7 +589,6 @@ impl Session {
             engine: utterance.engine.clone(),
             target: None,
             mode: Mode::Quick,
-            vocabulary: vec![],
             send: false,
         });
         entry.utterance = utterance;
@@ -617,7 +617,6 @@ impl Session {
             engine: entry.utterance.engine.clone(),
             target: entry.view.target.clone(),
             mode: entry.view.mode,
-            vocabulary: entry.vocabulary.clone(),
             send: entry.send,
         });
         next.utterance.audio_id = entry.utterance.audio_id;
@@ -683,7 +682,6 @@ impl Session {
                 engine: utterance.engine.clone(),
                 target: None,
                 mode: Mode::Quick,
-                vocabulary: vec![],
                 send: false,
             });
             entry.view.committed = utterance.raw_text.clone().unwrap();
@@ -840,7 +838,6 @@ impl Entry {
                 pasted_to: None,
                 pasted_at: None,
             },
-            vocabulary: context.vocabulary,
             send: context.send,
             pending: true,
             capture_started: false,

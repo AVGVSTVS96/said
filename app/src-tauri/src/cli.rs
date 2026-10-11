@@ -2,6 +2,7 @@
 use crate::runtime::{Host, HostPlatform};
 #[cfg(target_os = "linux")]
 use said_audio::Recorder;
+#[cfg(target_os = "linux")]
 use said_core::Result;
 #[cfg(target_os = "linux")]
 use said_core::{History, Mode};
@@ -31,77 +32,4 @@ pub fn control<P: HostPlatform, R: Recorder>(
         }
     }
     Ok("applied".into())
-}
-pub fn import_vocabulary(
-    paths: &crate::storage::Paths,
-    source: &str,
-    path: &std::path::Path,
-) -> Result<()> {
-    let terms: Vec<String> = match source {
-        "codex" => {
-            let value: serde_json::Value = serde_json::from_slice(&std::fs::read(path)?)?;
-            let dictionary = value
-                .get("dictationDictionary")
-                .or_else(|| {
-                    value
-                        .get("electron-saved-atom-state")
-                        .and_then(|state| state.get("dictationDictionary"))
-                })
-                .ok_or("dictationDictionary is missing")?;
-            match dictionary {
-                serde_json::Value::Array(terms) => terms
-                    .iter()
-                    .map(|term| {
-                        term.as_str()
-                            .ok_or_else(|| "dictionary term must be a string".into())
-                            .map(str::to_owned)
-                    })
-                    .collect::<Result<_>>()?,
-                serde_json::Value::String(terms) => terms.lines().map(str::to_owned).collect(),
-                _ => return Err("dictationDictionary must be a string or array".into()),
-            }
-        }
-        "wispr" => {
-            let db = rusqlite::Connection::open_with_flags(
-                path,
-                rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
-            )?;
-            let mut statement = db.prepare("SELECT phrase FROM Dictionary WHERE isDeleted = 0 AND isSnippet = 0 ORDER BY createdAt, id")?;
-            statement
-                .query_map([], |row| row.get(0))?
-                .collect::<std::result::Result<_, _>>()?
-        }
-        _ => return Err("source must be wispr or codex".into()),
-    };
-    if terms.iter().any(|term| term.contains(['\n', '\r', '\0'])) {
-        return Err("vocabulary terms must be single lines".into());
-    }
-    let file = paths.config.join("vocabulary.txt");
-    let mut text = std::fs::read_to_string(&file).unwrap_or_default();
-    if !text.is_empty() && !text.ends_with('\n') {
-        text.push('\n');
-    }
-    for term in terms {
-        text.push_str(&term);
-        text.push('\n');
-    }
-    crate::storage::atomic_write(&file, text.as_bytes())
-}
-
-pub fn vocabulary_source(source: &str) -> Result<std::path::PathBuf> {
-    let home = std::path::PathBuf::from(std::env::var_os("HOME").ok_or("HOME is required")?);
-    match source {
-        "codex" => Ok(home.join(".codex/.codex-global-state.json")),
-        "wispr" => {
-            #[cfg(target_os = "macos")]
-            {
-                Ok(home.join("Library/Application Support/Wispr Flow/flow.sqlite"))
-            }
-            #[cfg(target_os = "linux")]
-            {
-                Err("Wispr is a macOS source; supply the path to its exported database".into())
-            }
-        }
-        _ => Err("source must be wispr or codex".into()),
-    }
 }
