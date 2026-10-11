@@ -1,0 +1,227 @@
+{
+  "binary_sha256": "97aaa3b91b820dd068eea83768b7b408db3ab613f9a62f59c8d16a4fc470d41f",
+  "build": {
+    "dependency_lock_sha256": "a69383f3c7397b6ba59bc0d88923e3b537decd87bde996b50bc602c89290c660",
+    "rust": "rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "ci": false,
+  "clips": 28,
+  "corpus_sha256": "650c19b6436e8840c0f01d02fb2d8546e364c275d4761847268b017f132cbb6c",
+  "engine_crate": "0.0.0",
+  "engines": {
+    "parakeet-v3-fp32": {
+      "cold_load_ms": 4475.035416,
+      "failed_clips": 0,
+      "filler": {
+        "matched": 13,
+        "opportunities": 18,
+        "precision": 0.9285714285714286,
+        "predicted": 14,
+        "recall": 0.7222222222222222
+      },
+      "hallucinated_words": 0,
+      "identifiers": {
+        "matched": 1,
+        "opportunities": 8,
+        "precision": 1.0,
+        "predicted": 1,
+        "recall": 0.125
+      },
+      "latency": {
+        "audio_seconds": 208.336875,
+        "first_partial_missing": 0,
+        "first_partial_p50_ms": 685.2514560000001,
+        "first_partial_p95_ms": 1405.1181370000002,
+        "first_partial_samples": 28,
+        "first_text_p50_ms": 685.2514560000001,
+        "first_text_p95_ms": 1405.1181370000002,
+        "max_replay_lag_ms": 0.6324429999999666,
+        "release_5_to_20s_p50_ms": 482.81932900000004,
+        "release_5_to_20s_p95_ms": 705.5362640000001,
+        "release_5_to_20s_samples": 8,
+        "release_to_final_p50_ms": 326.028965,
+        "release_to_final_p95_ms": 705.5362640000001
+      },
+      "literal": {
+        "deletions": 26,
+        "hypothesis_words": 575,
+        "insertions": 13,
+        "reference_words": 588,
+        "substitutions": 66
+      },
+      "literal_wer": 0.17857142857142858,
+      "measured_busy_real_time_factor": 0.002477502,
+      "negation": {
+        "matched": 30,
+        "opportunities": 31,
+        "precision": 1.0,
+        "predicted": 30,
+        "recall": 0.967741935483871
+      },
+      "negations_added": 0,
+      "negations_changed": 0,
+      "negations_dropped": 1,
+      "normalized": {
+        "deletions": 22,
+        "hypothesis_words": 580,
+        "insertions": 10,
+        "reference_words": 592,
+        "substitutions": 25
+      },
+      "normalized_wer": 0.09628378378378379,
+      "peak_rss_bytes": 2868609024,
+      "pins": {
+        "adapter": "parakeet",
+        "chunk_seconds": 30,
+        "files": {
+          "decoder.onnx": "d593cdb0e571f5a457ec2219af9968cbf6b0e8198e8f7839b40a8754593bf68c",
+          "encoder.onnx": "3eed7ce424bf8339ad09233533c687e2dbd07e74ccf5027b5e7344019ea373b0",
+          "encoder.weights": "3af3f51af5f2d01dbbf5af47d42c7962a2c205f11004254bb4f2b979862f39a8",
+          "joiner.onnx": "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63",
+          "tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+        },
+        "license": "CC-BY-4.0",
+        "overlap_seconds": 5,
+        "provider": "cpu",
+        "ranking_candidate": true,
+        "runtime_files_sha256": {
+          "libonnxruntime.so": "4b3607aebd1784b26b6f9b20e4bd974c7ab8287043e4d095cb7d2cb40b5e566e",
+          "libsherpa-onnx-c-api.so": "c067b18cd746e49eb5016ee428196d21e1df14c14a3c54f128c1ac95f6aaed50",
+          "libsherpa-onnx-cxx-api.so": "81b3c4ffdd19e3da9d4f7df7c41fde233506cb701a074b005c31234bf910b1e1"
+        },
+        "runtime_library_sha256": "c067b18cd746e49eb5016ee428196d21e1df14c14a3c54f128c1ac95f6aaed50",
+        "runtime_source_revision": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf",
+        "runtime_source_sha256": "0a8db6c55dd318f4a688faba85f7760b99a6c92e8ef8864479d418531bee1ac2",
+        "runtime_version": "1.13.8",
+        "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/1a468a35cbba69418f126de829e75261dea4a4e4/",
+        "threads": 8,
+        "update_samples": 32000
+      },
+      "repetition": {
+        "matched": 9,
+        "opportunities": 14,
+        "precision": 1.0,
+        "predicted": 9,
+        "recall": 0.6428571428571429
+      },
+      "strata": {
+        "filler": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 10,
+          "reference_words": 317
+        },
+        "flag": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 23
+        },
+        "identifier": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 8
+        },
+        "long": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 8,
+          "reference_words": 304
+        },
+        "natural": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 23,
+          "reference_words": 111
+        },
+        "negation": {
+          "clips": 11,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 20,
+          "reference_words": 401
+        },
+        "noise": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "path": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 23
+        },
+        "repetition": {
+          "clips": 3,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 10,
+          "reference_words": 327
+        },
+        "silence": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "technical": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 22,
+          "reference_words": 345
+        }
+      },
+      "successful_clips": 28,
+      "technical": {
+        "matched": 17,
+        "opportunities": 18,
+        "precision": 1.0,
+        "predicted": 17,
+        "recall": 0.9444444444444444
+      }
+    }
+  },
+  "host": {
+    "architecture": "x86_64",
+    "cpu": "AMD Ryzen 7 5700G with Radeon Graphics",
+    "kernel": "7.2.8-1-cachyos",
+    "logical_cpus": 16,
+    "os": "linux"
+  },
+  "mode": "real_time",
+  "model_manifest_sha256": "b75b1b12a542acf5e3b00a224d82ed1180cb99c14ad95288ce4ebd79c33e6d4b",
+  "postprocessing": "none",
+  "reference_statuses": {
+    "authored_unreviewed": 21,
+    "deterministic": 2,
+    "upstream_verbatim": 5
+  },
+  "requested_engines": [
+    "parakeet-v3-fp32"
+  ],
+  "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
+  "runtime_version": "1.13.8",
+  "schema": 1,
+  "started_unix_ms": 1791679448802,
+  "vocabulary": [],
+  "watchdog": {
+    "policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 30), recent peak busy RTF * min(uncommitted seconds, 0.5)))"
+  },
+  "worker_deadlines_seconds": {
+    "audio": 10,
+    "finish": 30,
+    "startup": 60
+  }
+}

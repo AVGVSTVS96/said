@@ -1,8 +1,10 @@
 # Public results
 
-The first runs below are retained as baseline evidence. The engine-fix update
-at the end records the corrected pipeline and full completion; model defaults
-remain provisional.
+**Current bundled default on Linux CPU and Apple Silicon: Parakeet TDT v3,
+FP32, sherpa-onnx 1.13.8 / ONNX Runtime 1.28.2, CPU, eight threads, 30s/5s
+windows.** Moonshine is removed. The [native replacement](#native-parakeet-replacement)
+section records the current decision; earlier Moonshine runs remain historical
+evidence. Engine selection does not certify an acoustically perfect transcript.
 
 ## First public results
 
@@ -108,6 +110,9 @@ implemented crate adapter and no fabricated score. The private bake-off and its
 provisional silver references were not modified or published.
 
 ## Reproduce
+
+These commands describe the archived Moonshine revision. Use
+[the current default commands](#reproduce-the-current-default) for this checkout.
 
 ```sh
 CARGO_BUILD_JOBS=2 cargo build --locked --manifest-path bench/Cargo.toml
@@ -275,3 +280,196 @@ Receipts: [Linux full metrics](results/linux-engine-fix.summary.json),
 
 The corpus/reference statuses and all WAV hashes are unchanged. Inspect the
 receipts' actual hashes rather than expecting byte-identical timings on a busy host.
+
+
+## Native Parakeet replacement
+
+Measured 2026-10-10–11 UTC. Both platforms use the same pinned FP32 ONNX
+export, greedy decoding and timestamp merge. Linux is Ryzen 7 5700G CPU;
+macOS is M1 Max CPU, at nice 10 with idle checks. Model inference uses eight
+threads; Cargo builds use two jobs. No GUI, microphone or permission prompt
+was used. No audio went to an external ASR service.
+
+### Private fidelity: before and after
+
+The full private suite covers 180 clips. Headline scores use the original
+170 high/medium-confidence references: 10,116 words, 222 protected
+negative/scope tokens and 72 um/uh-class tokens. The ten low-confidence clips
+are runtime diagnostics, not silently promoted into the headline cohort.
+References, identifiers, audio and raw outputs remain outside the repository.
+
+| Configuration | Headline clips | WER | Protected kept; extra | um/uh kept; extra | Repetition-span tokens | Added words |
+|---|---:|---:|---:|---:|---:|---:|
+| Before: Moonshine Small | 170 | 7.11% | 218/222; +5 | 38/72; +5 | 168/200 | 231 |
+| Before: Moonshine Medium | 170 | 6.28% | 220/222; +6 | 35/72; +3 | 170/200 | 228 |
+| Bake-off anchor: Parakeet MLX BF16, 30s/5s | 170 | 1.95% | 222/222; +0 | 67/72; +7 | 197/200 | 53 |
+| After: native Parakeet FP32, Linux | 170 | 1.95% | 222/222; +0 | 69/72; +7 | 196/200 | 50 |
+| After: native Parakeet FP32, macOS | 170 | 1.95% | 222/222; +0 | 69/72; +7 | 196/200 | 50 |
+| Comparator: Phonon-2 / Fermion 0.2.11 Linux | 170 | 3.53% | 220/222; +0 | 62/72; +6 | 185/200 | 74 |
+
+Both native platforms completed 180/180 speech clips and the two private
+known-empty controls. Every one of the 170 headline raw transcripts is
+byte-identical across platforms. Native FP32 matches the anchor's exact
+headline WER (197/10,116 errors) and retains two more hesitation tokens. Its
+repetition recall is one token lower; technical-glossary recall is reported
+in the private receipts. No quantized path was accepted without evidence.
+
+These counts use the original private scorer, including its protected scope
+words, minimum-edit alignment and repeated spans of one to four words. They
+are not the narrower public scorer's negation/repetition definitions. Silver
+contains a Parakeet committee member and correlated models, so agreement is
+optimistic. No listening-gold or population accuracy claim is made. Word
+insertions on speech are not automatically acoustic hallucinations.
+
+### Latency, memory and Linux choice
+
+Linux timing compares the same eight clips as the retained Phonon adaptive
+replay: six short clips and two difficult longer clips, 167.27 seconds total.
+Quantiles below are recomputed with the runner's nearest-rank definition.
+Phonon is the earlier bake-off run; these were separate shared-host phases,
+not an isolated simultaneous performance experiment.
+
+| Linux configuration | n | First partial p50 / p95 | Release→Final p50 / p95 |
+|---|---:|---:|---:|
+| Native Parakeet FP32, 8 threads | 8/8 | 687 / 1395 ms | 487 / 2382 ms |
+| Phonon-2 CPU, adaptive cadence | 8/8 | 921 / 1820 ms | 200 / 796 ms |
+
+For the six 5–20 second clips, native Parakeet release p95 is **549 ms**.
+Its two longer clips raise the all-eight p95 to 2.38 seconds. All eight final
+word sequences agree with their native unpaced results. Mac's separate
+eight-clip paced set has first-partial p50/p95 **575/1820 ms**, release
+p50/p95 **338/649 ms**, and short-clip release p95 **456 ms**. It is a different
+latency set from the Linux matched comparison.
+
+Full-suite sampled parent-plus-worker RSS is **2.71 GiB Linux / 2.92 GiB macOS**.
+The earlier Phonon full-file worker peak was about 1.03 GiB, with a different
+process memory method. Native Parakeet fits the stated 3–4 GB available budget
+for one loaded worker, but exceeds SPEC's 1 GB Linux / 1.5 GB Mac targets.
+RSS can double-count mappings and miss short peaks; Mac RSS is not physical
+unified-memory footprint. No claim is made about microphone-to-overlay or
+Final-to-paste latency.
+
+Choose the same native Parakeet engine on both platforms: it preserves more
+protected/hesitation tokens than Phonon, runs without Python, completes all
+clips, and has acceptable measured short-dictation latency. Phonon's smaller
+memory and faster longer-clip finalization remain real advantages. Its measured
+SDK still uses Python/PyTorch for loading, mel extraction and projection;
+linkable native kernels alone are not an end-to-end app adapter.
+
+CoreML was tested on ten matched clips at four threads. CPU decoded them in
+28.19 seconds after a 2.42-second load; the CoreML configuration needed
+42.33 seconds after an 8.57-second load. CoreML sampled RSS reached 9.05 GiB,
+versus roughly 3 GiB for CPU. Text matched, but this was no acceleration win.
+CPU remains the default. parakeet.cpp's CPU/Metal C API was assessed from
+source; its conversion/backend fidelity was not measured on this corpus.
+
+### Integrity and integration
+
+The final merge aligns words monotonically by timestamps, preserving whole
+words and repeated-word multiplicity without comparing text. Continuous speech
+needs no silence gap. A stricter experimental interval-component guard rejected
+three clips; those failed attempts are retained privately and score as deletions.
+The corrected three-clip regressions and both final full runs have no failures.
+Partials replace; only closed prefixes commit; finish commits the tail before
+Final. No core trait, event or protocol change is needed.
+
+The shared client serializes overlapping utterances while capture continues
+into private disk spools. Its file-replay method reuses the same model slot.
+The app retry executor still needs the supplied integration patch to use that
+method; until then, a standalone history replay can coexist with an idle model
+copy. That executor is integrator-owned. Apply the handoff before claiming
+bounded app-retry memory.
+
+Moonshine's optional low-memory entry, adapter, patch and runtime-build machinery
+are removed. Its measured fidelity losses do not serve the verbatim contract.
+No Whisper or other automatic recognition fallback is present.
+
+### Public corpus and regression checks
+
+Both platforms completed the same 28 public clips, 208.34 seconds of audio.
+Their final transcript bytes agree on every clip. The references and audio
+hashes are unchanged from the corrected Moonshine runs above.
+
+| Platform / engine | Completed | Normalized WER | First partial p50 / p95 | Release p95, 5–20 s | Sampled RSS |
+|---|---:|---:|---:|---:|---:|
+| Before: Linux / Moonshine Small | 28/28 | 14.9% | 784 / 2130 ms | 3565 ms | 442 MiB |
+| Before: macOS / Moonshine Medium | 28/28 | 12.5% | 596 / 2188 ms | 961 ms | 2171 MiB |
+| After: Linux / native Parakeet | 28/28 | 9.63% | 685 / 1405 ms | 706 ms | 2.67 GiB |
+| After: macOS / native Parakeet | 28/28 | 9.63% | 568 / 1188 ms | 762 ms | 3.18 GiB |
+
+Native literal WER is 17.86% on both platforms. Public retention is **30/31
+negations, 13/18 fillers, 9/14 repetition opportunities, 1/8 identifiers and
+17/18 technical terms**, with zero extra negations and zero words on the two
+known-empty controls. The missing negation is in the natural meeting subset;
+clear polarity twins pass. These public failures remain visible despite the
+stronger private silver result. Authored synthetic references still need
+listening acceptance, especially identifier pronunciation.
+
+The unchanged CI quality gate passes on both platforms: 12/12 clips, 18.87%
+normalized WER, 6/7 negations, 3/4 fillers, 2/3 repeats and empty controls.
+Passing its historical smoke thresholds does not mean perfect retention.
+Both public short-clip release p95 values meet the one-second target; sampled
+memory exceeds SPEC's targets, as does the private suite. First-partial timing
+measures file replay to worker events, not overlay painting.
+
+The Mac public summary's `build.rust` reports the `rustc` found on the replay
+process's PATH (Homebrew 1.89.0). The executable was built with Rust 1.96.1;
+the build log and Mac CI receipt record that toolchain. Binary and native
+library hashes identify the actual artifacts.
+
+Receipts: [Linux full metrics](results/linux-parakeet.summary.json),
+[Linux raw events](results/linux-parakeet.clips.jsonl),
+[macOS full metrics](results/macos-parakeet.summary.json),
+[macOS raw events](results/macos-parakeet.clips.jsonl),
+[Linux CI metrics](results/linux-parakeet-ci.summary.json),
+[Linux CI raw events](results/linux-parakeet-ci.clips.jsonl),
+[macOS CI metrics](results/macos-parakeet-ci.summary.json), and
+[macOS CI raw events](results/macos-parakeet-ci.clips.jsonl).
+
+### Reproduce the current default
+
+```sh
+crates/engine/scripts/fetch-model.sh
+bench/scripts/fetch.sh
+CARGO_BUILD_JOBS=2 cargo build --locked -p voice-bench
+systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
+  nice -n 10 target/debug/voice-bench bench bench/clips.jsonl --all \
+  --audio-root "$HOME/.cache/voice-models/bench-public"
+```
+
+Private fidelity used the app's `voice bench` command with external manifests
+and `--unpaced`; paced subset runs measured latency separately. All manifests,
+references, private audio and transcripts remain outside the public worktree.
+
+### Current checks and capped native proofs
+
+- `cargo test -p voice-engine`: pass. Engine/bench pure tests, including the
+  shared-slot concurrency/file-replay regression, pass; the bench has 13 tests.
+- `bench/scripts/ci.sh`: pass on Linux and macOS, 12/12 recognitions each.
+- `cargo test -p voice-app --test end_to_end`: pass. Its native proof was also
+  explicitly run with `--ignored --nocapture` on both platforms.
+- Engine/bench clippy with `-D warnings`, formatting, shell syntax and diff
+  checks pass. The host installer produces the exact pinned measured libraries.
+- Native direct/worker golden passes on both platforms, preserving all six
+  boundary repetitions and identical raw bytes. Linux's 4 GiB / no-swap scope
+  completed in 74.75 seconds; macOS completed in 20.12 seconds.
+- Linux's warm-worker public regression passes in 160.79 seconds under a
+  separate 4 GiB / no-swap scope: quiet speech after previous streams is stable,
+  an exact eight-second recording retains its final “Stop”, and all five
+  long-script passage anchors occur four times across four commits.
+
+The initially uncapped Linux golden run was stopped and killed after a resource
+watcher identified risk to the editor's shared cgroup. Its isolated rerun passed.
+The ordinary-allocator native app proof then hit its separate 4 GiB cap and was
+OOM-killed; the editor stayed alive. With `MALLOC_ARENA_MAX=1` and
+`MALLOC_TRIM_THRESHOLD_=131072`, that same proof passed all four fixtures in
+101.19 seconds with a 3.68 GiB cgroup peak. It alternates direct model loads with
+host subprocesses; retained allocator pages affect this proof's memory budget.
+The benchmark/default engine environment does not use these allocator settings.
+Mac's native app proof passed in 22.59 seconds without them. History, raw text
+and fake-platform paste bytes agree; no real desktop input was used.
+
+Inspect the [check receipt](results/parakeet-checks.json). Cgroup peaks include
+reclaimable file cache and cannot be compared directly with sampled RSS. The
+app retry integration described above and unmet SPEC RAM targets remain explicit
+handoff limits; no shared-type change is required.

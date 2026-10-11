@@ -23,7 +23,7 @@ cargo run -p voice-engine --bin voice-engine -- /path/to/16k-mono-i16.wav
 Provisioning needs curl, jq, OpenSSL, tar and bzip2 support. It downloads and
 hash-checks published native libraries; no runtime source compilation is needed.
 The app downloader installs the same pinned libraries. Linux x86_64 and macOS
-arm64 are measured; other architectures have no invented runtime/default entry.
+arm64 are measured; the manifest supplies runtime archives only for those targets.
 The loader checks the exact C ABI version before constructing a recognizer.
 Unsafe calls stay in the isolated worker. CPU arenas, memory patterns and busy
 spinning are disabled through the native session configuration.
@@ -138,6 +138,25 @@ only these synthetic WAVs to Linux before running the ignored native checks.
 crates/engine/scripts/generate-clips.sh
 CARGO_BUILD_JOBS=2 cargo test -p voice-engine --test golden -- --ignored --nocapture
 CARGO_BUILD_JOBS=2 cargo test -p voice-engine --test public_regressions -- --ignored --nocapture
+```
+
+On Linux, run each native check separately under
+`systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- nice -n 10`.
+Direct/worker proof tests reload native sessions and can also retain allocator
+pages after a direct model is dropped. Their cgroup budget includes reclaimable
+file cache as well as resident allocations; keep these checks outside the editor's
+own memory scope. The warm production worker reuses its loaded model.
+
+The app's ignored direct/host comparison also needs
+`MALLOC_ARENA_MAX=1 MALLOC_TRIM_THRESHOLD_=131072` in its Linux test environment
+to pass under that cap. Without those settings, the proof was OOM-killed in its
+isolated scope. With them, all four fixtures passed. Benchmark measurements
+use the ordinary allocator environment; these settings are not model defaults.
+
+```sh
+MALLOC_ARENA_MAX=1 MALLOC_TRIM_THRESHOLD_=131072 CARGO_BUILD_JOBS=2 \
+  systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
+  nice -n 10 cargo test -p voice-app --test end_to_end -- --ignored --nocapture
 ```
 
 Protocol fuzzing, truncated/oversized frames, lifecycle identity, literal fake
