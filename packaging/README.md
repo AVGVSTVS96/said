@@ -65,3 +65,5 @@ The app starts hidden. Open Setup from the tray menu. Brand tray artwork is in
 `app/src-tauri/icons/tray`; selecting idle/recording artwork remains app-module
 integration work. Ship versioned artifacts with SHA256SUMS; verify Linux `ldd`,
 isolated-cache native loading, macOS `otool -L`, and complete bundle signatures.
+
+The PKGBUILD consumes a local clone; a public upstream URL has not been configured.

@@ -3,7 +3,6 @@ pkgver=0.0.0
 pkgrel=1
 pkgdesc='Local dictation with Parakeet v3'
 arch=('x86_64')
-url='https://github.com/AVGVSTVS96/said'
 license=('MIT')
 depends=('webkit2gtk-4.1' 'libayatana-appindicator' 'gtk-layer-shell' 'alsa-lib' 'wl-clipboard' 'libxkbcommon')
 makedepends=('rust' 'bun' 'git' 'curl' 'jq' 'openssl' 'bzip2')
