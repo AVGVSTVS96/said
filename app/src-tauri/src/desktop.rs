@@ -22,6 +22,8 @@ pub struct Desktop {
     error: Option<String>,
     hotkey: String,
     settings: Option<Settings>,
+    #[cfg(target_os = "linux")]
+    input_status: Vec<String>,
 }
 impl Desktop {
     #[cfg(target_os = "linux")]
@@ -82,68 +84,62 @@ impl HostPlatform for Desktop {
     fn configure(&mut self, settings: &Settings) -> Result<()> {
         #[cfg(target_os = "linux")]
         {
-            let mut config = linux::Config::from_environment(env!("PRODUCT_STORAGE_KEY"))?;
-            if self.login.is_none() {
-                match crate::login::Login::start() {
-                    Ok(login) => self.login = Some(login),
-                    Err(error) => {
-                        self.error = Some(format!(
-                            "logind unavailable: {error}; physical input disabled"
-                        ))
+            let shortcuts = linux::input::Shortcuts::parse(
+                &settings.hotkey,
+                &settings.interactive_hotkey,
+                &settings.insert_last_hotkey,
+            )?;
+            let paste_chords = settings
+                .apps
+                .iter()
+                .map(|(app, rule)| {
+                    let chord = match rule.paste.to_ascii_lowercase().as_str() {
+                        "ctrl+v" => linux::paste::PasteChord::CtrlV,
+                        "ctrl+shift+v" => linux::paste::PasteChord::CtrlShiftV,
+                        "shift+insert" => linux::paste::PasteChord::ShiftInsert,
+                        _ => {
+                            return Err(
+                                "supported paste shortcuts: ctrl+v, ctrl+shift+v, shift+insert"
+                                    .into(),
+                            );
+                        }
+                    };
+                    Ok((app.clone(), chord))
+                })
+                .collect::<Result<BTreeMap<_, _>>>()?;
+            if let Some(native) = &mut self.native {
+                native.configure(shortcuts, paste_chords);
+            } else {
+                let mut config = linux::Config::from_environment(env!("PRODUCT_STORAGE_KEY"))?;
+                if self.login.is_none() {
+                    match crate::login::Login::start() {
+                        Ok(login) => self.login = Some(login),
+                        Err(error) => {
+                            self.error = Some(format!(
+                                "logind unavailable: {error}; physical input disabled"
+                            ))
+                        }
                     }
                 }
+                config.read_input = self.login.as_ref().is_some_and(crate::login::Login::active);
+                config.shortcuts = shortcuts;
+                config.paste_chords = paste_chords;
+                let native = LinuxPlatform::new(config)?;
+                self.changes = native
+                    .niri()
+                    .map(linux::niri::Niri::focus_changes)
+                    .transpose()?;
+                self.native = Some(native);
             }
-            config.read_input = self.login.as_ref().is_some_and(crate::login::Login::active);
-            if !config.read_input {
-                config.portal_trigger = None;
-            }
-            config.chord = linux::input::Chord::parse(&settings.hotkey)?;
-            let reserved = linux::input::Chord::parse("ctrl+alt+v")?;
-            if settings.hotkey.to_ascii_lowercase().contains("shift")
-                || config.chord.key == reserved.key
-                    && reserved
-                        .modifiers
-                        .iter()
-                        .all(|modifier| config.chord.modifiers.contains(modifier))
-            {
-                return Err(
-                    "Shift is reserved for interactive mode and Ctrl+Alt+V for insert last".into(),
-                );
-            }
-            if config.read_input {
-                let mut parts: Vec<_> = settings.hotkey.split('+').map(str::to_owned).collect();
-                let last = parts.len() - 1;
-                for part in &mut parts[..last] {
-                    *part = part.to_ascii_uppercase();
-                }
-                parts[last] = parts[last].to_ascii_lowercase();
-                config.portal_trigger = Some(parts.join("+"));
-            }
-            for (app, rule) in &settings.apps {
-                let chord = match rule.paste.to_ascii_lowercase().as_str() {
-                    "ctrl+v" => linux::paste::PasteChord::CtrlV,
-                    "ctrl+shift+v" => linux::paste::PasteChord::CtrlShiftV,
-                    "shift+insert" => linux::paste::PasteChord::ShiftInsert,
-                    _ => {
-                        return Err(
-                            "supported paste shortcuts: ctrl+v, ctrl+shift+v, shift+insert".into(),
-                        );
-                    }
-                };
-                config.paste_chords.insert(app.clone(), chord);
-            }
-            self.changes = None;
-            self.native = None;
-            let native = LinuxPlatform::new(config)?;
-            self.changes = native
-                .niri()
-                .map(linux::niri::Niri::focus_changes)
-                .transpose()?;
-            self.native = Some(native);
         }
         #[cfg(target_os = "macos")]
         {
-            let shortcut = shortcut(&settings.hotkey)?;
+            let shortcuts = macos::Shortcuts {
+                dictation: shortcut(&settings.hotkey)?,
+                interactive: shortcut(&settings.interactive_hotkey)?,
+                insert_last: shortcut(&settings.insert_last_hotkey)?,
+            };
+            shortcuts.validate()?;
             if settings
                 .apps
                 .values()
@@ -152,11 +148,15 @@ impl HostPlatform for Desktop {
                 return Err("macOS paste shortcut is cmd+v".into());
             }
             if let Some(native) = &mut self.native {
-                if settings.hotkey != self.hotkey {
-                    native.set_shortcut(shortcut)?;
+                if self.settings.as_ref().is_none_or(|previous| {
+                    previous.hotkey != settings.hotkey
+                        || previous.interactive_hotkey != settings.interactive_hotkey
+                        || previous.insert_last_hotkey != settings.insert_last_hotkey
+                }) {
+                    native.set_shortcuts(shortcuts)?;
                 }
             } else {
-                match MacosPlatform::start(shortcut, configure_overlay) {
+                match MacosPlatform::start(shortcuts, configure_overlay) {
                     Ok(native) => {
                         self.native = Some(native);
                         self.error = None;
@@ -186,18 +186,7 @@ impl HostPlatform for Desktop {
     }
     fn availability(&mut self, available: bool) {
         #[cfg(target_os = "linux")]
-        if available
-            && self
-                .native
-                .as_ref()
-                .is_some_and(|native| native.mode() == linux::Mode::NiriToggle)
-        {
-            if let Some(settings) = self.settings.clone()
-                && let Err(error) = self.configure(&settings)
-            {
-                self.error = Some(error.to_string());
-            }
-        } else if let Some(native) = &mut self.native {
+        if let Some(native) = &mut self.native {
             native.set_input_enabled(available);
         }
         #[cfg(target_os = "macos")]
@@ -226,8 +215,34 @@ impl HostPlatform for Desktop {
                     .map(|target| SessionEvent::FocusChanged { target }),
             );
         }
+        #[cfg(target_os = "linux")]
+        {
+            let instructions = self.instructions();
+            if instructions != self.input_status {
+                self.input_status = instructions;
+                events.push(
+                    if self.login.as_ref().is_some_and(crate::login::Login::active) {
+                        SessionEvent::SessionAvailable
+                    } else if self.login.is_none() {
+                        SessionEvent::FocusChanged {
+                            target: self.focused(),
+                        }
+                    } else {
+                        SessionEvent::SessionUnavailable {
+                            reason: "Session locked, inactive or logind disconnected".into(),
+                        }
+                    },
+                );
+            }
+        }
         #[cfg(target_os = "macos")]
         if let Some(native) = &self.native {
+            events.extend(
+                native
+                    .focus_changes()
+                    .try_iter()
+                    .map(|target| SessionEvent::FocusChanged { target }),
+            );
             for status in native.input_statuses().try_iter() {
                 events.push(match status {
                     macos::InputStatus::Available => SessionEvent::SessionAvailable,
@@ -254,7 +269,7 @@ impl HostPlatform for Desktop {
     fn permissions(&self) -> BTreeMap<String, String> {
         #[cfg(target_os = "linux")]
         {
-            BTreeMap::from([("microphone".into(), "authorized".into())])
+            BTreeMap::new()
         }
         #[cfg(target_os = "macos")]
         {
@@ -289,26 +304,38 @@ impl HostPlatform for Desktop {
         let mut steps = vec![];
         #[cfg(target_os = "linux")]
         {
-            steps.push(format!(
-                "Niri bind: {} {{ spawn \"said\" \"hotkey\"; }}",
-                self.hotkey
-                    .replace("ctrl", "Ctrl")
-                    .replace("alt", "Alt")
-                    .replace("space", "Space")
-            ));
-            steps.push("Without input access, each press toggles. For hold-to-talk: sudo usermod -aG input \"$USER\"; then sign out and back in.".into());
+            if let Some(settings) = &self.settings
+                && let Ok(shortcuts) = linux::input::Shortcuts::parse(
+                    &settings.hotkey,
+                    &settings.interactive_hotkey,
+                    &settings.insert_last_hotkey,
+                )
+            {
+                steps.push(shortcuts.niri_binds());
+            }
+            steps.push("For hold-to-talk: sudo usermod -aG input \"$USER\"; then sign out and back in. These are the same keys as the Niri toggle binds.".into());
             if let Some(native) = &self.native {
-                steps.push(format!("Input mode: {:?}", native.mode()));
+                steps.insert(0, match native.mode() {
+                    linux::Mode::NiriHold => "Hold-to-talk available. Hold a shortcut to talk; tap to toggle.",
+                    linux::Mode::NiriPortal => "Hold-to-talk available through GlobalShortcuts. Hold a shortcut to talk; tap to toggle.",
+                    linux::Mode::NiriToggle => "Toggle mode. Press a shortcut to start; press it again to stop. Hold-to-talk needs input access or a working GlobalShortcuts portal.",
+                    linux::Mode::Clipboard => "Clipboard mode. Dictation is copied for manual paste; automatic insertion needs Niri.",
+                }.into());
                 if let Some(reason) = native.input_unavailable_reason() {
                     steps.push(reason.into());
                 }
                 if let Some(reason) = native.portal_unavailable_reason() {
-                    steps.push(reason.into());
+                    steps.push(reason);
                 }
             }
         }
         #[cfg(target_os = "macos")]
         {
+            steps.push(if self.native.is_some() {
+                "Hold-to-talk available. Hold a shortcut to talk; tap to toggle."
+            } else {
+                "Shortcuts unavailable. Allow Accessibility and Input Monitoring, then reopen the app."
+            }.into());
             steps.extend(
                 macos::permissions::Permissions::check()
                     .recovery()
@@ -328,6 +355,7 @@ fn shortcut(value: &str) -> Result<macos::Shortcut> {
     let key = parts.next_back().ok_or("shortcut needs a key")?;
     let keycode = match key.to_ascii_lowercase().as_str() {
         "space" => 49,
+        "v" => 9,
         "a" => 0,
         "s" => 1,
         "d" => 2,
@@ -354,10 +382,7 @@ fn shortcut(value: &str) -> Result<macos::Shortcut> {
         "n" => 45,
         "m" => 46,
         _ => {
-            return Err(
-                "choose Space or a letter other than V; Shift is reserved for interactive mode"
-                    .into(),
-            );
+            return Err("choose Space or a letter".into());
         }
     };
     let mut modifiers = 0;
@@ -366,7 +391,8 @@ fn shortcut(value: &str) -> Result<macos::Shortcut> {
             "ctrl" => macos::CONTROL,
             "alt" => macos::OPTION,
             "cmd" => macos::COMMAND,
-            _ => return Err("supported modifiers are ctrl, alt and cmd".into()),
+            "shift" => macos::SHIFT,
+            _ => return Err("supported modifiers are ctrl, alt, cmd and shift".into()),
         };
     }
     if modifiers == 0 {

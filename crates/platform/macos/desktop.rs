@@ -6,6 +6,7 @@ use said_core::{Result, Target};
 
 use super::decoder::COMMAND;
 use super::ffi::{self, Owned, Ref};
+use super::focus::FocusChanges;
 use super::{objc, permissions};
 
 struct WindowIdentity {
@@ -24,6 +25,7 @@ struct Registry {
 #[derive(Default)]
 pub struct Desktop {
     registry: Mutex<Registry>,
+    changes: FocusChanges,
 }
 
 fn attribute(element: Ref, name: &str) -> Result<Owned> {
@@ -44,6 +46,7 @@ impl Desktop {
         if !unsafe { ffi::AXIsProcessTrusted() } {
             return Err("Enable this signed app in System Settings > Privacy & Security > Accessibility, then quit and reopen it.".into());
         }
+        self.changes.observe()?;
         unsafe {
             let workspace = objc::send::<Ref>(objc::class(c"NSWorkspace"), c"sharedWorkspace");
             let app = objc::send::<Ref>(workspace, c"frontmostApplication");
@@ -85,6 +88,9 @@ impl Desktop {
             });
             Ok(target)
         }
+    }
+    pub fn focus_changes(&self) -> crossbeam_channel::Receiver<Option<Target>> {
+        self.changes.events()
     }
     fn pid(&self, target: &Target) -> Result<i32> {
         self.registry

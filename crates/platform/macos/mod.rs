@@ -1,6 +1,7 @@
 mod decoder;
 mod desktop;
 mod ffi;
+mod focus;
 mod input;
 mod objc;
 pub mod overlay;
@@ -9,7 +10,7 @@ pub mod permissions;
 use crossbeam_channel::Receiver;
 use said_core::{Hotkey, Result, Target};
 
-pub use decoder::{COMMAND, CONTROL, OPTION, SHIFT, Shortcut};
+pub use decoder::{COMMAND, CONTROL, OPTION, SHIFT, Shortcut, Shortcuts};
 pub use input::InputStatus;
 
 use crate::Platform;
@@ -24,19 +25,22 @@ pub struct MacosPlatform<W> {
     errors: Receiver<String>,
 }
 impl<W> MacosPlatform<W> {
-    pub fn start(shortcut: Shortcut, configure_overlay: fn(&W) -> Result<()>) -> Result<Self> {
+    pub fn start(shortcuts: Shortcuts, configure_overlay: fn(&W) -> Result<()>) -> Result<Self> {
         let (overlay_errors, errors) = crossbeam_channel::unbounded();
         Ok(Self {
-            input: Input::start(shortcut)?,
+            input: Input::start(shortcuts)?,
             desktop: Desktop::default(),
             overlay: configure_overlay,
             overlay_errors,
             errors,
         })
     }
-    pub fn set_shortcut(&mut self, shortcut: Shortcut) -> Result<()> {
-        self.input = Input::start(shortcut)?;
+    pub fn set_shortcuts(&mut self, shortcuts: Shortcuts) -> Result<()> {
+        self.input = Input::start(shortcuts)?;
         Ok(())
+    }
+    pub fn focus_changes(&self) -> Receiver<Option<Target>> {
+        self.desktop.focus_changes()
     }
     pub fn input_statuses(&self) -> Receiver<InputStatus> {
         self.input.statuses()

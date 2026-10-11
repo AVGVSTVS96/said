@@ -5,7 +5,7 @@ use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
 use said_core::Result;
@@ -53,6 +53,13 @@ impl ControlCommand {
 pub struct ControlRequest {
     pub command: ControlCommand,
     pub reply: Sender<std::result::Result<String, String>>,
+    pub deadline: Instant,
+}
+
+impl ControlRequest {
+    pub fn expired(&self) -> bool {
+        Instant::now() >= self.deadline
+    }
 }
 
 pub struct ControlSocket {
@@ -208,10 +215,13 @@ fn serve(stream: &mut UnixStream, sender: &Sender<ControlRequest>) -> Result<Str
             .ok_or("unterminated control command")?,
     )?;
     let (reply, response) = bounded(1);
-    sender.try_send(ControlRequest { command, reply })?;
-    response
-        .recv_timeout(Duration::from_secs(3))?
-        .map_err(Into::into)
+    let deadline = Instant::now() + Duration::from_secs(3);
+    sender.try_send(ControlRequest {
+        command,
+        reply,
+        deadline,
+    })?;
+    response.recv_deadline(deadline)?.map_err(Into::into)
 }
 
 pub fn run_cli(runtime: &Path, storage_key: &str, arguments: &[String]) -> Result<String> {
@@ -240,6 +250,19 @@ pub fn run_cli(runtime: &Path, storage_key: &str, arguments: &[String]) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn queued_requests_expire_before_they_can_apply() {
+        let (reply, _) = bounded(1);
+        let mut request = ControlRequest {
+            command: ControlCommand::Toggle,
+            reply,
+            deadline: Instant::now() + Duration::from_secs(3),
+        };
+        assert!(!request.expired());
+        request.deadline = Instant::now();
+        assert!(request.expired());
+    }
 
     #[test]
     fn control_permissions_exclusivity_reply_and_cleanup() {

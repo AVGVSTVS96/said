@@ -22,13 +22,7 @@ fn commits_are_literal_and_every_consumed_frame_is_acknowledged() {
     };
     let mut input = vec![];
     for (message, pcm) in [
-        (
-            WorkerRequest::Start {
-                id,
-                vocabulary: vec!["literal".into()],
-            },
-            None,
-        ),
+        (WorkerRequest::Start { id }, None),
         (WorkerRequest::Audio { id, sequence: 0 }, Some(vec![1, -2])),
         (WorkerRequest::Audio { id, sequence: 1 }, Some(vec![])),
         (WorkerRequest::Finish { id }, None),
@@ -81,21 +75,10 @@ fn worker_rejects_wrong_identity_order_and_events_after_final() {
         WorkerRequest::Finish {
             id: UtteranceId::random(),
         },
-        WorkerRequest::Start {
-            id,
-            vocabulary: vec![],
-        },
+        WorkerRequest::Start { id },
     ] {
         let mut input = vec![];
-        protocol::write_request(
-            &mut input,
-            &WorkerRequest::Start {
-                id,
-                vocabulary: vec![],
-            },
-            None,
-        )
-        .unwrap();
+        protocol::write_request(&mut input, &WorkerRequest::Start { id }, None).unwrap();
         let pcm = matches!(message, WorkerRequest::Audio { .. }).then_some(&[][..]);
         protocol::write_request(&mut input, &message, pcm).unwrap();
         assert!(
@@ -107,15 +90,7 @@ fn worker_rejects_wrong_identity_order_and_events_after_final() {
         );
     }
     let mut input = vec![];
-    protocol::write_request(
-        &mut input,
-        &WorkerRequest::Start {
-            id,
-            vocabulary: vec![],
-        },
-        None,
-    )
-    .unwrap();
+    protocol::write_request(&mut input, &WorkerRequest::Start { id }, None).unwrap();
     protocol::write_request(&mut input, &WorkerRequest::Finish { id }, None).unwrap();
     assert!(
         worker::run(&input[..], vec![], |id| {
@@ -142,7 +117,7 @@ fn fake_records_exact_inputs_and_cancel_suppresses_late_text() {
             ..Trace::default()
         },
     );
-    fake.start(&["  spaces\t".into()]).unwrap();
+    fake.start().unwrap();
     fake.feed(&[i16::MIN, i16::MAX]);
     fake.cancel();
     fake.finish();
@@ -151,7 +126,7 @@ fn fake_records_exact_inputs_and_cancel_suppresses_late_text() {
     assert_eq!(
         fake.calls,
         [
-            EngineCall::Start(vec!["  spaces\t".into()]),
+            EngineCall::Start,
             EngineCall::Feed(vec![i16::MIN, i16::MAX]),
             EngineCall::Cancel
         ]

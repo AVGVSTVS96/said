@@ -14,10 +14,11 @@ const target = {
   name: "Text editor",
 };
 const settings: Settings = {
-  hotkey: "ctrl+alt+space",
-  engine: "moonshine-small-en",
+  hotkey: "super+z",
+  interactive_hotkey: "super+x",
+  insert_last_hotkey: "super+a",
+  engine: "parakeet-v3-fp32",
   microphone: null,
-  vocabulary: false,
   apps: {
     "example.terminal": { paste: "ctrl+shift+v", send: false },
     "example.editor": { paste: "ctrl+v", send: false },

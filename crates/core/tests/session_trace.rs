@@ -83,7 +83,6 @@ impl Harness {
             engine: "fake".into(),
             target: self.platform.focused(),
             mode,
-            vocabulary: vec![],
             send: false,
         }
     }
@@ -145,10 +144,10 @@ impl Harness {
                         }
                     }
                 }
-                Effect::StartEngine { id, vocabulary } => {
+                Effect::StartEngine { id } => {
                     let (mut engine, output) =
                         FakeEngine::new(id, self.traces.remove(&id).unwrap_or_default());
-                    engine.start(&vocabulary).unwrap();
+                    engine.start().unwrap();
                     self.events
                         .extend(output.try_iter().map(SessionEvent::Engine));
                     self.engines.insert(id, (engine, output));
@@ -206,7 +205,7 @@ impl Harness {
                             ..Default::default()
                         }),
                     );
-                    engine.start(&[]).unwrap();
+                    engine.start().unwrap();
                     engine.feed(&[1, -1]);
                     engine.finish();
                     self.events
@@ -456,7 +455,7 @@ fn focus_move_target_close_and_move_back_all_save_without_paste() {
             );
             assert!(
                 h.notices
-                    .contains(&"Saved. Press Ctrl+Alt+V to insert".into())
+                    .contains(&"Saved. Use Insert last to insert.".into())
             );
         }
     }
@@ -1038,7 +1037,6 @@ fn replay_reducer_is_deterministic_with_host_supplied_identity() {
         engine: "fake".into(),
         target: Some(target("1")),
         mode: Mode::Quick,
-        vocabulary: vec![],
         send: false,
     };
     let mut first = Session::default();

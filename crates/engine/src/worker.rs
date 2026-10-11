@@ -17,12 +17,12 @@ pub fn run(
     let mut active: Option<Active> = None;
     while let Some(frame) = protocol::read_request(&mut input)? {
         match frame.message {
-            WorkerRequest::Start { id, vocabulary } => {
+            WorkerRequest::Start { id } => {
                 if active.is_some() {
                     return Err("Start while an utterance is active".into());
                 }
                 let (mut engine, events) = create(id)?;
-                engine.start(&vocabulary)?;
+                engine.start()?;
                 active = Some((id, engine, events, 0));
             }
             WorkerRequest::Audio { id, sequence } => {

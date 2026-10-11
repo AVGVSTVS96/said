@@ -1,5 +1,5 @@
 binds {
-    Mod+Ctrl+Alt+Space repeat=false allow-inhibiting=false hotkey-overlay-title="Dictate: said" {
-        spawn "said" "hotkey";
-    }
+    Super+Z repeat=false allow-inhibiting=false hotkey-overlay-title="Dictate: said" { spawn "said" "hotkey"; }
+    Super+X repeat=false allow-inhibiting=false hotkey-overlay-title="Review dictation: said" { spawn "said" "hotkey" "interactive"; }
+    Super+A repeat=false allow-inhibiting=false hotkey-overlay-title="Insert last dictation: said" { spawn "said" "hotkey" "insert-last"; }
 }

@@ -2,6 +2,7 @@ use std::ffi::{c_char, c_int, c_void};
 
 pub type Ref = *mut c_void;
 pub type TapCallback = unsafe extern "C" fn(Ref, u32, Ref, Ref) -> Ref;
+pub type ObserverCallback = unsafe extern "C" fn(Ref, Ref, Ref, Ref);
 
 #[cfg(test)]
 #[repr(C)]
@@ -42,9 +43,12 @@ unsafe extern "C" {
     pub fn CFMachPortCreateRunLoopSource(allocator: Ref, port: Ref, order: isize) -> Ref;
     pub fn CFMachPortInvalidate(port: Ref);
     pub fn CFRunLoopGetCurrent() -> Ref;
+    pub fn CFRunLoopGetMain() -> Ref;
     pub fn CFRunLoopAddSource(run_loop: Ref, source: Ref, mode: Ref);
+    pub fn CFRunLoopRemoveSource(run_loop: Ref, source: Ref, mode: Ref);
     pub fn CFRunLoopRunInMode(mode: Ref, seconds: f64, return_after_source: bool) -> i32;
     pub static kCFRunLoopDefaultMode: Ref;
+    pub static kCFRunLoopCommonModes: Ref;
 }
 
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -52,6 +56,14 @@ unsafe extern "C" {
     pub fn AXIsProcessTrusted() -> bool;
     pub fn CGSessionCopyCurrentDictionary() -> Ref;
     pub fn AXUIElementCreateApplication(pid: c_int) -> Ref;
+    pub fn AXObserverCreate(pid: c_int, callback: ObserverCallback, observer: *mut Ref) -> i32;
+    pub fn AXObserverAddNotification(
+        observer: Ref,
+        element: Ref,
+        notification: Ref,
+        context: Ref,
+    ) -> i32;
+    pub fn AXObserverGetRunLoopSource(observer: Ref) -> Ref;
     pub fn AXUIElementCopyAttributeValue(element: Ref, attribute: Ref, value: *mut Ref) -> i32;
     pub fn AXUIElementSetAttributeValue(element: Ref, attribute: Ref, value: Ref) -> i32;
     pub fn AXUIElementPerformAction(element: Ref, action: Ref) -> i32;
@@ -118,6 +130,15 @@ unsafe extern "C" {
         implementation: *const c_void,
         types: *const c_char,
     ) -> bool;
+    pub fn class_addIvar(
+        class: Ref,
+        name: *const c_char,
+        size: usize,
+        alignment: u8,
+        types: *const c_char,
+    ) -> bool;
+    pub fn object_setInstanceVariable(object: Ref, name: *const c_char, value: Ref) -> Ref;
+    pub fn object_getInstanceVariable(object: Ref, name: *const c_char, value: *mut Ref) -> Ref;
     pub fn class_getInstanceSize(class: Ref) -> usize;
     pub fn object_setClass(object: Ref, class: Ref) -> Ref;
 }

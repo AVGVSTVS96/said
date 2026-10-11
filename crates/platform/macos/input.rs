@@ -8,7 +8,7 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
 use said_core::{Hotkey, Result};
 
-use super::decoder::{Decoder, KeyEvent, Shortcut};
+use super::decoder::{Decoder, KeyEvent, Shortcuts};
 use super::ffi::{self, Owned, Ref};
 use super::permissions::{Permissions, secure_input_enabled, session_locked};
 
@@ -79,19 +79,8 @@ unsafe extern "C" fn callback(_: Ref, kind: u32, event: Ref, context: Ref) -> Re
 }
 
 impl Input {
-    pub fn start(shortcut: Shortcut) -> Result<Self> {
-        if shortcut.keycode >= 128
-            || shortcut.modifiers & super::decoder::SHIFT != 0
-            || shortcut.modifiers == 0
-            || shortcut.keycode == 53
-            || (shortcut.keycode == 9
-                && shortcut.modifiers == super::decoder::CONTROL | super::decoder::OPTION)
-            || shortcut.modifiers
-                & !(super::decoder::CONTROL | super::decoder::OPTION | super::decoder::COMMAND)
-                != 0
-        {
-            return Err("hotkey must use a keycode below 128 and modifiers excluding Shift (reserved for interactive mode)".into());
-        }
+    pub fn start(shortcuts: Shortcuts) -> Result<Self> {
+        shortcuts.validate()?;
         let permissions = Permissions::check();
         if !permissions.accessibility || !permissions.input_monitoring {
             return Err(permissions.recovery().join(" ").into());
@@ -107,7 +96,7 @@ impl Input {
             .name("macos-hotkey".into())
             .spawn(move || {
                 let result = run(
-                    shortcut,
+                    shortcuts,
                     sender,
                     status_sender,
                     worker_recording,
@@ -152,7 +141,7 @@ impl Drop for Input {
 }
 
 fn run(
-    shortcut: Shortcut,
+    shortcuts: Shortcuts,
     hotkeys: Sender<Hotkey>,
     statuses: Sender<InputStatus>,
     recording: Arc<AtomicBool>,
@@ -160,7 +149,7 @@ fn run(
     ready: &Sender<std::result::Result<(), String>>,
 ) -> Result<()> {
     let mut tap = Tap {
-        decoder: Decoder::new(shortcut),
+        decoder: Decoder::new(shortcuts),
         hotkeys,
         statuses,
         recording,
@@ -228,7 +217,13 @@ mod tests {
         let (hotkeys, receiver) = unbounded();
         let (statuses, _) = unbounded();
         let mut tap = Tap {
-            decoder: Decoder::new(Shortcut::default()),
+            decoder: Decoder::new(Shortcuts {
+                dictation: super::super::decoder::Shortcut {
+                    keycode: 49,
+                    modifiers: super::super::decoder::CONTROL | super::super::decoder::OPTION,
+                },
+                ..Shortcuts::default()
+            }),
             hotkeys,
             statuses,
             recording: Arc::new(AtomicBool::new(false)),
@@ -273,7 +268,13 @@ mod tests {
         let (hotkeys, receiver) = unbounded();
         let (statuses, status_receiver) = unbounded();
         let mut tap = Tap {
-            decoder: Decoder::new(Shortcut::default()),
+            decoder: Decoder::new(Shortcuts {
+                dictation: super::super::decoder::Shortcut {
+                    keycode: 49,
+                    modifiers: super::super::decoder::CONTROL | super::super::decoder::OPTION,
+                },
+                ..Shortcuts::default()
+            }),
             hotkeys,
             statuses,
             recording: Arc::new(AtomicBool::new(false)),

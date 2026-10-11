@@ -33,7 +33,6 @@ fn parakeet_worker_host_history_and_paste_preserve_exact_bytes() {
                 queue_frames: 256,
             },
             &input,
-            &[],
         )
         .unwrap();
         let data = root.join(clip);
@@ -227,6 +226,16 @@ fn cold_start_spools_frames_and_stop_drains_before_the_next_recording() {
         assert_eq!(samples, [11, 22, 33, 44]);
     }
     assert_eq!(host.platform.calls.borrow().iter().filter(|call|matches!(call,PlatformCall::Paste {text:received,send:false,..} if received.as_bytes()==text.as_bytes())).count(),2);
+    host.start(Mode::Quick, false).unwrap();
+    let interrupted = host.session.views().last().unwrap().id;
     drop(host);
+    let history = SqliteHistory::open(&root).unwrap();
+    let pending = history.get(interrupted).unwrap().unwrap();
+    assert!(pending.raw_text.is_none());
+    let mut wav = said_audio::wav::WavReader::open(&history.audio_path(pending.audio_id)).unwrap();
+    let mut samples = [0; 4];
+    assert_eq!(wav.read(&mut samples).unwrap(), 4);
+    assert_eq!(samples, [11, 22, 33, 44]);
+    drop(history);
     fs::remove_dir_all(root).unwrap();
 }

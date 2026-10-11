@@ -140,7 +140,7 @@ fn recognize(client: &WorkerClient, path: &Path, unpaced: bool) -> Result<Recogn
         let release_signal = release.clone();
         let stop_signal = stopped.clone();
         let feeder = scope.spawn(move || -> Result<(said_engine::host::WorkerEngine, u64)> {
-            engine.start(&[])?;
+            engine.start()?;
             let mut samples = 0_u64;
             while let Some(block) = wav.read()? {
                 if stop_signal.load(Ordering::Relaxed) {
@@ -324,7 +324,7 @@ pub fn run(mut options: Options) -> Result<()> {
         "schema": 1, "started_unix_ms": SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis(),
         "corpus_sha256": corpus::hash(&options.manifest)?, "clips": clips.len(),
         "mode": if options.unpaced { "unpaced" } else { "real_time" },
-        "ci": options.ci, "vocabulary": [], "postprocessing": "none",
+        "ci": options.ci, "postprocessing": "none",
         "requested_engines": options.engines,
         "model_manifest_sha256": options.model_manifest.as_ref().map(|p| corpus::hash(p)).transpose()?.unwrap_or_else(|| format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../crates/engine/models.json")))),
         "build": {"rust": std::process::Command::new("rustc").arg("--version").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned()),

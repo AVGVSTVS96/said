@@ -44,7 +44,7 @@ fn main() -> Result<()> {
     };
     println!(
         "{}",
-        serde_json::json!({"text": recognize_file(UtteranceId::random(), &config, &PathBuf::from(path), &[])?})
+        serde_json::json!({"text": recognize_file(UtteranceId::random(), &config, &PathBuf::from(path))?})
     );
     Ok(())
 }
