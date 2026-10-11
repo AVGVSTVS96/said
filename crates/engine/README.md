@@ -3,9 +3,8 @@
 The default on Linux CPU and Apple Silicon is **Parakeet TDT v3, FP32,
 sherpa-onnx 1.13.8**, with 30-second windows and 5-second overlap. The app and
 `said bench` run this adapter through the same worker protocol. No Python,
-server daemon, VAD gate, vocabulary bias, text cleanup or automatic fallback
-runs in the recognition path. Vocabulary is ignored and setup reports that
-biasing is unavailable.
+server daemon, VAD gate, text cleanup or automatic fallback
+runs in the recognition path.
 
 `models.json` pins the model export revision, each file's SHA-256, runtime
 archives, license, CPU provider, eight inference threads and 32,000 samples
@@ -83,9 +82,7 @@ watchdog starts after it acquires the worker, not while capture waits.
 `WorkerClient::recognize_file` uses that same lease with a fresh utterance ID.
 The existing standalone `recognize_file` helpers create independent workers.
 The host retry executor calls the shared-client method for its current model,
-avoiding a second loaded model beside live dictation. No core trait, event or
-worker wire change is needed.
-
+avoiding a second loaded model beside live dictation.
 PCM spools are 0600 files in a 0700 cache directory, immediately unlinked after
 opening. Bounded queues signal available audio; original samples remain in
 order on disk while recognition catches up. The recorder's durable WAV remains
@@ -115,30 +112,6 @@ The fetch helper accepts a model ID and an optional manifest path:
 crates/engine/scripts/fetch-model.sh parakeet-v3-int8 bench/precision-models.json
 ```
 
-## Selection
-
-Moonshine is removed: the measured small model's memory advantage does not
-justify protected-token errors, roughly half the hesitation words missing and
-speech on digital silence. There is no selectable weaker engine or automatic
-Whisper path.
-
-Phonon-2/Fermion 0.2.11 has Apache-2.0 runtime code and CC-BY-4.0 weights.
-Its native encoder/TDT libraries can be linked without a server, but its measured
-SDK still needs Python/PyTorch for model loading, log-mel extraction and encoder
-projection. Shipping that measured path unchanged violates the app's runtime
-contract. A native frontend/container port would be further work; its lower
-protected-token and hesitation recall also loses the fidelity comparison.
-Sources: [runtime distribution](https://pypi.org/project/fermion-research/0.2.11/),
-[license notice](https://github.com/fermionresearch/phonon/blob/cf97fdbedaf5bfd3cc8b88c946e64c0fdc2587b1/NOTICE).
-
-[parakeet.cpp](https://github.com/mudler/parakeet.cpp) is another native CPU/Metal
-runtime with a reusable C API and timestamp output. It was assessed from source;
-its GGUF conversion and numerical path were not measured on this corpus.
-Sherpa's published C ABI/library distribution and measured FP32 fidelity make
-it the current choice. Sherpa CoreML was tested on ten matched clips: it retained
-the same words, but was slower and used much more sampled RSS than CPU. It is
-not an automatic acceleration path.
-
 ## Verification
 
 ```sh
@@ -160,8 +133,8 @@ CARGO_BUILD_JOBS=2 cargo test -p said-engine --test golden -- --ignored --nocapt
 CARGO_BUILD_JOBS=2 cargo test -p said-engine --test public_regressions -- --ignored --nocapture
 ```
 
-On Linux, run each native check separately under
-`systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- nice -n 10`.
+On Linux, run each native check separately under the [shared model lock and memory
+scope](../../CONTRIBUTING.md#native-verification).
 Direct/worker proof tests reload native sessions and can also retain allocator
 pages after a direct model is dropped. Their cgroup budget includes reclaimable
 file cache as well as resident allocations; keep these checks outside the editor's
@@ -172,7 +145,7 @@ separate worker and waits for its exit before running the host. The test parent
 never loads ONNX, so allocator tuning is unnecessary for that proof.
 
 ```sh
-CARGO_BUILD_JOBS=2 systemd-run --user --scope -q \
+CARGO_BUILD_JOBS=2 flock "$HOME/.cache/said-model.lock" systemd-run --user --scope -q \
   -p MemoryMax=4G -p MemorySwapMax=0 -- \
   nice -n 10 cargo test -p said-app --test end_to_end -- --include-ignored
 ```

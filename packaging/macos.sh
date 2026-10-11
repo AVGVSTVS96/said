@@ -13,14 +13,10 @@ bun install --frozen-lockfile
 bun run tauri build --target aarch64-apple-darwin --bundles app
 cd "$root"
 bundle="$root/target/aarch64-apple-darwin/release/bundle/macos/said.app"
-mv "$bundle/Contents/MacOS/said" "$bundle/Contents/MacOS/said-host"
-SAID_RUNTIME_VERSION="$(jq -r '.runtime.version' crates/engine/models.json)" \
-    rustc --edition=2024 -O packaging/launcher.rs -o "$bundle/Contents/MacOS/said"
 cp "$runtime/runtime.archive" "$bundle/Contents/Resources/runtime.archive"
 mkdir -p "$bundle/Contents/Resources/tray"
 cp app/src-tauri/icons/tray/*.png "$bundle/Contents/Resources/tray/"
-mkdir -p "$bundle/Contents/Resources/licenses"
-cp -R crates/engine/licenses/. "$bundle/Contents/Resources/licenses/"
+"$root/packaging/install-notices.sh" "$bundle/Contents/Resources/licenses"
 codesign --force --deep --sign - "$bundle"
 codesign --verify --deep --strict "$bundle"
 output="$root/target/packaging"

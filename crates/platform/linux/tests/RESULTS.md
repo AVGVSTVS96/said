@@ -36,8 +36,7 @@ The runner retains receipt bytes, key logs and compositor logs in its private se
 terminates its own process groups. No uinput device was created, no real evdev device was opened by
 these tests, and the live session's clipboard and input were untouched.
 
-Scope: native module acceptance, not the composed Tauri app. The integrator still adds the optional
-native dependencies and wires CLI/control replies, focus notifications, settings, Copy and session
-lock/deactivation. Actual portal backend operation and physical-device permission/hotplug behavior
+Scope: a dated native-adapter receipt, not composed Tauri app acceptance. Current host wiring is
+described in [the host README](../../../../app/src-tauri/README.md). Actual portal backend operation and physical-device permission/hotplug behavior
 are not proven by fake streams. Production paste success means the chord was posted; these scratch
 fixtures alone supply readback evidence of exact insertion.

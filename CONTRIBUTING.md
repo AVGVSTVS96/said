@@ -1,39 +1,62 @@
-# Module guide
+# Contributing to said
 
-Read SPEC.md and CONTRACTS.md first. The integrator owns shared contracts and updates every consumer when they change. Module agents implement behind those contracts in separate worktrees; do not edit another module's files. Commit explicit paths, with SSH signing and conventional messages. Fixtures are synthetic or freely licensed; recordings, databases, private prompts and research stay outside this public repository.
+Read [SPEC.md](SPEC.md) for current behavior and limits, and [CONTRACTS.md](CONTRACTS.md) for text, identity and delivery ordering. Keep changes small and direct. Update the affected consumers when a shared Rust type changes; TypeScript types are generated rather than copied.
 
-Use idiomatic Rust 2024 and React/TypeScript, small modules and direct calls. Comments explain non-obvious platform facts; avoid narrating the code. Add tests for meaningful behavior rather than implementation details.
+## Source map
 
-| Module | Paths and ownership | Local check |
-| --- | --- | --- |
-| core | `crates/core/src/session.rs`, `history.rs`, `fake.rs`; add persistence, settings, recovery and remaining state transitions | `cargo test -p said-core` |
-| audio | `crates/audio`; capture, bounded buffers, resampling, durable WAV, devices and disconnect handling | `cargo test -p said-audio` |
-| engine | `crates/engine`; adapters, host client, worker dispatch; reuse `protocol` unchanged in app and bench | `cargo test -p said-engine` |
-| platform-macos | `crates/platform/macos`; CGEventTap, focus, clipboard and NSPanel; dependency changes go through integrator | `cargo check -p said-platform --features native` on macOS |
-| platform-linux | `crates/platform/linux`; Niri IPC, control socket, evdev, clipboard, virtual keyboard, layer-shell | `cargo check -p said-platform --features native` on Linux |
-| ui | `app/src` excluding generated `bindings/` and `product.ts`; five screens, core state subscription and actions | `cd app && bun run typecheck && bun run build` |
-| bench | `bench`; public corpus, runner, scorer and results; same engine crate as the app | add a pure scorer check before corpus integration |
-| app/packaging | `app/src-tauri`, `packaging`; effect executor, worker CLI, IPC, permissions and install artifacts | `cargo check -p said-app` |
-| integrator | `crates/core/src/types.rs`, `bindings.rs`, core build/export scripts, schema, crate manifests, `crates/platform/src`, `product.toml`, app build configuration, CI | checks below |
+| Path | Responsibility |
+| --- | --- |
+| `crates/core` | Session reducer, shared types, SQLite history, settings and deterministic fakes |
+| `crates/audio` | Capture, bounded buffers, resampling, durable WAV and recovery |
+| `crates/engine` | Parakeet adapter, worker protocol, process supervision and model manifest |
+| `crates/platform` | Hotkeys, focus, clipboard, paste and native overlay hooks |
+| `app/src-tauri` | Host actor, effect execution, IPC, downloads, permissions and CLI |
+| `app/src` | React overlay, interactive editor, history, settings and setup |
+| `bench` | Public corpus, replay runner, scoring and receipts |
+| `packaging` | Arch package, Linux staging, macOS app/DMG and distribution notices |
 
-```sh
-git worktree add ../said-wt/core -b m/core master
-```
+Use Rust 2024 and React/TypeScript, with small modules and short call paths. Comments explain non-obvious platform facts. Tests should prove a meaningful behavior or failure path. Fixtures must be synthetic or freely licensed; keep personal recordings, transcripts, databases and research outside this public repository. Include provenance for new data and preserve third-party credits for reused code.
 
-Use your module name in place of `core`. Both platform agents share one crate manifest: request target-specific dependencies from the integrator rather than editing it concurrently. Common fakes stay available on every OS; native modules are gated by OS and the `native` feature, enabled by the host. Future desktop dependencies must be optional and activated by that feature so pure tests stay headless.
+## Local checks
 
-Set `CARGO_BUILD_JOBS=2`. Default workspace members are the four pure crates; this intentionally avoids building Tauri during an adapter test. Scratch data belongs on disk outside the repo; models live in the shared cache, not git. No tests may inject into the live desktop, acquire real hotkeys or open native windows. Linux GUI checks use a nested/headless compositor. macOS permission and input checks belong in a separate test account.
+Rust 1.90+ and Bun 1.4+ are required. Set `CARGO_BUILD_JOBS=2` to bound parallel compilation. Default workspace members exclude Tauri; pure tests need no display or microphone.
 
 ```sh
 cargo fmt --all --check
-CARGO_BUILD_JOBS=2 cargo clippy -p said-core -p said-audio -p said-engine -p said-platform --all-targets -- -D warnings
-CARGO_BUILD_JOBS=2 cargo test -p said-core -p said-audio -p said-engine -p said-platform
+CARGO_BUILD_JOBS=2 cargo clippy --locked -p said-core -p said-audio -p said-engine -p said-platform -p said-bench --all-targets -- -D warnings
+CARGO_BUILD_JOBS=2 cargo test --locked -p said-core -p said-audio -p said-engine -p said-platform -p said-bench
 cd app
 bun install --frozen-lockfile
-CARGO_BUILD_JOBS=2 bun run typecheck
-CARGO_BUILD_JOBS=2 bun run build
+bun run typecheck
+bun run build
 ```
 
-`bun run generate` regenerates product metadata and TypeScript, including after deleting generated files. Rust builds also export the shared types. UI code imports types from `src/contracts.ts`; do not duplicate Rust definitions. The UI sends `UiAction` to core through host IPC and never invokes clipboard or input APIs itself. The IPC executor and subscriptions are the next integration step, not implemented in the empty shell.
+`bun run generate` exports product metadata and shared types. Rust builds also export types. The renderer imports `src/contracts.ts` and sends actions through Tauri IPC; native adapters own clipboard and input operations. `bun run dev` previews the renderer; `/?demo=1&screen=interactive` selects a synthetic development demo. `bun run tauri dev` launches the native app and can request desktop permissions or register input listeners.
 
-CI runs format, clippy and pure tests on Linux and macOS, UI typecheck/build on Linux, and a Linux Tauri host check. Golden audio, nested Niri, recovery and signed macOS evidence are future milestones, not current coverage.
+A host check needs the [native build dependencies](packaging/README.md):
+
+```sh
+CARGO_BUILD_JOBS=2 cargo check --locked -p said-app --features custom-protocol
+CARGO_BUILD_JOBS=2 cargo test --locked -p said-app --test end_to_end
+bash packaging/tests/notices.sh
+```
+
+## Native verification
+
+Run each model test, benchmark or release build in its own bounded scope. On Linux, serialize model-loading runs with a shared lock:
+
+```sh
+flock "$HOME/.cache/said-model.lock" systemd-run --user --scope -q \
+  -p MemoryMax=4G -p MemorySwapMax=0 -- \
+  env CARGO_BUILD_JOBS=2 cargo test -p said-engine --test golden -- --ignored --nocapture
+```
+
+The command is a verification procedure, not a claim that the golden suite currently passes. See [benchmark results](bench/RESULTS.md) for recorded failures and reference limits. Use the same cap for full/release builds. Keep scratch data on disk outside git and load one model at a time.
+
+Desktop checks belong in isolated scratch sessions. Linux uses [nested/headless compositors](crates/platform/linux/README.md#acceptance-checks). macOS uses the [separate-account checklist](crates/platform/macos/MANUAL-CHECKLIST.md). Pure and decoder tests do not establish native acceptance. Avoid acquiring live desktop hotkeys, injecting into personal applications or changing permission grants during automated checks.
+
+CI runs format, lint and pure tests on Linux/macOS, plus renderer checks and Linux host check/end-to-end fakes. It does not run the model suite, nested Niri or live macOS acceptance. Keep result claims tied to their command, commit and scope.
+
+## Distribution credits
+
+Update [NOTICE](NOTICE) and the applicable license files when adding a model, font or adapted source. Dependency notice generation and package checks are described in [packaging](packaging/README.md#licenses). Commit explicit paths with conventional messages and retain the repository's configured signing policy.

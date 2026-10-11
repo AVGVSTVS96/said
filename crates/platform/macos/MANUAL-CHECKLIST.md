@@ -1,14 +1,14 @@
 # One-time macOS acceptance
 
-Pending: run after the host wires the adapter and produces the app bundle.
+Pending live acceptance of the packaged app.
 Use a separate macOS test account and scratch documents, never live conversations.
 The automatic checks require no TCC grants. Keep the bundle ID from product.toml
 and the same signing identity/build location throughout these checks. Re-signing
 an ad-hoc build can invalidate grants; test one unchanged bundle.
 
 1. Build the host's app bundle. Ad-hoc sign that bundle once with
-   `codesign --force --deep --sign - target/release/bundle/macos/said.app`, then
-   verify `codesign --verify --deep --strict target/release/bundle/macos/said.app`.
+   `codesign --force --deep --sign - target/aarch64-apple-darwin/release/bundle/macos/said.app`, then
+   verify `codesign --verify --deep --strict target/aarch64-apple-darwin/release/bundle/macos/said.app`.
    Launch the bundle from Finder. Its Info.plist must contain
    `NSMicrophoneUsageDescription` before using Grant Microphone.
 2. In System Settings > Privacy & Security > Accessibility, add that exact app
@@ -16,10 +16,11 @@ an ad-hoc build can invalidate grants; test one unchanged bundle.
    Use the setup screen's **Grant Microphone** once, choose **Allow**, and confirm
    the app appears enabled under **Microphone**. A denial must show its exact
    Settings recovery path; a policy restriction must say to contact an admin.
-3. Focus a scratch field. Hold Control+Option+Space for over 300 ms and release:
+3. Focus a scratch field. Hold Option+Space for over 300 ms and release:
    exactly one capture starts and ends. Repeat releasing Option before Space.
    Tap for under 300 ms: capture stays on; the next tap stops. Hold the chord
-   through key repeat: no duplicate start. Shift+the chord starts interactive mode.
+   through key repeat: no duplicate start. Option+X starts interactive mode; Option+A inserts the latest stored transcript.
+   Change all three shortcuts in Settings and verify the new bindings and hint.
    Escape cancels hold and toggle recordings, leaves a canceled history entry,
    and inserts nothing. Escape passes through normally when idle.
 4. While recording, type in the scratch field and click the overlay close button.
