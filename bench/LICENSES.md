@@ -3,7 +3,7 @@
 The benchmark implementation and provisioning scripts use the repository's MIT
 license. Corpus data has separate licenses recorded per clip.
 
-## AMI excerpts — CC BY 4.0
+## AMI excerpts (CC BY 4.0)
 
 Credit: **AMI Consortium, AMI Meeting Corpus**, meeting ES2002a,
 manual annotations v1.6.2. Five cropped individual-headset excerpts include
@@ -26,7 +26,7 @@ AMI is spontaneous meeting speech, including repeated words and unfinished
 fragments; its headset channels still capture other speakers. These excerpts
 are a small diagnostic selection, not the official AMI evaluation split.
 
-## Synthetic prompts and controls — CC0 1.0
+## Synthetic prompts and controls (CC0 1.0)
 
 The newly authored scripts, their generated WAVs, and deterministic silence/noise
 controls in this benchmark are dedicated to the public domain under
