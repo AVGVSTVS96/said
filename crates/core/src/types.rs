@@ -349,6 +349,8 @@ pub struct AppSettings {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 pub struct Settings {
     pub hotkey: String,
+    pub interactive_hotkey: String,
+    pub insert_last_hotkey: String,
     pub engine: String,
     pub vocabulary: bool,
     pub microphone: Option<String>,

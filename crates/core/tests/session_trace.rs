@@ -456,7 +456,7 @@ fn focus_move_target_close_and_move_back_all_save_without_paste() {
             );
             assert!(
                 h.notices
-                    .contains(&"Saved. Press Ctrl+Alt+V to insert".into())
+                    .contains(&"Saved. Use Insert last to insert.".into())
             );
         }
     }
