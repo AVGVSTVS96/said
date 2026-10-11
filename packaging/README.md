@@ -3,8 +3,9 @@
 Use Rust 1.90+, Bun 1.4+, curl, jq, OpenSSL and bzip2. The build verifies the native
 archive pinned in `crates/engine/models.json` and rejects build-machine library
 paths. Linux libraries use `$ORIGIN`; macOS uses `@rpath`. All sherpa/ONNX libraries
-ship compressed in the archive. A native launcher stages it in private app data;
-the host checks its SHA-256 again before extraction and loads the C ABI from there.
+ship compressed in the archive. The host finds the archive beside the installed
+layout, stages it in private app data, rechecks its SHA-256 before extraction and
+loads the C ABI from there.
 No runtime library relies on a build directory or Python installation.
 
 Models remain outside every artifact. First launch downloads the FP32 model into
@@ -33,9 +34,9 @@ before activating that target. Enable it in a systemd graphical session.
 On Niri, prefer its native startup hook: include `/usr/share/said/autostart.kdl`
 from the compositor configuration instead of enabling the user service. It starts
 a 4G/no-swap scope tied to `graphical-session.target`, inheriting the Wayland
-environment. Join `input` before using this snippet: `newgrp input -c` refreshes
-said's groups even when Niri and the user manager linger with their old groups.
-Choose one startup mechanism, so only one app runs.
+environment. For physical hold/release, join `input` and start a fresh login before running
+said. The startup snippet invokes the capped host directly. Choose one startup
+mechanism, so only one app runs.
 
 Show `packaging/linux/niri.kdl` before adding this include to Niri configuration:
 

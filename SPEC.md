@@ -54,7 +54,7 @@ hotkeys / focus -> host -> pure session reducer -> ordered effects
 
 Tauri 2 hosts five React windows: overlay, interactive, history, settings and setup. The Rust host owns capture, persistence and platform input. The renderer sends typed actions and receives sequenced snapshots through Tauri commands/channels. Shared Rust types are exported to TypeScript.
 
-Recognition runs in a child process of the same host binary (`--worker`). Native runtime failure is isolated from capture. A small native packaging launcher starts the host and stages its compressed runtime archive. The recognition path needs no Python and runs locally.
+Recognition runs in a child process of the same host binary (`--worker`). Native runtime failure is isolated from capture. The host stages the packaged compressed runtime archive before provisioning its model. The recognition path needs no Python and runs locally.
 
 [core](crates/core/README.md) owns state, settings and history. [audio](crates/audio/README.md) owns bounded capture and durable WAVs. [engine](crates/engine/README.md) owns model/protocol/supervision. [platform](crates/platform/README.md) owns native focus/input/clipboard/overlay hooks. [host](app/src-tauri/README.md) executes effects; [renderer](app/src/README.md) displays state. [CONTRACTS.md](CONTRACTS.md) specifies ordering and units.
 
