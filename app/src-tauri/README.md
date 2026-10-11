@@ -1,10 +1,14 @@
 # Native host
 
+Setup opens automatically until setup is complete. Setup and Settings show the
+active input capability and all three configurable shortcuts. Portal registration
+runs in the background; settings saves retain the control socket and focus adapter.
+
 The `said` host embeds the built renderer with `custom-protocol`. Build `app/dist` before a standalone host build. `--worker` dispatch happens before Tauri initialization and runs the same Parakeet code used by the benchmark.
 
 `runtime::Host` executes core effects on one actor. It opens owner-only storage and a data lock, verifies/downloads the model and native runtime, warms the worker, and recovers pending recordings without automatic paste. Pending saves precede capture; completed durable saves precede focus checks and delivery. Recorder stop drains final frames before engine finish. Live gaps replay the durable WAV with a new recognition identity.
 
-Linux consumes Niri focus events and logind session signals. Native key edges and compositor commands are routed separately to avoid double toggles. Other Wayland desktops provide clipboard-only delivery. macOS checks grants passively, runs AppKit operations on the main thread and configures the nonactivating panel before showing it. Permission requests are explicit actions; microphone usage text lives in `Info.plist`.
+Linux consumes Niri focus events and logind session signals. Native key edges and compositor commands are routed separately to avoid double toggles. Other Wayland desktops provide clipboard-only delivery. macOS queues application and window focus notifications, checks grants passively, runs AppKit operations on the main thread and configures the nonactivating panel before showing it. Permission requests are explicit actions; microphone usage text lives in `Info.plist`.
 
 ## IPC
 
@@ -65,3 +69,21 @@ flock "$HOME/.cache/said-model.lock" systemd-run --user --scope -q \
 The [Linux harness](../../crates/platform/linux/README.md#acceptance-checks) isolates Niri, runtime, clipboard and scratch targets. `--nested-proof` refuses a runtime/socket outside that harness. It exercises bind, CLI, host, Parakeet, durable history and exact terminal input with no Enter. Physical input/portal availability needs separate verification.
 
 Worker startup/audio/final deadlines are diagnostic limits; benchmark results do not certify them as release budgets. [macOS acceptance](../../crates/platform/macos/MANUAL-CHECKLIST.md) remains pending; passing a compile or native unit test does not establish permission, capture, focus or delivery behavior.
+
+## First-launch regression
+
+The native check requires an existing verified model cache, `cage`, `niri` and
+`grim`. It launches in a separate headless compositor and does not send input or
+start microphone capture:
+
+```sh
+SAID_APP_BINARY=/path/to/built/said \
+SAID_MODEL_CACHE=/path/to/verified/models \
+SAID_FIRST_RUN_STATE="$HOME/.cache/said-first-run-$RANDOM" \
+flock "$HOME/.cache/said-model.lock" \
+systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
+python3 app/src-tauri/tests/first_run.py
+```
+
+It checks that a fresh configuration shows Setup without a hotkey and that
+completed setup stays hidden. The scratch directory contains snapshots and a screenshot.
