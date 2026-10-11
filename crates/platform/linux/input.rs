@@ -15,7 +15,7 @@ use crossbeam_channel::Sender;
 use evdev::{BusType, Device, EventType, InputEvent, KeyCode};
 use said_core::{Hotkey, Result};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Chord {
     pub modifiers: Vec<Vec<KeyCode>>,
     pub key: KeyCode,
@@ -23,17 +23,119 @@ pub struct Chord {
 
 impl Default for Chord {
     fn default() -> Self {
-        Self {
-            modifiers: vec![
-                vec![KeyCode::KEY_LEFTCTRL, KeyCode::KEY_RIGHTCTRL],
-                vec![KeyCode::KEY_LEFTALT, KeyCode::KEY_RIGHTALT],
-            ],
-            key: KeyCode::KEY_SPACE,
+        Self::parse(&said_core::Settings::defaults("").hotkey).unwrap()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Shortcuts {
+    pub dictation: Chord,
+    pub interactive: Chord,
+    pub insert_last: Chord,
+}
+
+impl Default for Shortcuts {
+    fn default() -> Self {
+        let settings = said_core::Settings::defaults("");
+        Self::parse(
+            &settings.hotkey,
+            &settings.interactive_hotkey,
+            &settings.insert_last_hotkey,
+        )
+        .unwrap()
+    }
+}
+
+impl Shortcuts {
+    pub fn chords_for_portal(&self) -> [String; 3] {
+        self.chords().map(Chord::portal_trigger)
+    }
+    pub fn parse(dictation: &str, interactive: &str, insert_last: &str) -> Result<Self> {
+        let shortcuts = Self {
+            dictation: Chord::parse(dictation)?,
+            interactive: Chord::parse(interactive)?,
+            insert_last: Chord::parse(insert_last)?,
+        };
+        if shortcuts.dictation == shortcuts.interactive
+            || shortcuts.dictation == shortcuts.insert_last
+            || shortcuts.interactive == shortcuts.insert_last
+        {
+            return Err("shortcuts must be distinct".into());
         }
+        Ok(shortcuts)
+    }
+
+    pub fn niri_binds(&self) -> String {
+        let mut result = "binds {\n".to_owned();
+        for (chord, action, title) in [
+            (&self.dictation, "\"hotkey\"", "Dictate"),
+            (
+                &self.interactive,
+                "\"hotkey\" \"interactive\"",
+                "Review dictation",
+            ),
+            (
+                &self.insert_last,
+                "\"hotkey\" \"insert-last\"",
+                "Insert last dictation",
+            ),
+        ] {
+            result.push_str(&format!("    {} repeat=false allow-inhibiting=false hotkey-overlay-title=\"{title}: said\" {{ spawn \"said\" {action}; }}\n", chord.niri()));
+        }
+        result.push('}');
+        result
+    }
+
+    fn chords(&self) -> [&Chord; 3] {
+        [&self.dictation, &self.interactive, &self.insert_last]
     }
 }
 
 impl Chord {
+    pub fn niri(&self) -> String {
+        let mut parts = self
+            .modifiers
+            .iter()
+            .map(|keys| match keys[0] {
+                KeyCode::KEY_LEFTCTRL => "Ctrl",
+                KeyCode::KEY_LEFTALT => "Alt",
+                KeyCode::KEY_LEFTSHIFT => "Shift",
+                KeyCode::KEY_LEFTMETA => "Super",
+                _ => unreachable!(),
+            })
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let key = match self.key {
+            KeyCode::KEY_SPACE => "Space".into(),
+            KeyCode::KEY_ESC => "Escape".into(),
+            KeyCode::KEY_ENTER => "Return".into(),
+            KeyCode::KEY_GRAVE => "grave".into(),
+            KeyCode::KEY_LEFTBRACE => "bracketleft".into(),
+            KeyCode::KEY_RIGHTBRACE => "bracketright".into(),
+            KeyCode::KEY_SEMICOLON => "semicolon".into(),
+            KeyCode::KEY_APOSTROPHE => "apostrophe".into(),
+            KeyCode::KEY_COMMA => "comma".into(),
+            KeyCode::KEY_DOT => "period".into(),
+            KeyCode::KEY_SLASH => "slash".into(),
+            KeyCode::KEY_BACKSLASH => "backslash".into(),
+            _ => format!("{:?}", self.key).trim_start_matches("KEY_").into(),
+        };
+        parts.push(key);
+        parts.join("+")
+    }
+
+    pub fn portal_trigger(&self) -> String {
+        self.niri()
+            .split('+')
+            .map(|part| match part {
+                "Super" => "LOGO".into(),
+                "Ctrl" | "Alt" | "Shift" => part.to_ascii_uppercase(),
+                _ => part.to_ascii_lowercase(),
+            })
+            .collect::<Vec<_>>()
+            .join("+")
+    }
+
     pub fn parse(binding: &str) -> Result<Self> {
         let mut parts = binding.split('+');
         let key = parts.next_back().ok_or("hotkey needs a key")?;
@@ -56,22 +158,23 @@ impl Chord {
         if modifiers.is_empty() || modifiers.iter().flatten().any(|modifier| *modifier == key) {
             return Err("hotkey needs modifiers and a distinct trigger key".into());
         }
+        modifiers.sort_by_key(|keys| keys[0].0);
         Ok(Self { modifiers, key })
     }
 }
 
 pub struct KeyTracker {
-    chord: Chord,
+    shortcuts: Shortcuts,
     devices: BTreeMap<u64, BTreeSet<KeyCode>>,
-    active: bool,
+    active: Option<usize>,
 }
 
 impl KeyTracker {
-    pub fn new(chord: Chord) -> Self {
+    pub fn new(shortcuts: Shortcuts) -> Self {
         Self {
-            chord,
+            shortcuts,
             devices: BTreeMap::new(),
-            active: false,
+            active: None,
         }
     }
 
@@ -96,30 +199,50 @@ impl KeyTracker {
         if pressed && key == KeyCode::KEY_ESC {
             return vec![Hotkey::Cancel];
         }
-        if pressed && key == KeyCode::KEY_V && self.default_modifiers() {
-            return vec![Hotkey::InsertLast];
+        let mut events = self.transition();
+        if pressed {
+            if self.matches(&self.shortcuts.insert_last) && key == self.shortcuts.insert_last.key {
+                events.push(Hotkey::InsertLast);
+            } else if self.active.is_none() {
+                for (index, event) in [
+                    (&self.shortcuts.dictation, Hotkey::Down),
+                    (&self.shortcuts.interactive, Hotkey::Interactive),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    let (chord, event) = event;
+                    if key == chord.key && self.matches(chord) {
+                        self.active = Some(index);
+                        events.push(event);
+                        break;
+                    }
+                }
+            }
         }
-        self.transition(pressed && key == self.chord.key)
+        events
     }
 
     pub fn remove(&mut self, device: u64) -> Vec<Hotkey> {
         self.devices.remove(&device);
-        self.transition(false)
+        self.transition()
     }
 
     pub fn reset(&mut self) -> Vec<Hotkey> {
         self.devices.clear();
-        self.transition(false)
+        self.transition()
     }
 
     fn tracked(&self, key: KeyCode) -> bool {
-        key == self.chord.key
-            || self
-                .chord
-                .modifiers
-                .iter()
-                .flatten()
-                .any(|modifier| *modifier == key)
+        key == KeyCode::KEY_ESC
+            || self.shortcuts.chords().iter().any(|chord| {
+                chord.key == key
+                    || chord
+                        .modifiers
+                        .iter()
+                        .flatten()
+                        .any(|modifier| *modifier == key)
+            })
             || [
                 KeyCode::KEY_LEFTCTRL,
                 KeyCode::KEY_RIGHTCTRL,
@@ -127,8 +250,8 @@ impl KeyTracker {
                 KeyCode::KEY_RIGHTALT,
                 KeyCode::KEY_LEFTSHIFT,
                 KeyCode::KEY_RIGHTSHIFT,
-                KeyCode::KEY_V,
-                KeyCode::KEY_ESC,
+                KeyCode::KEY_LEFTMETA,
+                KeyCode::KEY_RIGHTMETA,
             ]
             .contains(&key)
     }
@@ -137,31 +260,28 @@ impl KeyTracker {
         self.devices.values().any(|keys| keys.contains(&key))
     }
 
-    fn default_modifiers(&self) -> bool {
-        (self.down(KeyCode::KEY_LEFTCTRL) || self.down(KeyCode::KEY_RIGHTCTRL))
-            && (self.down(KeyCode::KEY_LEFTALT) || self.down(KeyCode::KEY_RIGHTALT))
+    fn matches(&self, chord: &Chord) -> bool {
+        self.down(chord.key)
+            && [
+                [KeyCode::KEY_LEFTCTRL, KeyCode::KEY_RIGHTCTRL],
+                [KeyCode::KEY_LEFTALT, KeyCode::KEY_RIGHTALT],
+                [KeyCode::KEY_LEFTSHIFT, KeyCode::KEY_RIGHTSHIFT],
+                [KeyCode::KEY_LEFTMETA, KeyCode::KEY_RIGHTMETA],
+            ]
+            .iter()
+            .all(|keys| {
+                keys.iter().any(|key| self.down(*key))
+                    == chord.modifiers.iter().any(|group| group.as_slice() == keys)
+            })
     }
 
-    fn transition(&mut self, trigger: bool) -> Vec<Hotkey> {
-        let chord = self.down(self.chord.key)
-            && self
-                .chord
-                .modifiers
-                .iter()
-                .all(|alternatives| alternatives.iter().any(|key| self.down(*key)));
-        if self.active && !chord {
-            self.active = false;
-            return vec![Hotkey::Up];
-        }
-        if !self.active && chord && trigger {
-            self.active = true;
-            return vec![
-                if self.down(KeyCode::KEY_LEFTSHIFT) || self.down(KeyCode::KEY_RIGHTSHIFT) {
-                    Hotkey::Interactive
-                } else {
-                    Hotkey::Down
-                },
-            ];
+    fn transition(&mut self) -> Vec<Hotkey> {
+        if let Some(index) = self.active {
+            let chord = self.shortcuts.chords()[index];
+            if !self.matches(chord) {
+                self.active = None;
+                return vec![Hotkey::Up];
+            }
         }
         Vec::new()
     }
@@ -175,7 +295,7 @@ pub struct InputListener {
 }
 
 impl InputListener {
-    pub fn start(directory: &Path, chord: Chord, sender: Sender<Hotkey>) -> Result<Self> {
+    pub fn start(directory: &Path, shortcuts: Shortcuts, sender: Sender<Hotkey>) -> Result<Self> {
         let directory = directory.to_path_buf();
         let watch = watch_directory(&directory)?;
         let devices = keyboards(&directory);
@@ -193,7 +313,7 @@ impl InputListener {
                 watch,
                 devices,
                 stopped,
-                chord,
+                shortcuts,
                 sender,
                 (thread_enabled, thread_available),
             );
@@ -280,12 +400,12 @@ fn listen(
     watch: OwnedFd,
     mut devices: BTreeMap<PathBuf, Device>,
     mut stopped: UnixStream,
-    chord: Chord,
+    shortcuts: Shortcuts,
     sender: Sender<Hotkey>,
     state: (Arc<AtomicBool>, Arc<AtomicBool>),
 ) {
     let (enabled, available) = state;
-    let mut tracker = KeyTracker::new(chord);
+    let mut tracker = KeyTracker::new(shortcuts);
     loop {
         let paths: Vec<_> = devices.keys().cloned().collect();
         let mut descriptors = vec![
@@ -398,6 +518,44 @@ fn emit(sender: &Sender<Hotkey>, events: Vec<Hotkey>) {
 mod tests {
     use super::*;
 
+    #[test]
+    fn packaged_niri_binds_match_the_settings_and_all_actions() {
+        assert_eq!(
+            Shortcuts::default().niri_binds(),
+            include_str!("../../../packaging/linux/niri.kdl").trim()
+        );
+        let configured = Shortcuts::parse("meta+control+space", "super+g", "alt+a").unwrap();
+        let binds = configured.niri_binds();
+        assert!(binds.starts_with("binds {\n"));
+        assert!(binds.contains("Ctrl+Super+Space"));
+        assert!(binds.contains("\"hotkey\" \"interactive\""));
+        assert!(binds.contains("\"hotkey\" \"insert-last\""));
+        assert_eq!(configured.dictation.portal_trigger(), "CTRL+LOGO+space");
+    }
+
+    #[test]
+    fn configured_actions_use_exact_modifiers_and_pair_their_releases() {
+        let mut tracker = KeyTracker::new(Shortcuts::default());
+        key(&mut tracker, 1, KeyCode::KEY_LEFTMETA, 1);
+        assert_eq!(
+            key(&mut tracker, 1, KeyCode::KEY_X, 1),
+            [Hotkey::Interactive]
+        );
+        assert_eq!(key(&mut tracker, 1, KeyCode::KEY_X, 0), [Hotkey::Up]);
+        assert_eq!(
+            key(&mut tracker, 1, KeyCode::KEY_A, 1),
+            [Hotkey::InsertLast]
+        );
+        assert!(key(&mut tracker, 1, KeyCode::KEY_A, 2).is_empty());
+        assert!(key(&mut tracker, 1, KeyCode::KEY_A, 0).is_empty());
+        key(&mut tracker, 1, KeyCode::KEY_LEFTSHIFT, 1);
+        assert!(key(&mut tracker, 1, KeyCode::KEY_Z, 1).is_empty());
+        key(&mut tracker, 1, KeyCode::KEY_Z, 0);
+        key(&mut tracker, 1, KeyCode::KEY_LEFTSHIFT, 0);
+        assert_eq!(key(&mut tracker, 1, KeyCode::KEY_Z, 1), [Hotkey::Down]);
+        assert_eq!(key(&mut tracker, 1, KeyCode::KEY_LEFTMETA, 0), [Hotkey::Up]);
+    }
+
     fn key(tracker: &mut KeyTracker, device: u64, code: KeyCode, value: i32) -> Vec<Hotkey> {
         tracker.event(device, InputEvent::new(EventType::KEY.0, code.0, value))
     }
@@ -405,7 +563,9 @@ mod tests {
     #[test]
     fn fake_event_stream_runs_the_listener_dispatch_without_input_devices() {
         let (sender, receiver) = crossbeam_channel::unbounded();
-        let mut tracker = KeyTracker::new(Chord::default());
+        let mut tracker = KeyTracker::new(
+            Shortcuts::parse("ctrl+alt+space", "ctrl+alt+shift+space", "ctrl+alt+v").unwrap(),
+        );
         let stream = [
             (KeyCode::KEY_LEFTCTRL, 1),
             (KeyCode::KEY_LEFTALT, 1),
@@ -430,7 +590,9 @@ mod tests {
 
     #[test]
     fn fake_devices_hold_repeats_modifier_release_and_unplug() {
-        let mut tracker = KeyTracker::new(Chord::parse("ctrl+alt+space").unwrap());
+        let mut tracker = KeyTracker::new(
+            Shortcuts::parse("ctrl+alt+space", "ctrl+alt+shift+space", "ctrl+alt+v").unwrap(),
+        );
         assert!(key(&mut tracker, 1, KeyCode::KEY_A, 1).is_empty());
         assert!(key(&mut tracker, 1, KeyCode::KEY_LEFTCTRL, 1).is_empty());
         assert!(key(&mut tracker, 2, KeyCode::KEY_RIGHTALT, 1).is_empty());
@@ -445,7 +607,9 @@ mod tests {
 
     #[test]
     fn fake_stream_interactive_insert_cancel_and_reset() {
-        let mut tracker = KeyTracker::new(Chord::default());
+        let mut tracker = KeyTracker::new(
+            Shortcuts::parse("ctrl+alt+space", "ctrl+alt+shift+space", "ctrl+alt+v").unwrap(),
+        );
         for code in [
             KeyCode::KEY_LEFTCTRL,
             KeyCode::KEY_LEFTALT,

@@ -11,7 +11,7 @@ fn main() -> said_core::Result<()> {
     let root = PathBuf::from(std::env::var("SAID_TEST_ROOT")?);
     let mut config = Config::from_environment("said")?;
     config.read_input = false;
-    config.portal_trigger = None;
+    config.portal_enabled = false;
     let platform = LinuxPlatform::new(config)?;
     assert_eq!(platform.mode(), Mode::NiriToggle);
     let runtime = std::env::var_os("XDG_RUNTIME_DIR").unwrap();
