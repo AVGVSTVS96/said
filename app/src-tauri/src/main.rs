@@ -135,14 +135,6 @@ fn run() -> Result<()> {
         }
     }
     if !args.is_empty() {
-        if args[0] == "import-vocabulary" {
-            let source = args.get(1).ok_or("specify wispr or codex")?;
-            let path = match args.get(2) {
-                Some(path) => PathBuf::from(path),
-                None => said_app::cli::vocabulary_source(source)?,
-            };
-            return said_app::cli::import_vocabulary(&paths, source, &path);
-        }
         #[cfg(target_os = "linux")]
         {
             let runtime =
@@ -212,7 +204,7 @@ fn run() -> Result<()> {
                     .collect::<Vec<_>>(),
             )?;
             TrayIconBuilder::with_id("main")
-                .icon(ipc::tray_icon(false)?)
+                .icon(ipc::tray_icon(false))
                 .icon_as_template(cfg!(target_os = "macos"))
                 .menu(&menu)
                 .tooltip(env!("PRODUCT_NAME"))

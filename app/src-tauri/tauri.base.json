@@ -11,7 +11,7 @@
       {
         "label": "overlay",
         "url": "index.html?screen=overlay",
-        "title": "said \u2014 Dictation",
+        "title": "said · Dictation",
         "width": 544,
         "height": 216,
         "visible": false,
@@ -25,7 +25,7 @@
       {
         "label": "interactive",
         "url": "index.html?screen=interactive",
-        "title": "said \u2014 Review",
+        "title": "said · Review",
         "width": 624,
         "height": 269,
         "visible": false,
@@ -41,7 +41,7 @@
       {
         "label": "history",
         "url": "index.html?screen=history",
-        "title": "said \u2014 History",
+        "title": "said · History",
         "width": 800,
         "height": 640,
         "visible": false
@@ -49,7 +49,7 @@
       {
         "label": "settings",
         "url": "index.html?screen=settings",
-        "title": "said \u2014 Settings",
+        "title": "said · Settings",
         "width": 640,
         "height": 680,
         "visible": false
@@ -57,7 +57,7 @@
       {
         "label": "setup",
         "url": "index.html?screen=setup",
-        "title": "said \u2014 Setup",
+        "title": "said · Setup",
         "width": 640,
         "height": 680,
         "visible": false

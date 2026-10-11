@@ -38,9 +38,14 @@ impl WorkerConfig {
 }
 
 enum Input {
-    Start(Vec<String>),
+    Start,
     AudioAvailable,
-    Finish,
+}
+
+#[derive(Default)]
+struct ProducerState {
+    cancelled: AtomicBool,
+    finished: AtomicBool,
 }
 
 struct WorkerSlot {
@@ -83,13 +88,7 @@ impl WorkerClient {
         config.validate()?;
         let worker = Transport::spawn(&config)?;
         let id = UtteranceId::random();
-        worker.send(
-            WorkerRequest::Start {
-                id,
-                vocabulary: vec![],
-            },
-            None,
-        )?;
+        worker.send(WorkerRequest::Start { id }, None)?;
         worker.send(WorkerRequest::Audio { id, sequence: 0 }, Some(vec![]))?;
         let deadline = Instant::now() + config.startup_timeout;
         loop {
@@ -153,18 +152,17 @@ impl WorkerClient {
         &self,
         id: UtteranceId,
         path: &std::path::Path,
-        vocabulary: &[String],
         cancellation: &Receiver<()>,
     ) -> Result<String> {
         let (mut engine, output) = self.engine(id)?;
-        let cancelled = engine.cancelled.clone();
+        let producer = engine.producer.clone();
         let cancel_signal = engine.cancel_signal.clone();
-        engine.start(vocabulary)?;
+        engine.start()?;
         thread::scope(|scope| {
             let feeder = scope.spawn(move || -> Result<()> {
                 let mut wav = Wav::open(path)?;
                 while let Some(samples) = wav.read()? {
-                    if engine.cancelled.load(Ordering::Acquire) {
+                    if engine.producer.cancelled.load(Ordering::Acquire) {
                         return Err("recognition canceled".into());
                     }
                     engine.feed(&samples);
@@ -186,7 +184,7 @@ impl WorkerClient {
                 }
             };
             if result.is_err() {
-                cancelled.store(true, Ordering::Release);
+                producer.cancelled.store(true, Ordering::Release);
                 let _ = cancel_signal.try_send(());
             }
             let feeding = feeder.join().map_err(|_| "audio file feeder panicked")?;
@@ -212,7 +210,7 @@ pub struct WorkerEngine {
     started: bool,
     used: bool,
     cancel_signal: Sender<()>,
-    cancelled: Arc<AtomicBool>,
+    producer: Arc<ProducerState>,
 }
 
 impl WorkerEngine {
@@ -226,14 +224,14 @@ impl WorkerEngine {
         idle: Option<IdleWorker>,
     ) -> Result<(Self, Receiver<EngineOutput>)> {
         config.validate()?;
-        let (input, requests) = bounded(config.queue_frames);
+        let (input, requests) = bounded(1);
         let (failures, errors) = bounded(1);
         let spool = Arc::new(Spool::new(id)?);
         let audio = spool.clone();
         let (events, output) = bounded(64);
         let (cancel_signal, cancellation) = bounded(1);
-        let cancelled = Arc::new(AtomicBool::new(false));
-        let cancel_flag = cancelled.clone();
+        let producer = Arc::new(ProducerState::default());
+        let state = producer.clone();
         thread::Builder::new()
             .name("said-engine".into())
             .spawn(move || {
@@ -244,7 +242,7 @@ impl WorkerEngine {
                     errors,
                     events,
                     audio,
-                    (cancellation, cancel_flag, idle),
+                    (cancellation, state, idle),
                 );
             })?;
         Ok((
@@ -255,7 +253,7 @@ impl WorkerEngine {
                 started: false,
                 used: false,
                 cancel_signal,
-                cancelled,
+                producer,
             },
             output,
         ))
@@ -263,12 +261,12 @@ impl WorkerEngine {
 }
 
 impl Engine for WorkerEngine {
-    fn start(&mut self, vocabulary: &[String]) -> Result<()> {
+    fn start(&mut self) -> Result<()> {
         if self.used {
             return Err("worker instances are scoped to one utterance".into());
         }
         self.input
-            .try_send(Input::Start(vocabulary.to_vec()))
+            .try_send(Input::Start)
             .map_err(|_| "worker unavailable")?;
         self.started = true;
         self.used = true;
@@ -290,12 +288,13 @@ impl Engine for WorkerEngine {
     }
     fn finish(&mut self) {
         if self.started {
-            let _ = self.input.send(Input::Finish);
+            self.producer.finished.store(true, Ordering::Release);
+            let _ = self.input.try_send(Input::AudioAvailable);
             self.started = false;
         }
     }
     fn cancel(&mut self) {
-        self.cancelled.store(true, Ordering::Release);
+        self.producer.cancelled.store(true, Ordering::Release);
         let _ = self.cancel_signal.try_send(());
         self.started = false;
     }
@@ -382,11 +381,11 @@ fn supervise(
     mut failures: Receiver<String>,
     events: Sender<EngineOutput>,
     spool: Arc<Spool>,
-    cancellation: (Receiver<()>, Arc<AtomicBool>, Option<IdleWorker>),
+    cancellation: (Receiver<()>, Arc<ProducerState>, Option<IdleWorker>),
 ) {
-    let (mut cancellation, cancelled, idle) = cancellation;
-    let vocabulary = loop {
-        if cancelled.load(Ordering::Acquire) {
+    let (mut cancellation, producer, idle) = cancellation;
+    loop {
+        if producer.cancelled.load(Ordering::Acquire) {
             return;
         }
         select! {
@@ -395,14 +394,14 @@ fn supervise(
                 cancellation = crossbeam_channel::never();
             }
             recv(requests) -> input => match input {
-                Ok(Input::Start(vocabulary)) => break vocabulary,
+                Ok(Input::Start) => break,
                 _ => return,
             }
         }
-    };
+    }
     let _lease = if let Some(idle) = &idle {
         loop {
-            if cancelled.load(Ordering::Acquire) {
+            if producer.cancelled.load(Ordering::Acquire) {
                 return;
             }
             select! {
@@ -431,25 +430,18 @@ fn supervise(
         .map(Ok)
         .unwrap_or_else(|| Transport::spawn(&config))
         .and_then(|worker| {
-            worker.send(
-                WorkerRequest::Start {
-                    id,
-                    vocabulary: vocabulary.clone(),
-                },
-                None,
-            )?;
+            worker.send(WorkerRequest::Start { id }, None)?;
             Ok(worker)
         });
     let mut pending = VecDeque::new();
     let mut sequence = 0;
     let mut finishing = None;
-    let mut finish_requested = false;
     let mut offset = 0;
     let mut loaded = existing_is_warm;
     let mut progress = None;
     let mut uncommitted_samples = 0_u64;
     loop {
-        if cancelled.load(Ordering::Acquire) {
+        if producer.cancelled.load(Ordering::Acquire) {
             return;
         }
         if let Err(error) = &transport {
@@ -485,7 +477,11 @@ fn supervise(
             }
             continue;
         }
-        if finish_requested && finishing.is_none() && pending.is_empty() && spool.consumed(offset) {
+        if producer.finished.load(Ordering::Acquire)
+            && finishing.is_none()
+            && pending.is_empty()
+            && spool.consumed(offset)
+        {
             finishing = Some(());
             progress = Some(Instant::now());
             if let Err(error) = worker.send(WorkerRequest::Finish { id }, None) {
@@ -518,12 +514,11 @@ fn supervise(
             }
             recv(requests) -> input => match input {
                 Ok(Input::AudioAvailable) => {}
-                Ok(Input::Finish) => { finish_requested = true; }
                 Err(_) => {
-                    if !finish_requested { return; }
+                    if !producer.finished.load(Ordering::Acquire) { return; }
                     requests = crossbeam_channel::never();
                 }
-                Ok(Input::Start(_)) => { transport = Err("duplicate Start".into()); }
+                Ok(Input::Start) => { transport = Err("duplicate Start".into()); }
             },
             recv(worker.output) -> response => match response {
                 Ok(Ok(WorkerResponse::AudioAck { id: current, sequence: ack })) => {
@@ -578,38 +573,29 @@ pub fn recognize_file(
     id: UtteranceId,
     config: &WorkerConfig,
     path: &std::path::Path,
-    vocabulary: &[String],
 ) -> Result<String> {
     config.validate()?;
-    replay(id, config, path, vocabulary, None)
+    replay(id, config, path, None)
 }
 
 pub fn recognize_file_with_cancel(
     id: UtteranceId,
     config: &WorkerConfig,
     path: &std::path::Path,
-    vocabulary: &[String],
     cancellation: &Receiver<()>,
 ) -> Result<String> {
     config.validate()?;
-    replay(id, config, path, vocabulary, Some(cancellation))
+    replay(id, config, path, Some(cancellation))
 }
 
 fn replay(
     id: UtteranceId,
     config: &WorkerConfig,
     path: &std::path::Path,
-    vocabulary: &[String],
     cancellation: Option<&Receiver<()>>,
 ) -> Result<String> {
     let mut worker = Transport::spawn(config)?;
-    worker.send(
-        WorkerRequest::Start {
-            id,
-            vocabulary: vocabulary.to_vec(),
-        },
-        None,
-    )?;
+    worker.send(WorkerRequest::Start { id }, None)?;
     let mut wav = Wav::open(path)?;
     let mut text = String::new();
     let mut sequence = 0;

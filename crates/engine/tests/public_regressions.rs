@@ -15,7 +15,7 @@ fn recognize(client: &WorkerClient, path: PathBuf) -> (String, usize) {
     let mut commits = 0;
     std::thread::scope(|scope| {
         let feeder = scope.spawn(move || {
-            engine.start(&[]).unwrap();
+            engine.start().unwrap();
             let mut wav = Wav::open(&path).unwrap();
             while let Some(samples) = wav.read().unwrap() {
                 engine.feed(&samples);

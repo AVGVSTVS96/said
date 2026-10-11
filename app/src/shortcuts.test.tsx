@@ -5,7 +5,7 @@ import type { HostState, Settings } from "./contracts";
 
 const settings: Settings = {
   hotkey: "super+z", interactive_hotkey: "super+x", insert_last_hotkey: "super+a",
-  engine: "local-model", vocabulary: false, microphone: null, apps: {},
+  engine: "local-model", microphone: null, apps: {},
 };
 
 test("all configured shortcuts are displayed and invalid or duplicate chords cannot save", () => {

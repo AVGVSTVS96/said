@@ -67,7 +67,6 @@ impl Settings {
             }
             .into(),
             engine: engine.into(),
-            vocabulary: false,
             microphone: None,
             apps,
         }
@@ -82,13 +81,11 @@ impl Settings {
             Err(error) => return Err(error.into()),
         };
         #[derive(serde::Deserialize)]
-        #[serde(deny_unknown_fields)]
         struct FileSettings {
             hotkey: Option<String>,
             interactive_hotkey: Option<String>,
             insert_last_hotkey: Option<String>,
             engine: Option<String>,
-            vocabulary: Option<bool>,
             microphone: Option<String>,
             apps: Option<BTreeMap<String, AppSettings>>,
         }
@@ -105,9 +102,6 @@ impl Settings {
         }
         if let Some(value) = file.engine {
             settings.engine = value;
-        }
-        if let Some(value) = file.vocabulary {
-            settings.vocabulary = value;
         }
         settings.microphone = file.microphone;
         if let Some(value) = file.apps {

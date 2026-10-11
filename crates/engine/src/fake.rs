@@ -14,7 +14,7 @@ pub struct Trace {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EngineCall {
-    Start(Vec<String>),
+    Start,
     Feed(Vec<i16>),
     Finish,
     Cancel,
@@ -51,12 +51,12 @@ impl FakeEngine {
 }
 
 impl Engine for FakeEngine {
-    fn start(&mut self, vocabulary: &[String]) -> Result<()> {
+    fn start(&mut self) -> Result<()> {
         if self.active {
             return Err("engine already active".into());
         }
         self.active = true;
-        self.calls.push(EngineCall::Start(vocabulary.to_vec()));
+        self.calls.push(EngineCall::Start);
         let events = std::mem::take(&mut self.trace.start);
         self.emit(events);
         Ok(())
