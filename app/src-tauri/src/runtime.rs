@@ -794,17 +794,15 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     self.replaying.insert(id, cancel);
                     let sender = self.sender.clone();
                     let path = self.history.audio_path(audio_id);
+                    let client = (engine == self.settings.engine).then(|| self.client.clone()).flatten();
                     let config = worker_config(&self.paths.models, &engine)?;
                     std::thread::spawn(move || {
                         let result = (|| {
                             let samples = voice_audio::wav::recover_wav(&path)?;
-                            let text = recognize_file_with_cancel(
-                                id,
-                                &config,
-                                &path,
-                                &vocabulary,
-                                &cancellation,
-                            )?;
+                            let text = match client {
+                                Some(client) => client.recognize_file(id, &path, &vocabulary, &cancellation)?,
+                                None => recognize_file_with_cancel(id, &config, &path, &vocabulary, &cancellation)?,
+                            };
                             Ok((samples * 1000 / 16000, text))
                         })();
                         let _ = sender.send(Background::Replay { id, result });
