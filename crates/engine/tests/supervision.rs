@@ -278,6 +278,7 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
         EngineEvent::Partial("active".into())
     );
     second.start(&[]).unwrap();
+    assert!(!client.unload_if_idle(Duration::ZERO));
     second.feed(&[0]);
     second.finish();
     assert!(
@@ -310,6 +311,76 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
         "no no  café\t\n"
     );
     assert_eq!(fs::read(starts).unwrap(), b"x");
+}
+
+#[test]
+fn idle_unload_reloads_and_spools_every_sample_from_the_next_start() {
+    let fixture = Fixture::new();
+    let script = fixture.directory.join("delayed.py");
+    let starts = fixture.directory.join("starts");
+    let captured = fixture.directory.join("captured");
+    fs::write(&script, r#"import sys, struct, json, time
+with open(sys.argv[1], 'a') as starts:
+    starts.write('x')
+time.sleep(0.2)
+r = sys.stdin.buffer
+w = sys.stdout.buffer
+def send(value):
+    data = json.dumps(value).encode()
+    w.write(struct.pack('<I', len(data)) + data)
+    w.flush()
+while prefix := r.read(4):
+    value = json.loads(r.read(struct.unpack('<I', prefix)[0]))
+    if value['type'] == 'audio':
+        pcm = r.read(struct.unpack('<I', r.read(4))[0])
+        with open(sys.argv[2], 'ab') as captured:
+            captured.write(pcm)
+        send({'type': 'audio_ack', 'id': value['id'], 'sequence': value['sequence']})
+    elif value['type'] == 'finish':
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'committed', 'text': 'first words'}})
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
+"#).unwrap();
+    let client = said_engine::host::WorkerClient::warm(WorkerConfig {
+        executable: PathBuf::from("python3"),
+        args: vec![
+            script.display().to_string(),
+            starts.display().to_string(),
+            captured.display().to_string(),
+        ],
+        ..fixture.config()
+    })
+    .unwrap();
+    assert!(!client.unload_if_idle(Duration::from_secs(300)));
+    let deadline = std::time::Instant::now() + Duration::from_secs(2);
+    while !client.unload_if_idle(Duration::from_millis(50)) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "idle polling must not reset the inactivity deadline"
+        );
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert!(!client.unload_if_idle(Duration::ZERO));
+    let (mut engine, output) = client.engine(UtteranceId::random()).unwrap();
+    engine.start(&[]).unwrap();
+    let samples: Vec<i16> = (0..12_800).map(|index| (index % 32_767) as i16).collect();
+    engine.feed(&samples);
+    engine.finish();
+    assert_eq!(
+        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
+        EngineEvent::Committed("first words".into())
+    );
+    assert_eq!(
+        output.recv_timeout(Duration::from_secs(5)).unwrap().event,
+        EngineEvent::Final
+    );
+    assert_eq!(
+        fs::read(&captured).unwrap(),
+        samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(fs::read(&starts).unwrap(), b"xx");
 }
 
 #[test]

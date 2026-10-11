@@ -87,6 +87,7 @@ impl ParakeetModel {
     pub fn load(
         library: &Path,
         directory: &Path,
+        files: [&str; 4],
         threads: i32,
         provider: &str,
         update_samples: usize,
@@ -96,7 +97,7 @@ impl ParakeetModel {
             return Err("Parakeet threads and update_samples must be positive".into());
         }
         let api = Api::open(library)?;
-        let paths = ["encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt"]
+        let paths = files
             .map(|name| CString::new(directory.join(name).as_os_str().as_bytes()))
             .into_iter()
             .collect::<std::result::Result<Vec<_>, _>>()?;

@@ -1,0 +1,78 @@
+{
+  "defaults": {
+    "linux": "parakeet-v3-fp32",
+    "macos": "parakeet-v3-fp32"
+  },
+  "models": {
+    "parakeet-v3-fp32": {
+      "adapter": "parakeet",
+      "update_samples": 32000,
+      "threads": 8,
+      "provider": "cpu",
+      "directory": "parakeet-v3-fp32",
+      "license": "CC-BY-4.0",
+      "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/1a468a35cbba69418f126de829e75261dea4a4e4/",
+      "files": {
+        "decoder.onnx": "d593cdb0e571f5a457ec2219af9968cbf6b0e8198e8f7839b40a8754593bf68c",
+        "encoder.onnx": "3eed7ce424bf8339ad09233533c687e2dbd07e74ccf5027b5e7344019ea373b0",
+        "encoder.weights": "3af3f51af5f2d01dbbf5af47d42c7962a2c205f11004254bb4f2b979862f39a8",
+        "joiner.onnx": "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63",
+        "tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+      }
+    },
+    "parakeet-v3-int8": {
+      "adapter": "parakeet",
+      "update_samples": 32000,
+      "threads": 8,
+      "provider": "cpu",
+      "directory": "parakeet-v3-int8",
+      "license": "CC-BY-4.0",
+      "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/2bda32ec70b097a55adaa07d9a7173915b43cc78/",
+      "files": {
+        "decoder.int8.onnx": "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e",
+        "encoder.int8.onnx": "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247",
+        "joiner.int8.onnx": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+        "tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+      }
+    },
+    "parakeet-v3-fp16-int8": {
+      "adapter": "parakeet",
+      "update_samples": 32000,
+      "threads": 8,
+      "provider": "cpu",
+      "directory": "parakeet-v3-fp16-int8",
+      "license": "CC-BY-4.0",
+      "source": "https://huggingface.co/ako101/parakeet-tdt-0.6b-v3-sherpa-onnx-fp16/resolve/960f38997f4d70341fbd1ffc1de61a226c959cf8/",
+      "files": {
+        "decoder.int8.onnx": "214722efd99924f303720cb902d08674b975ab40527ef2aebf3e1d751fed4c69",
+        "encoder.fp16.onnx": "27afafcc1c39ee031e4f06f9a99433b3757c8b8b6c20d55166df1538bf8440d0",
+        "joiner.int8.onnx": "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3",
+        "tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+      }
+    }
+  },
+  "runtime": {
+    "version": "1.13.8",
+    "libraries": {
+      "linux": "runtime/sherpa-onnx-1.13.8/lib/libsherpa-onnx-c-api.so",
+      "macos": "runtime/sherpa-onnx-1.13.8/lib/libsherpa-onnx-c-api.dylib"
+    },
+    "artifacts": {
+      "linux-x86_64": {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-linux-x64-shared-no-tts-lib.tar.bz2",
+        "sha256": "bf2d998c8b07012cd5098f3b92673bc1333fd9b927767d7cb664be8190d8bc0b",
+        "format": "tar.bz2"
+      },
+      "macos-aarch64": {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-v1.13.8-osx-arm64-shared-no-tts-lib.tar.bz2",
+        "sha256": "f3e0cbd86cc3f38dad30c97921b40e9a8bcc6f2c943777eb76ad77176993e417",
+        "format": "tar.bz2"
+      }
+    },
+    "source": {
+      "url": "https://codeload.github.com/k2-fsa/sherpa-onnx/tar.gz/11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf",
+      "sha256": "0a8db6c55dd318f4a688faba85f7760b99a6c92e8ef8864479d418531bee1ac2",
+      "revision": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf"
+    }
+  }
+}

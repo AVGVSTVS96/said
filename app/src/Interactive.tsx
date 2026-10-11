@@ -127,7 +127,14 @@ export function Interactive({
         {!session && utterance ? (
           <span className="quiet">{duration(utterance.duration_ms)}</span>
         ) : null}
-        <Target name={session?.target?.name ?? utterance?.pasted_to?.name} />
+        <Target
+          name={
+            session?.target?.name ||
+            session?.target?.app_id ||
+            utterance?.pasted_to?.name ||
+            utterance?.pasted_to?.app_id
+          }
+        />
         {onClose ? (
           <button className="close" aria-label="Close" onClick={onClose}>
             <Icon name="close" />

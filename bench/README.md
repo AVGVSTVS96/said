@@ -195,3 +195,26 @@ entrypoint before Tauri initialization. The root workspace/lockfile owns depende
 and fake-worker checks run in CI. The real quality gate remains separate and currently fails as
 reported in RESULTS.md. Model defaults remain provisional; no shared engine event, worker wire
 format or schema change is needed for this integration.
+
+## Precision probes
+
+`precision-models.json` is the benchmark-only catalog for the measured FP32,
+INT8 and mixed FP16-encoder / INT8-decoder-and-joiner exports. All sources and
+weight hashes are pinned; application selection still uses `crates/engine/models.json`.
+The pinned upstream FP16 repository contains no model files, so the available
+community mixed export is labeled explicitly. No all-FP16 result is claimed.
+
+```sh
+crates/engine/scripts/fetch-model.sh parakeet-v3-fp16-int8 bench/precision-models.json
+systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
+  nice -n 10 target/debug/said-bench bench /private/clips.jsonl --unpaced \
+  --engine parakeet-v3-fp16-int8 --model-manifest bench/precision-models.json \
+  --output /private/new-result
+```
+
+That resource scope is Linux-specific. Run one model-loading probe at a time;
+on macOS use `nice -n 10`. The private headline comparison uses the original
+external silver scorer, not this public scorer's narrower negation/repetition
+classes. Only aggregate precision receipts are published in
+[RESULTS.md](RESULTS.md#precision-and-idle-memory-polish); audio, manifests with
+private references, clip identifiers and transcripts stay outside the repository.

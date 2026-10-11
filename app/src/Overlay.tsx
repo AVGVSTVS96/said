@@ -47,7 +47,9 @@ export function Overlay({
                 ) : null}
                 {autoSend ? <span className="quiet">auto-send</span> : null}
               </Status>
-              <Target name={session.target?.name ?? "Clipboard"} />
+              <Target
+                name={session.target?.name || session.target?.app_id || "Clipboard"}
+              />
               {session.phase === "recording" ? (
                 <button
                   className="close"
