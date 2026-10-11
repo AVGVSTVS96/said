@@ -5,7 +5,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 fn hash(path: &Path) -> Result<String> {
@@ -95,6 +95,12 @@ pub fn install(
         .get(&key)
         .ok_or("no native runtime for this architecture")?;
     let archive = directory.join(format!("runtime-{}.archive", selected.version));
+    if let Some(packaged) = packaged_runtime(&std::env::current_exe()?)
+        && packaged.is_file()
+        && (!archive.is_file() || hash(&archive)? != artifact.sha256)
+    {
+        stage_runtime(&packaged, &archive, &artifact.sha256)?;
+    }
     fetch(
         &client,
         &artifact.url,
@@ -132,6 +138,57 @@ pub fn install(
         return Err("runtime archive omitted its library".into());
     }
     Ok(())
+}
+
+fn packaged_runtime(executable: &Path) -> Option<PathBuf> {
+    let prefix = executable.parent()?.parent()?;
+    #[cfg(target_os = "linux")]
+    let archive = prefix.join("lib/said/runtime.archive");
+    #[cfg(target_os = "macos")]
+    let archive = prefix.join("Resources/runtime.archive");
+    Some(archive)
+}
+
+fn stage_runtime(source: &Path, destination: &Path, expected: &str) -> Result<()> {
+    let temporary = destination.with_extension("part");
+    let result = (|| {
+        let mut file = private_file(&temporary)?;
+        file.set_len(0)?;
+        std::io::copy(&mut File::open(source)?, &mut file)?;
+        file.sync_all()?;
+        if hash(&temporary)? != expected {
+            return Err("Packaged runtime failed SHA-256 verification".into());
+        }
+        fs::rename(&temporary, destination)?;
+        File::open(destination.parent().ok_or("runtime needs a directory")?)?.sync_all()?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn packaged_runtime_is_verified_and_staged_atomically_without_network() {
+        let directory =
+            std::env::temp_dir().join(format!("said-runtime-stage-{}", std::process::id()));
+        private_dir(&directory).unwrap();
+        let source = directory.join("runtime.archive");
+        let destination = directory.join("cached.archive");
+        fs::write(&source, b"synthetic pinned runtime").unwrap();
+        stage_runtime(&source, &destination, &hash(&source).unwrap()).unwrap();
+        assert_eq!(fs::read(&destination).unwrap(), b"synthetic pinned runtime");
+        fs::write(&source, b"corrupt archive").unwrap();
+        assert!(stage_runtime(&source, &destination, "incorrect hash").is_err());
+        assert_eq!(fs::read(&destination).unwrap(), b"synthetic pinned runtime");
+        assert!(!destination.with_extension("part").exists());
+        fs::remove_dir_all(directory).unwrap();
+    }
 }
 
 fn install_library(reader: &mut impl Read, path: &Path) -> Result<()> {

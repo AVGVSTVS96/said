@@ -1,4 +1,5 @@
 import type { CoreSource, SessionView } from "./source";
+import { shortcutLabel } from "./shortcuts";
 import {
   Icon,
   LevelMeter,
@@ -19,9 +20,6 @@ export function Overlay({
 }) {
   const snapshot = source.getSnapshot();
   const settings = snapshot.settings;
-  const cloud = snapshot.host?.models.find(
-    (model) => model.id === settings?.engine,
-  )?.cloud;
   const autoSend =
     session?.target && settings?.apps[session.target.app_id]?.send;
   const notification = session && snapshot.host?.notifications[session.id];
@@ -30,7 +28,7 @@ export function Overlay({
     : notification && notification !== sessionLabel(session)
       ? notification
       : session.phase === "saved"
-        ? "Press Ctrl+Alt+V to insert"
+        ? settings ? `Press ${shortcutLabel(settings.insert_last_hotkey, Boolean(snapshot.host && "accessibility" in snapshot.host.permissions))} to insert` : "Use Insert last to insert"
         : session.phase === "failed"
           ? "Kept in history"
           : "";
@@ -41,10 +39,6 @@ export function Overlay({
           <>
             <div className="row">
               <Status session={session}>
-                {cloud ? <span className="quiet">cloud</span> : null}
-                {settings?.vocabulary ? (
-                  <span className="quiet">vocabulary</span>
-                ) : null}
                 {autoSend ? <span className="quiet">auto-send</span> : null}
               </Status>
               <Target
