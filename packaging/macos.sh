@@ -3,7 +3,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 test "$(uname -m)" = arm64
-idle="$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ {print int($NF/1e9); exit}')"
+idle="$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ && !seen {print int($NF/1e9); seen=1}')"
 test "$idle" -ge 300 || { echo "Mac active ($idle idle seconds); build postponed" >&2; exit 1; }
 export CARGO_BUILD_JOBS=2 MACOSX_DEPLOYMENT_TARGET=14.0
 runtime="$root/target/packaging/runtime"
