@@ -240,11 +240,11 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                     }
                     let snapshot = host.snapshot()?;
                     let recording = host.recording();
-                    if tray_recording != Some(recording) {
-                        if let Some(tray) = app.tray_by_id("main") {
-                            let _ = tray.set_icon(Some(tray_icon(recording)));
-                            tray_recording = Some(recording);
-                        }
+                    if tray_recording != Some(recording)
+                        && let Some(tray) = app.tray_by_id("main")
+                    {
+                        let _ = tray.set_icon(Some(tray_icon(recording)));
+                        tray_recording = Some(recording);
                     }
                     let label = if let Some(reason) = &snapshot.host.unavailable {
                         format!("{} · {reason}", env!("PRODUCT_NAME"))
