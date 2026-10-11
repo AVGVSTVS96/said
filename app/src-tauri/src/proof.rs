@@ -21,7 +21,7 @@ impl Platform for SavedPlatform {
     fn make_overlay(&self, window: &()) {
         self.fake.make_overlay(window);
     }
-    fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
+    fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
         let database = rusqlite::Connection::open_with_flags(
             &self.database,
             rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
@@ -34,7 +34,7 @@ impl Platform for SavedPlatform {
         if raw.as_bytes() != text.as_bytes() || saved.as_bytes() != text.as_bytes() {
             return Err("paste was attempted before an exact durable save".into());
         }
-        self.fake.paste(target, text, send)
+        self.fake.paste(target, text, send, automatic)
     }
 }
 impl HostPlatform for SavedPlatform {
@@ -75,8 +75,8 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
         fn focus(&self, target: &Target) -> Result<()> {
             self.native.focus(target)
         }
-        fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
-            self.native.paste(target, text, send)
+        fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
+            self.native.paste(target, text, send, automatic)
         }
         fn make_overlay(&self, window: &tauri::Window) {
             self.native.make_overlay(window);

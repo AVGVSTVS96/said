@@ -63,6 +63,7 @@ impl Config {
 pub struct LinuxPlatform {
     config: Config,
     niri: Option<Niri>,
+    changes: Option<niri::FocusChanges>,
     control: ControlSocket,
     keyboard: Option<Mutex<VirtualKeyboard>>,
     input: Option<InputListener>,
@@ -76,6 +77,7 @@ pub struct LinuxPlatform {
 impl LinuxPlatform {
     pub fn new(config: Config) -> Result<Self> {
         let niri = config.niri_socket.as_ref().map(Niri::new).transpose()?;
+        let changes = niri.as_ref().map(Niri::focus_changes).transpose()?;
         let control = ControlSocket::bind(&config.runtime_dir, &config.storage_key)?;
         let keyboard = niri
             .as_ref()
@@ -89,6 +91,7 @@ impl LinuxPlatform {
         let mut platform = Self {
             config,
             niri,
+            changes,
             control,
             keyboard,
             input: None,
@@ -198,6 +201,13 @@ impl LinuxPlatform {
         Some((event, false))
     }
 
+    pub fn focus_changes(&self) -> Vec<Option<Target>> {
+        self.changes.as_ref().map_or_else(Vec::new, |changes| {
+            changes.events().try_iter().for_each(drop);
+            changes.queue.drain()
+        })
+    }
+
     pub fn copy(&self, text: &str) -> Result<()> {
         paste::copy(&self.config.runtime_dir, &self.config.wayland_display, text)
     }
@@ -221,7 +231,7 @@ impl Platform for LinuxPlatform {
             .focus(target)
     }
 
-    fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
+    fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
         let niri = self
             .niri
             .as_ref()
@@ -232,7 +242,21 @@ impl Platform for LinuxPlatform {
             .ok_or("no virtual keyboard")?
             .lock()
             .map_err(|_| "virtual keyboard lock poisoned")?;
-        paste::paste(niri, &self.config, target, text, send, &mut keyboard)
+        paste::paste(
+            niri,
+            &self.config,
+            target,
+            text,
+            send,
+            &mut keyboard,
+            |post| {
+                self.changes
+                    .as_ref()
+                    .ok_or("focus observer unavailable")?
+                    .queue
+                    .post(target, automatic, post)
+            },
+        )
     }
 
     fn make_overlay(&self, window: &Self::Window) {

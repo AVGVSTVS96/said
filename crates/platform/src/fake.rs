@@ -58,7 +58,7 @@ impl Platform for FakePlatform {
         Ok(())
     }
 
-    fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
+    fn paste(&self, target: &Target, text: &str, send: bool, _automatic: bool) -> Result<()> {
         if !self
             .focused()
             .as_ref()

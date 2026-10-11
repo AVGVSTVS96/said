@@ -1,7 +1,6 @@
 use std::ptr::null_mut;
 use std::sync::{Mutex, OnceLock};
 
-use crossbeam_channel::{Receiver, Sender, unbounded};
 use said_core::{Result, Target};
 
 use super::ffi::{self, Owned, Ref};
@@ -28,12 +27,12 @@ impl Drop for Watch {
 
 struct State {
     watch: Mutex<Option<Watch>>,
-    events: Sender<Option<Target>>,
+    pub queue: crate::focus::FocusQueue,
 }
 impl State {
     fn changed(&self) {
         // A queued invalidation preserves a departure even when current focus has already returned.
-        let _ = self.events.send(None);
+        self.queue.push(None);
     }
     fn observe(&self) -> Result<i32> {
         unsafe {
@@ -125,7 +124,6 @@ fn observer_class() -> Ref {
 pub struct FocusChanges {
     state: Box<State>,
     object: Mutex<Option<objc::Retained>>,
-    events: Receiver<Option<Target>>,
 }
 impl Default for FocusChanges {
     fn default() -> Self {
@@ -137,14 +135,12 @@ unsafe impl Send for FocusChanges {}
 unsafe impl Sync for FocusChanges {}
 impl FocusChanges {
     pub fn new() -> Self {
-        let (sender, events) = unbounded();
         Self {
             state: Box::new(State {
                 watch: Mutex::new(None),
-                events: sender,
+                queue: crate::focus::FocusQueue::default(),
             }),
             object: Mutex::new(None),
-            events,
         }
     }
     pub fn observe(&self) -> Result<()> {
@@ -174,8 +170,16 @@ impl FocusChanges {
         self.state.observe()?;
         Ok(())
     }
-    pub fn events(&self) -> Receiver<Option<Target>> {
-        self.events.clone()
+    pub fn events(&self) -> Vec<Option<Target>> {
+        self.state.queue.drain()
+    }
+    pub fn post(
+        &self,
+        target: &Target,
+        automatic: bool,
+        post: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        self.state.queue.post(target, automatic, post)
     }
 }
 impl FocusChanges {
@@ -211,9 +215,6 @@ mod tests {
             window_changed(null_mut(), null_mut(), null_mut(), context);
             window_changed(null_mut(), null_mut(), null_mut(), context);
         }
-        assert_eq!(
-            changes.events().try_iter().collect::<Vec<_>>(),
-            [None, None]
-        );
+        assert_eq!(changes.events(), [None, None]);
     }
 }

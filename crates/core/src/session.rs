@@ -485,6 +485,7 @@ impl Session {
                         target: destination,
                         text: entry.text().to_owned(),
                         send: entry.send && !entry.manual && entry.view.mode == Mode::Quick,
+                        automatic: !entry.manual,
                     });
                 } else {
                     entry.delivery_done = true;

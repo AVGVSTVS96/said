@@ -89,6 +89,7 @@ export function Interactive({
     try {
       if (draft?.edited) await send({ type: "edit", id, text });
       await send({ type, id } satisfies UiAction);
+      if (type === "insert" && source.getSnapshot().sessions.some((view) => view.id === id && view.phase === "pasted")) onClose?.();
     } catch {
     } finally {
       setPending(false);

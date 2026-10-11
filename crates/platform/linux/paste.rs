@@ -77,6 +77,7 @@ pub fn paste(
     text: &str,
     send: bool,
     keyboard: &mut VirtualKeyboard,
+    authorize: impl Fn(&mut dyn FnMut() -> Result<()>) -> Result<()>,
 ) -> Result<()> {
     check_focus(niri, target)?;
     if text.is_empty() {
@@ -84,12 +85,14 @@ pub fn paste(
     }
     copy(&config.runtime_dir, &config.wayland_display, text)?;
     check_focus(niri, target)?;
-    config
-        .paste_chords
-        .get(&target.app_id)
-        .copied()
-        .unwrap_or_default()
-        .post(keyboard)?;
+    authorize(&mut || {
+        config
+            .paste_chords
+            .get(&target.app_id)
+            .copied()
+            .unwrap_or_default()
+            .post(keyboard)
+    })?;
     if send {
         thread::sleep(Duration::from_millis(50));
         check_focus(niri, target)?;

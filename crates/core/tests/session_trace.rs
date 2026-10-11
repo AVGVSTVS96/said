@@ -237,11 +237,12 @@ impl Harness {
                     target,
                     text,
                     send,
+                    automatic,
                 } => {
                     let row = self.history.get(id).unwrap().unwrap();
                     assert_eq!(row.text.as_deref(), Some(text.as_str()));
                     assert!(row.raw_text.is_some());
-                    match self.platform.paste(&target, &text, send) {
+                    match self.platform.paste(&target, &text, send, automatic) {
                         Ok(()) => {
                             self.clipboard = text;
                             self.events.push_back(SessionEvent::Pasted { id, at: 1000 });

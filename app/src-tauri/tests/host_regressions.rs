@@ -4,14 +4,17 @@ use said_app::{
     storage::Paths,
 };
 use said_audio::fake::FakeRecorder;
-use said_core::{History, Hotkey, Mode, Result, Settings, Target, UiAction, UtteranceId};
+use said_core::{
+    EngineEvent, EngineOutput, History, Hotkey, Mode, Phase, Result, SessionEvent, Settings,
+    Target, UiAction, UtteranceId,
+};
 use said_engine::host::{WorkerClient, WorkerConfig};
 use said_platform::{
     Platform,
     fake::{FakePlatform, PlatformCall},
 };
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     fs,
     path::PathBuf,
     time::{Duration, Instant},
@@ -58,6 +61,9 @@ impl Directory {
                     name: "Scratch".into(),
                 })),
                 copies: RefCell::new(vec![]),
+                focus_queue: said_platform::focus::FocusQueue::default(),
+                depart_at: Cell::new(0),
+                paste_failure: Cell::new(false),
                 instructions: RefCell::new(vec![]),
             },
             FakeRecorder::new(vec![(vec![1, 2], 0.2)], 1),
@@ -76,6 +82,9 @@ impl Drop for Directory {
 struct TestPlatform {
     inner: FakePlatform,
     copies: RefCell<Vec<String>>,
+    focus_queue: said_platform::focus::FocusQueue,
+    depart_at: Cell<u8>,
+    paste_failure: Cell<bool>,
     instructions: RefCell<Vec<String>>,
 }
 impl Platform for TestPlatform {
@@ -84,19 +93,41 @@ impl Platform for TestPlatform {
         self.inner.hotkeys()
     }
     fn focused(&self) -> Option<Target> {
+        if self.depart_at.get() == 1 {
+            self.depart_at.set(0);
+            self.focus_queue.push(None);
+            self.focus_queue.push(self.inner.focused());
+        }
         self.inner.focused()
     }
     fn focus(&self, target: &Target) -> Result<()> {
         self.inner.focus(target)
     }
-    fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
-        self.inner.paste(target, text, send)
+    fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
+        if self.paste_failure.get() {
+            return Err("synthetic paste failure".into());
+        }
+        if self.depart_at.get() == 2 {
+            self.depart_at.set(0);
+            self.focus_queue.push(None);
+            self.focus_queue.push(self.inner.focused());
+        }
+        self.focus_queue.post(target, automatic, || {
+            self.inner.paste(target, text, send, automatic)
+        })
     }
     fn make_overlay(&self, window: &()) {
         self.inner.make_overlay(window);
     }
 }
 impl HostPlatform for TestPlatform {
+    fn poll(&mut self) -> Vec<SessionEvent> {
+        self.focus_queue
+            .drain()
+            .into_iter()
+            .map(|target| SessionEvent::FocusChanged { target })
+            .collect()
+    }
     fn instructions(&self) -> Vec<String> {
         self.instructions.borrow().clone()
     }
@@ -401,4 +432,87 @@ fn snapshot_refreshes_capabilities_without_a_settings_or_session_change() {
         host.snapshot().unwrap().host.instructions,
         ["Shortcut release available"]
     );
+}
+
+#[test]
+fn queued_departures_before_query_during_query_and_before_chord_withhold_automatic_paste() {
+    for departure_at in 0..=2 {
+        let directory = Directory::new();
+        let mut host = directory.host();
+        host.start(Mode::Quick, false).unwrap();
+        let id = host.session.views().last().unwrap().id;
+        host.stop().unwrap();
+        host.event(SessionEvent::Engine(EngineOutput {
+            id,
+            event: EngineEvent::Committed("synthetic words".into()),
+        }))
+        .unwrap();
+        if departure_at == 0 {
+            host.platform.focus_queue.push(None);
+            host.platform
+                .focus_queue
+                .push(host.platform.inner.focused());
+        } else {
+            host.platform.depart_at.set(departure_at);
+        }
+        host.event(SessionEvent::Engine(EngineOutput {
+            id,
+            event: EngineEvent::Final,
+        }))
+        .unwrap();
+        assert!(
+            !host
+                .platform
+                .inner
+                .calls
+                .borrow()
+                .iter()
+                .any(|call| matches!(call, PlatformCall::Paste { .. }))
+        );
+        let row = host.history.get(id).unwrap().unwrap();
+        assert_eq!(row.text.as_deref(), Some("synthetic words"));
+        assert!(row.pasted_at.is_none());
+        assert_eq!(
+            host.session
+                .views()
+                .find(|view| view.id == id)
+                .unwrap()
+                .phase,
+            Phase::Saved
+        );
+        host.ui(UiAction::InsertLast).unwrap();
+        assert_paste(&host, "synthetic words");
+    }
+}
+
+#[test]
+fn interactive_insert_rejects_failed_delivery_with_its_reason_and_succeeds_on_retry() {
+    let directory = Directory::new();
+    let mut host = directory.host();
+    let id = complete(&mut host, Mode::Interactive);
+    host.platform.paste_failure.set(true);
+    assert_eq!(
+        host.ui(UiAction::Insert { id }).unwrap_err().to_string(),
+        "synthetic paste failure"
+    );
+    assert_eq!(
+        host.session
+            .views()
+            .find(|view| view.id == id)
+            .unwrap()
+            .phase,
+        Phase::Reviewing
+    );
+    assert!(host.history.get(id).unwrap().unwrap().pasted_at.is_none());
+    host.platform.paste_failure.set(false);
+    host.ui(UiAction::Insert { id }).unwrap();
+    assert_eq!(
+        host.session
+            .views()
+            .find(|view| view.id == id)
+            .unwrap()
+            .phase,
+        Phase::Pasted
+    );
+    assert_paste(&host, "do delete the file");
 }

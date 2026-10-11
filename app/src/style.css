@@ -729,3 +729,26 @@ html[data-demo="true"] .panel-stage {
     -webkit-text-fill-color: CanvasText;
   }
 }
+
+.setup-window {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 16px;
+}
+.setup {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.setup-content {
+  min-height: 0;
+  overflow-y: auto;
+}
+.setup-foot {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+}

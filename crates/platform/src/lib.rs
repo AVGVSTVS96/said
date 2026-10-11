@@ -1,4 +1,5 @@
 pub mod fake;
+pub mod focus;
 
 #[cfg(all(target_os = "linux", feature = "native"))]
 #[path = "../linux/mod.rs"]
@@ -17,6 +18,6 @@ pub trait Platform {
     fn hotkeys(&self) -> Receiver<Hotkey>;
     fn focused(&self) -> Option<Target>;
     fn focus(&self, target: &Target) -> Result<()>;
-    fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()>;
+    fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()>;
     fn make_overlay(&self, window: &Self::Window);
 }

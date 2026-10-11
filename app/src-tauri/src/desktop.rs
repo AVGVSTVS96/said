@@ -14,8 +14,6 @@ pub struct Desktop {
     #[cfg(target_os = "linux")]
     native: Option<LinuxPlatform>,
     #[cfg(target_os = "linux")]
-    changes: Option<linux::niri::FocusChanges>,
-    #[cfg(target_os = "linux")]
     login: Option<crate::login::Login>,
     #[cfg(target_os = "macos")]
     native: Option<MacosPlatform<tauri::Window>>,
@@ -58,11 +56,11 @@ impl Platform for Desktop {
             .ok_or("platform unavailable")?
             .focus(target)
     }
-    fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
+    fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
         self.native
             .as_ref()
             .ok_or("platform unavailable")?
-            .paste(target, text, send)
+            .paste(target, text, send, automatic)
     }
     fn make_overlay(&self, window: &tauri::Window) {
         if let Some(native) = &self.native {
@@ -117,10 +115,6 @@ impl HostPlatform for Desktop {
                 config.shortcuts = shortcuts;
                 config.paste_chords = paste_chords;
                 let native = LinuxPlatform::new(config)?;
-                self.changes = native
-                    .niri()
-                    .map(linux::niri::Niri::focus_changes)
-                    .transpose()?;
                 self.native = Some(native);
             }
         }
@@ -199,11 +193,11 @@ impl HostPlatform for Desktop {
             events.extend(login.poll());
         }
         #[cfg(target_os = "linux")]
-        if let Some(changes) = &self.changes {
+        if let Some(native) = &self.native {
             events.extend(
-                changes
-                    .events()
-                    .try_iter()
+                native
+                    .focus_changes()
+                    .into_iter()
                     .map(|target| SessionEvent::FocusChanged { target }),
             );
         }
@@ -232,7 +226,7 @@ impl HostPlatform for Desktop {
             events.extend(
                 native
                     .focus_changes()
-                    .try_iter()
+                    .into_iter()
                     .map(|target| SessionEvent::FocusChanged { target }),
             );
             for status in native.input_statuses().try_iter() {

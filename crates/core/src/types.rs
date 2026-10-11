@@ -309,6 +309,7 @@ pub enum Effect {
         target: Target,
         text: String,
         send: bool,
+        automatic: bool,
     },
     RecordDelivery {
         id: UtteranceId,

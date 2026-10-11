@@ -198,7 +198,7 @@ export function App({
           )}
         </FloatingPanel>
       ) : (
-        <main className="window">
+        <main className={`window${screen === "setup" ? " setup-window" : ""}`}>
           {screen === "history" && selected ? (
             editor(() => setSelected(null))
           ) : screen === "history" ? (

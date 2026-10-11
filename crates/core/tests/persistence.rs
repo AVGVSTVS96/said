@@ -304,12 +304,13 @@ fn restart_recovery_and_insert_last_run_against_sqlite_and_fake_adapters() {
                         target,
                         text,
                         send,
+                        automatic,
                     } => {
                         assert_eq!(
                             history.get(id).unwrap().unwrap().raw_text.as_deref(),
                             Some(text.as_str())
                         );
-                        platform.paste(&target, &text, send).unwrap();
+                        platform.paste(&target, &text, send, automatic).unwrap();
                         events.push_back(SessionEvent::Pasted { id, at: 1000 });
                     }
                     Effect::RecordDelivery { id, target, at } => {

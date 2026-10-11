@@ -39,7 +39,7 @@ impl<W> MacosPlatform<W> {
         self.input = Input::start(shortcuts)?;
         Ok(())
     }
-    pub fn focus_changes(&self) -> Receiver<Option<Target>> {
+    pub fn focus_changes(&self) -> Vec<Option<Target>> {
         self.desktop.focus_changes()
     }
     pub fn input_statuses(&self) -> Receiver<InputStatus> {
@@ -69,8 +69,8 @@ impl<W: Sync> Platform for MacosPlatform<W> {
     fn focus(&self, target: &Target) -> Result<()> {
         self.desktop.focus(target)
     }
-    fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
-        self.desktop.paste(target, text, send)
+    fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
+        self.desktop.paste(target, text, send, automatic)
     }
     fn make_overlay(&self, window: &W) {
         if let Err(error) = objc::main_thread(|| (self.overlay)(window)) {

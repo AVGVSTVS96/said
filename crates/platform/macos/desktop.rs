@@ -89,7 +89,7 @@ impl Desktop {
             Ok(target)
         }
     }
-    pub fn focus_changes(&self) -> crossbeam_channel::Receiver<Option<Target>> {
+    pub fn focus_changes(&self) -> Vec<Option<Target>> {
         self.changes.events()
     }
     fn pid(&self, target: &Target) -> Result<i32> {
@@ -161,7 +161,7 @@ impl Desktop {
     pub fn copy(&self, text: &str) -> Result<()> {
         objc::main_thread(|| objc::autorelease(|| write_clipboard(text)))
     }
-    pub fn paste(&self, target: &Target, text: &str, send: bool) -> Result<()> {
+    pub fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
         if text.is_empty() {
             return Ok(());
         }
@@ -188,8 +188,11 @@ impl Desktop {
                 if permissions::secure_input_enabled() || permissions::session_locked() {
                     return Err("Input became unavailable. Text remains on the clipboard.".into());
                 }
-                ffi::CGEventPostToPid(pid, down.0);
-                ffi::CGEventPostToPid(pid, up.0);
+                self.changes.post(target, automatic, || {
+                    ffi::CGEventPostToPid(pid, down.0);
+                    ffi::CGEventPostToPid(pid, up.0);
+                    Ok(())
+                })?;
                 if let Some((down, up)) = enter {
                     std::thread::sleep(Duration::from_millis(50));
                     self.check_focus(target)?;

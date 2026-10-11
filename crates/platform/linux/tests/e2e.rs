@@ -1,11 +1,11 @@
 use gtk::prelude::*;
 use gtk_layer_shell::LayerShell;
-use std::{fs, path::PathBuf, process::Command, time::Duration};
 use said_core::{Hotkey, Target};
 use said_platform::{
     Platform,
     linux::{Config, LinuxPlatform, Mode, control::ControlCommand, overlay},
 };
+use std::{fs, path::PathBuf, process::Command, time::Duration};
 
 fn main() -> said_core::Result<()> {
     let root = PathBuf::from(std::env::var("SAID_TEST_ROOT")?);
@@ -50,7 +50,7 @@ fn main() -> said_core::Result<()> {
             .find(|target| target.app_id == app_id)
             .ok_or("missing scratch target")?;
         platform.focus(target)?;
-        platform.paste(target, text, false)?;
+        platform.paste(target, text, false, false)?;
         let path = root.join(format!("{name}.txt"));
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while fs::read(&path).ok().as_deref() != Some(text.as_bytes()) {
@@ -84,7 +84,7 @@ fn main() -> said_core::Result<()> {
     println!("PASS nonfocusing layer-shell overlay");
     assert_eq!(window.keyboard_mode(), gtk_layer_shell::KeyboardMode::None);
     assert_eq!(window.exclusive_zone(), 0);
-    platform.paste(target, "OVERLAY", false)?;
+    platform.paste(target, "OVERLAY", false, false)?;
     window.close();
     while gtk::events_pending() {
         gtk::main_iteration_do(false);
@@ -94,7 +94,11 @@ fn main() -> said_core::Result<()> {
         .find(|other| !other.same_window(target))
         .unwrap();
     platform.focus(other)?;
-    assert!(platform.paste(target, "MUST NOT PASTE", false).is_err());
+    assert!(
+        platform
+            .paste(target, "MUST NOT PASTE", false, false)
+            .is_err()
+    );
     println!("PASS focus mismatch rejects injection");
     let mut observed = false;
     while let Ok(event) = niri_events.recv_timeout(Duration::from_millis(100)) {
@@ -127,7 +131,11 @@ fn main() -> said_core::Result<()> {
         .args(["--no-newline", "--type", "text/plain;charset=utf-8"])
         .output()?;
     assert_eq!(copied.stdout, text.as_bytes());
-    assert!(clipboard.paste(other, "MUST NOT INJECT", true).is_err());
+    assert!(
+        clipboard
+            .paste(other, "MUST NOT INJECT", true, false)
+            .is_err()
+    );
     println!("PASS clipboard-only fallback preserves bytes and refuses input");
     for name in ["gtk", "electron", "terminal"] {
         let keys = fs::read(root.join(format!("{name}.keys"))).unwrap_or_default();
@@ -150,7 +158,7 @@ fn main() -> said_core::Result<()> {
     }
     println!("PASS no stray Enter into any scratch target");
     platform.focus(target)?;
-    platform.paste(target, "EXPLICIT SEND", true)?;
+    platform.paste(target, "EXPLICIT SEND", true, false)?;
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     while !fs::read_to_string(root.join("gtk.keys"))
         .unwrap_or_default()

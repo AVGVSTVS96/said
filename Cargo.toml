@@ -4,7 +4,7 @@ default-members = ["crates/core", "crates/audio", "crates/engine", "crates/platf
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 license = "MIT"
 rust-version = "1.90"

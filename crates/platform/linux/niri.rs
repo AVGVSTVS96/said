@@ -128,6 +128,7 @@ fn target(window: &Value) -> Result<Target> {
 
 pub struct FocusChanges {
     events: crossbeam_channel::Receiver<Option<Target>>,
+    pub queue: std::sync::Arc<crate::focus::FocusQueue>,
     stream: UnixStream,
     thread: Option<std::thread::JoinHandle<()>>,
 }
@@ -152,6 +153,8 @@ impl Niri {
         let mut reader = self.events()?;
         let stream = reader.get_ref().try_clone()?;
         let (sender, events) = crossbeam_channel::unbounded();
+        let queue = std::sync::Arc::new(crate::focus::FocusQueue::default());
+        let observed = queue.clone();
         let thread = std::thread::spawn(move || {
             let mut windows = std::collections::BTreeMap::new();
             let mut focused: Option<Target> = None;
@@ -210,14 +213,19 @@ impl Niri {
                         changed = true;
                     }
                 }
-                if changed && sender.send(focused.clone()).is_err() {
-                    return;
+                if changed {
+                    observed.push(focused.clone());
+                    if sender.send(focused.clone()).is_err() {
+                        return;
+                    }
                 }
             }
+            observed.push(None);
             let _ = sender.send(None);
         });
         Ok(FocusChanges {
             events,
+            queue,
             stream,
             thread: Some(thread),
         })

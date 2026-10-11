@@ -398,7 +398,26 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             }
             return Ok(());
         }
-        self.event(SessionEvent::Ui(action))
+        let inserting = matches!(action, UiAction::Insert { .. });
+        self.event(SessionEvent::Ui(action))?;
+        if inserting
+            && let Some(id) = id
+            && !self
+                .session
+                .views()
+                .any(|view| view.id == id && view.phase == Phase::Pasted)
+        {
+            return Err(self
+                .state
+                .notifications
+                .get(&id)
+                .cloned()
+                .unwrap_or_else(|| {
+                    "Text was not inserted. Finish recognition and try again.".into()
+                })
+                .into());
+        }
+        Ok(())
     }
     pub fn action(&mut self, action: HostAction) -> Result<()> {
         match action {
@@ -851,10 +870,11 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     });
                 }
                 Effect::CheckFocus { id } => {
-                    response = Some(SessionEvent::FocusChecked {
-                        id,
-                        target: self.platform.focused(),
-                    })
+                    let target = self.platform.focused();
+                    for event in self.platform.poll() {
+                        self.event(event)?;
+                    }
+                    response = Some(SessionEvent::FocusChecked { id, target })
                 }
                 Effect::FocusTarget { id, target } => {
                     let _ = self.platform.focus(&target);
@@ -868,8 +888,9 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     target,
                     text,
                     send,
+                    automatic,
                 } => {
-                    response = Some(match self.platform.paste(&target, &text, send) {
+                    response = Some(match self.platform.paste(&target, &text, send, automatic) {
                         Ok(()) => SessionEvent::Pasted { id, at: now() },
                         Err(error) => SessionEvent::PasteFailed {
                             id,

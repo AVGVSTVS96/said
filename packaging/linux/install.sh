@@ -19,3 +19,5 @@ for icon in "$root"/app/src-tauri/icons/linux/*.png; do
     size="${icon##*-}"; size="${size%.png}"
     install -Dm644 "$icon" "$destination/share/icons/hicolor/${size}x${size}/apps/said.png"
 done
+
+python3 "$root/packaging/check-private-paths.py" "$destination"
