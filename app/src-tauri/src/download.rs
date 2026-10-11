@@ -88,7 +88,7 @@ pub fn install(
             &mut progress,
         )?;
     }
-    let selected = manifest.runtime(model)?;
+    let selected = &manifest.runtime;
     let key = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
     let artifact = selected
         .artifacts
@@ -112,42 +112,21 @@ pub fn install(
         .ok_or("runtime directory missing")?
         .to_owned();
     private_dir(&runtime)?;
-    if matches!(artifact.format.as_str(), "tar" | "tar.bz2") {
-        let input = File::open(&archive)?;
-        let decoder: Box<dyn Read> = if artifact.format == "tar.bz2" {
-            Box::new(bzip2::read::BzDecoder::new(input))
-        } else {
-            Box::new(flate2::read::GzDecoder::new(input))
+    if artifact.format != "tar.bz2" {
+        return Err("unsupported runtime archive".into());
+    }
+    let mut archive = tar::Archive::new(bzip2::read::BzDecoder::new(File::open(&archive)?));
+    for entry in archive.entries()? {
+        let mut entry = entry?;
+        let path = entry.path()?.into_owned();
+        let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
         };
-        let mut archive = tar::Archive::new(decoder);
-        for entry in archive.entries()? {
-            let mut entry = entry?;
-            let path = entry.path()?.into_owned();
-            let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
-                continue;
-            };
-            if !entry.header().entry_type().is_file()
-                || !(name.ends_with(".so") || name.contains(".so.") || name.ends_with(".dylib"))
-            {
-                continue;
-            }
+        if entry.header().entry_type().is_file()
+            && (name.ends_with(".so") || name.contains(".so.") || name.ends_with(".dylib"))
+        {
             install_library(&mut entry, &runtime.join(name))?;
         }
-    } else if artifact.format == "wheel" {
-        let mut archive = zip::ZipArchive::new(File::open(&archive)?)?;
-        for index in 0..archive.len() {
-            let mut entry = archive.by_index(index)?;
-            let path = Path::new(entry.name());
-            if !entry.name().starts_with("moonshine_voice/")
-                || path.extension().and_then(|s| s.to_str()) != Some("dylib")
-            {
-                continue;
-            }
-            let destination = runtime.join(path.file_name().ok_or("missing library filename")?);
-            install_library(&mut entry, &destination)?;
-        }
-    } else {
-        return Err("unsupported runtime archive".into());
     }
     if !directory.join(library).is_file() {
         return Err("runtime archive omitted its library".into());

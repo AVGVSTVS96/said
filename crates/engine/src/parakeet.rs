@@ -247,7 +247,16 @@ impl Decoded {
 }
 
 fn text(words: &[Word], first: bool) -> String {
-    let result: String = words.iter().map(|word| word.text.as_str()).collect();
+    let mut result = String::new();
+    for word in words {
+        if (!result.is_empty() || !first)
+            && !word.text.starts_with(char::is_whitespace)
+            && !result.ends_with(char::is_whitespace)
+        {
+            result.push(' ');
+        }
+        result.push_str(&word.text);
+    }
     if first {
         result.trim_start_matches(' ').to_owned()
     } else {
@@ -255,43 +264,104 @@ fn text(words: &[Word], first: bool) -> String {
     }
 }
 
-fn merge(previous: &[Word], next: &[Word], offset: usize) -> Result<Vec<Word>> {
+fn merge(previous: &[Word], next: &[Word], offset: usize) -> Vec<Word> {
     if previous.is_empty() {
-        return Ok(next.to_vec());
+        return next.to_vec();
+    }
+    if next.is_empty() {
+        return previous.to_vec();
+    }
+    let count = next
+        .iter()
+        .take_while(|word| word.start <= offset + 5 * RATE + RATE * 80 / 1000)
+        .count();
+    if count == 0 {
+        return previous.iter().chain(next).cloned().collect();
+    }
+    #[derive(Clone, Copy, Default)]
+    enum Step {
+        #[default]
+        Previous,
+        Next,
+        Matched,
+    }
+    #[derive(Clone, Copy, Default)]
+    struct Cell {
+        matches: usize,
+        error: usize,
+        step: Step,
+    }
+    let width = count + 1;
+    let mut cells = vec![Cell::default(); (previous.len() + 1) * width];
+    for cell in &mut cells[1..width] {
+        cell.step = Step::Next;
+    }
+    let rank = |cell: Cell| (cell.matches, std::cmp::Reverse(cell.error));
+    // NeMo TDT timestamps have an 80 ms encoder-frame resolution.
+    let frame = RATE * 80 / 1000;
+    for (i, old) in previous.iter().enumerate() {
+        for (j, new) in next[..count].iter().enumerate() {
+            let mut chosen = Cell {
+                step: Step::Previous,
+                ..cells[i * width + j + 1]
+            };
+            let left = Cell {
+                step: Step::Next,
+                ..cells[(i + 1) * width + j]
+            };
+            if rank(left) > rank(chosen) {
+                chosen = left;
+            }
+            if old.start <= new.end.saturating_add(frame)
+                && new.start <= old.end.saturating_add(frame)
+            {
+                let diagonal = cells[i * width + j];
+                let matched = Cell {
+                    matches: diagonal.matches + 1,
+                    error: diagonal.error
+                        + old.start.abs_diff(new.start)
+                        + old.end.abs_diff(new.end),
+                    step: Step::Matched,
+                };
+                if rank(matched) >= rank(chosen) {
+                    chosen = matched;
+                }
+            }
+            cells[(i + 1) * width + j + 1] = chosen;
+        }
+    }
+    let (mut i, mut j) = (previous.len(), count);
+    let mut pairs = Vec::new();
+    while i > 0 || j > 0 {
+        match cells[i * width + j].step {
+            Step::Matched => {
+                i -= 1;
+                j -= 1;
+                pairs.push((i, j));
+            }
+            Step::Previous => i -= 1,
+            Step::Next => j -= 1,
+        }
     }
     let middle = offset + 5 * RATE / 2;
-    let mut left = middle;
-    let mut right = middle;
-    loop {
-        let before = (left, right);
-        for word in previous.iter().chain(next) {
-            if word.start < right && word.end > left || word.start < middle && word.end > middle {
-                left = left.min(word.start);
-                right = right.max(word.end);
-            }
-        }
-        if (left, right) == before {
-            break;
-        }
-    }
-    if right > offset + 5 * RATE {
-        if left < offset {
-            return Err("Parakeet overlap has no complete timestamp boundary".into());
-        }
-        return Ok(previous
-            .iter()
-            .filter(|w| w.end <= left)
-            .chain(next.iter().filter(|w| w.start >= left))
-            .cloned()
-            .collect());
-    }
-    // Assign a boundary-spanning acoustic component to one complete decode.
-    Ok(previous
+    let boundary = pairs.into_iter().min_by_key(|&(old, new)| {
+        let time = previous[old].start.min(next[new].start)
+            + next[new].start.abs_diff(previous[old].start) / 2;
+        (
+            time.abs_diff(middle),
+            previous[old].start.abs_diff(next[new].start),
+        )
+    });
+    let Some((old, new)) = boundary else {
+        let mut words: Vec<_> = previous.iter().chain(next).cloned().collect();
+        words.sort_by_key(|word| word.start);
+        return words;
+    };
+    previous[..=old]
         .iter()
-        .filter(|w| w.start < right)
-        .chain(next.iter().filter(|w| w.start >= right))
+        .chain(&next[new + 1..])
         .cloned()
-        .collect())
+        .collect()
 }
 
 pub struct Parakeet {
@@ -338,7 +408,7 @@ impl Parakeet {
         Ok(if self.offset == 0 {
             decoded
         } else {
-            merge(&self.pending, &decoded, self.offset)?
+            merge(&self.pending, &decoded, self.offset)
         })
     }
 

@@ -37,7 +37,7 @@ impl Watchdog {
 
     pub fn budget(&self, floor: Duration, samples: u64) -> Duration {
         let peak = self.recent.iter().copied().fold(0.0, f64::max);
-        let segment_work = self.real_time_factor() * samples.min(240000) as f64 / 16000.0;
+        let segment_work = self.real_time_factor() * samples.min(480000) as f64 / 16000.0;
         let update_work = peak * samples.min(8000) as f64 / 16000.0;
         floor.max(Duration::from_secs_f64(segment_work.max(update_work) * 4.0))
     }
@@ -60,7 +60,7 @@ mod tests {
         assert_eq!(watchdog.budget(floor, 15 * 16000), Duration::from_secs(180));
         assert_eq!(
             watchdog.budget(floor, 600 * 16000),
-            Duration::from_secs(180)
+            Duration::from_secs(360)
         );
         watchdog.observe(8000, Duration::from_secs(3));
         assert_eq!(watchdog.real_time_factor(), 6.0);

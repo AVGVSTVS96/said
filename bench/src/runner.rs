@@ -330,9 +330,9 @@ pub fn run(mut options: Options) -> Result<()> {
         "build": {"rust": std::process::Command::new("rustc").arg("--version").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned()),
         "dependency_lock_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../Cargo.lock")))},
         "host": host(), "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
-        "engine_crate": env!("CARGO_PKG_VERSION"), "runtimes": manifest.runtimes.iter().map(|(name, runtime)| (name, &runtime.version)).collect::<BTreeMap<_, _>>(),
+        "engine_crate": env!("CARGO_PKG_VERSION"), "runtime_version": manifest.runtime.version,
         "binary_sha256": corpus::hash(&std::env::current_exe()?)?,
-        "watchdog": {"policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 15), recent peak busy RTF * min(uncommitted seconds, 0.5)))", "runtime_patch_sha256": format!("{:x}", <sha2::Sha256 as sha2::Digest>::digest(include_bytes!("../../crates/engine/moonshine-0.1.5.patch")))},
+        "watchdog": {"policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 30), recent peak busy RTF * min(uncommitted seconds, 0.5)))"},
         "worker_deadlines_seconds": {"startup": options.startup.as_secs(), "audio": options.audio.as_secs(), "finish": options.finish.as_secs()},
         "reference_statuses": clips.iter().fold(BTreeMap::new(), |mut counts, c| { *counts.entry(&c.reference_status).or_insert(0) += 1; counts }),
         "engines": {},
@@ -526,7 +526,7 @@ fn verify_model(manifest: &Manifest, model: &str, cache: &Path, trace: bool) -> 
         }
         files.insert(name, actual);
     }
-    let runtime = manifest.runtime(config)?;
+    let runtime = &manifest.runtime;
     let library_hash = runtime
         .libraries
         .get(std::env::consts::OS)
@@ -548,7 +548,7 @@ fn verify_model(manifest: &Manifest, model: &str, cache: &Path, trace: bool) -> 
         }
     }
     Ok(
-        json!({"adapter": config.adapter, "ranking_candidate": config.adapter != "fake", "runtime_files_sha256": runtime_files, "runtime_version": runtime.version, "runtime_source_revision": runtime.source.revision, "runtime_source_sha256": runtime.source.sha256, "threads": config.threads, "provider": config.provider, "chunk_seconds": if config.adapter == "parakeet" { Some(30) } else { None }, "overlap_seconds": if config.adapter == "parakeet" { Some(5) } else { None }, "architecture": config.architecture, "update_samples": config.update_samples,
+        json!({"adapter": config.adapter, "ranking_candidate": config.adapter != "fake", "runtime_files_sha256": runtime_files, "runtime_version": runtime.version, "runtime_source_revision": runtime.source.revision, "runtime_source_sha256": runtime.source.sha256, "threads": config.threads, "provider": config.provider, "chunk_seconds": if config.adapter == "parakeet" { Some(30) } else { None }, "overlap_seconds": if config.adapter == "parakeet" { Some(5) } else { None }, "update_samples": config.update_samples,
         "source": config.source, "license": config.license, "files": files, "runtime_library_sha256": library_hash}),
     )
 }

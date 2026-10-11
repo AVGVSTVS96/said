@@ -88,11 +88,11 @@ impl Drop for AlignedTail {
 }
 
 #[test]
-#[ignore = "requires Parakeet, patched Moonshine Small, and the public benchmark cache"]
+#[ignore = "requires Parakeet and the public benchmark cache"]
 fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() {
     let cache = model_cache().unwrap();
     let bench = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bench/clips");
-    for model in ["moonshine-small-en", "parakeet-v3-fp32"] {
+    for model in ["parakeet-v3-fp32"] {
         let client = WorkerClient::warm(WorkerConfig {
             executable: env!("CARGO_BIN_EXE_voice-engine").into(),
             args: vec!["--worker".into(), model.into()],

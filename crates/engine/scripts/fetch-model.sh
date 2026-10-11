@@ -19,9 +19,8 @@ while IFS=$'\t' read -r filename hash; do
     verify "$file.part" "$hash"
     mv "$file.part" "$file"
 done < <(jq -r --arg model "$model" '.models[$model].files | to_entries[] | [.key,.value] | @tsv' "$manifest")
-adapter="$(jq -er --arg model "$model" '.models[$model].adapter' "$manifest")"
-artifact="$(jq -er --arg adapter "$adapter" --arg key "$platform-$arch" '.runtimes[$adapter].artifacts[$key]' "$manifest")"
-library="$(jq -er --arg adapter "$adapter" --arg platform "$platform" '.runtimes[$adapter].libraries[$platform]' "$manifest")"
+artifact="$(jq -er --arg key "$platform-$arch" '.runtime.artifacts[$key]' "$manifest")"
+library="$(jq -er --arg platform "$platform" '.runtime.libraries[$platform]' "$manifest")"
 runtime="$cache/$(dirname "$(dirname "$library")")"
 mkdir -p "$cache/runtime"
 scratch="$(mktemp -d "$cache/runtime/download.XXXXXX")"
@@ -29,11 +28,8 @@ trap 'rm -rf "$scratch"' EXIT
 curl -fsSL "$(jq -r '.url' <<<"$artifact")" -o "$scratch/archive"
 verify "$scratch/archive" "$(jq -r '.sha256' <<<"$artifact")"
 mkdir "$scratch/unpacked"
-case "$(jq -r '.format' <<<"$artifact")" in
-    tar) tar xzf "$scratch/archive" -C "$scratch/unpacked" --strip-components=1 ;;
-    tar.bz2) tar xjf "$scratch/archive" -C "$scratch/unpacked" --strip-components=1 ;;
-    wheel) mkdir "$scratch/unpacked/lib"; unzip -jq "$scratch/archive" 'moonshine_voice/*.dylib' -d "$scratch/unpacked/lib" ;;
-esac
+test "$(jq -r '.format' <<<"$artifact")" = tar.bz2
+tar xjf "$scratch/archive" -C "$scratch/unpacked" --strip-components=1
 mkdir -p "$runtime"
 while IFS= read -r -d '' source; do
     destination="$runtime/${source#"$scratch/unpacked/"}"
@@ -41,7 +37,4 @@ while IFS= read -r -d '' source; do
     cp "$source" "$destination.part"
     mv "$destination.part" "$destination"
 done < <(find "$scratch/unpacked" -type f -print0)
-if test "$adapter" = moonshine; then
-    "$(dirname "$manifest")/scripts/build-runtime.sh"
-fi
 printf 'Ready: %s (%s), %s\n' "$model" "$directory" "$runtime"

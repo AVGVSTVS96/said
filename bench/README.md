@@ -15,9 +15,8 @@ CARGO_BUILD_JOBS=2 cargo build --locked --manifest-path bench/Cargo.toml
 target/debug/voice-bench bench bench/clips.jsonl --ci
 ```
 
-That command selects the bundled platform default. Both real engines run
-sequentially with `--all`, or select `--engine moonshine-small-en` or
-`--engine moonshine-medium-en`. The fake worker is for protocol checks:
+That command selects the bundled platform default. The native Parakeet default runs with no engine flag, or select
+`--engine parakeet-v3-fp32`. `--all` runs the installed manifest catalog. The fake worker is for protocol checks:
 `--engine fake --trace /path/to/scripted-events.json`.
 Scribe has no implemented adapter and cannot be benchmarked yet.
 
@@ -25,14 +24,13 @@ The 12 CI clips are checked into `bench/clips/`. The full corpus adds a long
 synthetic monologue kept outside git. Provision it, then run all engines:
 
 ```sh
-crates/engine/scripts/fetch-model.sh moonshine-small-en
-crates/engine/scripts/fetch-model.sh moonshine-medium-en
+crates/engine/scripts/fetch-model.sh
 bench/scripts/fetch.sh
 target/debug/voice-bench bench bench/clips.jsonl --all \
   --audio-root "$HOME/.cache/voice-models/bench-public"
 ```
 
-Provisioning needs Python 3 and curl for the engine script; the long clip also
+Model provisioning needs curl, jq, OpenSSL, tar and bzip2 support; the long clip also
 needs `uv`. Public source URLs and SHA-256 hashes live in `sources.json`.
 `recipes.jsonl` pins AMI crop times, verbatim references, TTS input and control
 seeds. The fetch script verifies source and derived WAV hashes, uses one Piper
@@ -69,6 +67,13 @@ release default. Never use recognizer agreement as acoustic adjudication.
 
 ## Manifest and private runs
 
+`--unpaced` feeds audio as quickly as the disk spool accepts it, through the
+same adapter and protocol. It is for file fidelity/throughput runs. The summary
+labels that mode explicitly; its first-partial/release times are not live-input
+latency measurements. Real-time pacing remains the default. Failed clips score
+as empty hypotheses and count as deletions; successful latency samples retain
+separate denominators.
+
 One JSON object per line, UTF-8. Blank lines are allowed; unknown fields,
 duplicate IDs, invalid terms, missing hashes and incomplete polarity twins fail.
 `audio` resolves relative to the manifest, or `--audio-root` overrides the root.
@@ -89,7 +94,7 @@ The identical command runs private audio outside the repository:
 
 ```sh
 target/debug/voice-bench bench /private/corpus/clips.jsonl \
-  --engine moonshine-small-en --output /private/results/new-run
+  --engine parakeet-v3-fp32 --unpaced --output /private/results/new-run
 ```
 
 Private references use `license: private` and an honest `reference_status`
@@ -102,7 +107,7 @@ Results default to a new directory under `~/.cache/voice-models/bench-runs/`,
 not the repo. Each directory is 0700 and each output file 0600. Explicit output
 paths must be new. `clips.jsonl` records the reference, raw text, every received
 event/timestamp, scores and failures. `summary.json` records aggregates, strata,
-model hashes, native library hashes, runtime version, corpus/binary/dependency
+model hashes, native library hashes, runtime version, provider/thread/chunk settings, corpus/binary/dependency
 hashes, deadlines and host CPU/OS/architecture; it omits hostname and input paths.
 Treat private results as private: they contain transcripts and reference text.
 An incomplete run exits nonzero; failed clips never masquerade as empty success.

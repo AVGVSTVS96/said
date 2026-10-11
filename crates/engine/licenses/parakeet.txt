@@ -1,0 +1,10 @@
+NVIDIA Parakeet-TDT-0.6B-v3
+Copyright NVIDIA Corporation.
+Original model: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+Weights license: Creative Commons Attribution 4.0 International (CC-BY-4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+The distributed ONNX export is provided by the sherpa-onnx maintainer:
+https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3
+Revision: 1a468a35cbba69418f126de829e75261dea4a4e4
+The app uses this unquantized export without modifying its weights.
