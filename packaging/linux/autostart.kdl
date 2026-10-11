@@ -1,1 +1,1 @@
-spawn-at-startup "systemd-run" "--user" "--scope" "-q" "--unit=said" "-p" "PartOf=graphical-session.target" "-p" "MemoryMax=4G" "-p" "MemorySwapMax=0" "--" "/usr/bin/said"
+spawn-at-startup "systemd-run" "--user" "--scope" "-q" "--unit=said" "-p" "PartOf=graphical-session.target" "-p" "MemoryMax=4G" "-p" "MemorySwapMax=0" "--" "/usr/bin/newgrp" "input" "-c" "/usr/bin/said"

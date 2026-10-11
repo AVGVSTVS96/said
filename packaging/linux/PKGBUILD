@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc='Local dictation with Parakeet v3'
 arch=('x86_64')
 license=('MIT')
-depends=('webkit2gtk-4.1' 'libayatana-appindicator' 'gtk-layer-shell' 'alsa-lib' 'wl-clipboard' 'libxkbcommon')
+depends=('webkit2gtk-4.1' 'libayatana-appindicator' 'gtk-layer-shell' 'alsa-lib' 'wl-clipboard' 'libxkbcommon' 'util-linux')
 makedepends=('rust' 'bun' 'git' 'curl' 'jq' 'openssl' 'bzip2')
 options=('!lto' '!debug' '!strip')
 source=("said::git+file://${SAID_REPO:-$(cd "$startdir/../.." && pwd)}#commit=${SAID_REVISION:-$(git -C "$startdir/../.." rev-parse HEAD)}")

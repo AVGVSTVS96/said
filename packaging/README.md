@@ -32,9 +32,10 @@ before activating that target. Enable it in a systemd graphical session.
 
 On Niri, prefer its native startup hook: include `/usr/share/said/autostart.kdl`
 from the compositor configuration instead of enabling the user service. It starts
-a 4G/no-swap scope tied to `graphical-session.target`, inheriting the actual login
-environment and groups. This matters for input-group changes when the user manager
-lingers between logins. Choose one startup mechanism, so only one app runs.
+a 4G/no-swap scope tied to `graphical-session.target`, inheriting the Wayland
+environment. Join `input` before using this snippet: `newgrp input -c` refreshes
+said's groups even when Niri and the user manager linger with their old groups.
+Choose one startup mechanism, so only one app runs.
 
 Show `packaging/linux/niri.kdl` before adding this include to Niri configuration:
 
