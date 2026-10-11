@@ -31,4 +31,6 @@ hdiutil create -ov -volname said -srcfolder "$stage" -format UDZO "$output/said-
 codesign --force --sign - "$output/said-$version-macos-arm64.dmg"
 python3 "$root/packaging/check-private-paths.py" "$output/said-$version-macos-arm64.dmg"
 rm -rf "$stage"
-shasum -a 256 "$output/said-$version-macos-arm64.dmg" > "$output/SHA256SUMS"
+cd "$output"
+shasum -a 256 "said-$version-macos-arm64.dmg" > SHA256SUMS
+python3 "$root/packaging/check-private-paths.py" SHA256SUMS
