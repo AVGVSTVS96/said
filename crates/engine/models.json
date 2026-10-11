@@ -1,7 +1,7 @@
 {
   "defaults": {
-    "linux": "moonshine-small-en",
-    "macos": "moonshine-medium-en"
+    "linux": "parakeet-v3-fp32",
+    "macos": "parakeet-v3-fp32"
   },
   "models": {
     "moonshine-small-en": {
@@ -24,32 +24,12 @@
       "threads": 2,
       "provider": "cpu"
     },
-    "moonshine-medium-en": {
-      "adapter": "moonshine",
-      "architecture": 5,
-      "directory": "moonshine-medium-en",
-      "license": "MIT",
-      "source": "https://download.moonshine.ai/model/medium-streaming-en/quantized_26_08_21/",
-      "files": {
-        "adapter.ort": "3f2a287def57cc094367a0eec3c4f5fc36a32ec420e86764b696920991b20281",
-        "cross_kv.ort": "642f6e21cd305be79342207c6f9e6b681d469d55bc48c72b27b84846fb71fd1e",
-        "decoder_kv.ort": "193bb366492b74fc4ad338c6778e8d8eb916aaa11b5aa264f9057f4db7759486",
-        "encoder.ort": "12915e76ebac7dd287c5ea63965d06103a53ba1ce242a4a34f318f3958c60c37",
-        "frontend.model.ort": "95768855c70c8251eeecc05fedf69999da1b8ab16f605c9f457fd3354b0ad6b5",
-        "frontend.weights.ort": "5ac941f490cbe035b335b99a414cc393d62d4c6f9f2423495b286870d271d709",
-        "streaming_config.json": "28e83b7a28e91472692a035e0dae3116422ae43aeb2bef5ed822c44ce89b88af",
-        "tokenizer.bin": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d"
-      },
-      "update_samples": 8000,
-      "threads": 2,
-      "provider": "cpu"
-    },
     "parakeet-v3-fp32": {
       "adapter": "parakeet",
       "architecture": 0,
       "update_samples": 32000,
-      "threads": 4,
-      "provider": "cpu:EnableCpuMemArena=0|EnableMemPattern=0|SessionConfig.session.intra_op.allow_spinning=0|SessionConfig.session.inter_op.allow_spinning=0",
+      "threads": 8,
+      "provider": "cpu",
       "directory": "parakeet-v3-fp32",
       "license": "CC-BY-4.0",
       "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/1a468a35cbba69418f126de829e75261dea4a4e4/",

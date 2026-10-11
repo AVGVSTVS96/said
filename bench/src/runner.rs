@@ -420,6 +420,13 @@ pub fn run(mut options: Options) -> Result<()> {
                     }
                     Err(error) => {
                         errors += 1;
+                        scores.push(score::score(
+                            &clip.reference,
+                            "",
+                            &clip.terms,
+                            clip.non_speech(),
+                        ));
+                        tags.push(clip.tags.clone());
                         writeln!(
                             records,
                             "{}",
@@ -432,6 +439,15 @@ pub fn run(mut options: Options) -> Result<()> {
             measured_rtf = client.measured_real_time_factor();
         } else if let Err(error) = client {
             errors = clips.len();
+            for clip in &clips {
+                scores.push(score::score(
+                    &clip.reference,
+                    "",
+                    &clip.terms,
+                    clip.non_speech(),
+                ));
+                tags.push(clip.tags.clone());
+            }
             writeln!(
                 records,
                 "{}",
@@ -469,7 +485,7 @@ pub fn run(mut options: Options) -> Result<()> {
         result["cold_load_ms"] = json!(cold_ms);
         result["measured_busy_real_time_factor"] = json!(measured_rtf);
         result["peak_rss_bytes"] = json!(memory.finish());
-        result["successful_clips"] = json!(scores.len());
+        result["successful_clips"] = json!(timings.len());
         result["failed_clips"] = json!(errors);
         result["pins"] = pins;
         report["engines"][model] = result;

@@ -108,6 +108,7 @@ impl Manifest {
                     &cache.join(&config.directory),
                     config.threads,
                     &config.provider,
+                    config.update_samples,
                 )?;
                 let (engine, output) = Parakeet::from_model(id, loaded);
                 Ok((Box::new(engine), output))
@@ -164,6 +165,7 @@ pub fn worker_main(model: Option<&str>, manifest: &Manifest, cache: &Path) -> Re
             &cache.join(&config.directory),
             config.threads,
             &config.provider,
+            config.update_samples,
         )?;
         crate::worker::run(std::io::stdin().lock(), std::io::stdout().lock(), |id| {
             let (engine, output) = Parakeet::from_model(id, loaded.clone());

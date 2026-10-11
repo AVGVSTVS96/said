@@ -12,6 +12,7 @@ for entry in \
  ffmpeg -v error -y -i "$cache/$name.aiff" -ar 16000 -ac 1 -c:a pcm_s16le "$cache/$name.wav"
 done
 ffmpeg -v error -y -f lavfi -i anullsrc=r=16000:cl=mono -t 2 -c:a pcm_s16le "$cache/silence.wav"
-ffmpeg -v error -y -i "$cache/repeats.wav" -i "$cache/silence.wav" \
+ffmpeg -v error -y -f lavfi -i anullsrc=r=16000:cl=mono -t 25 -c:a pcm_s16le "$cache/boundary-gap.wav"
+ffmpeg -v error -y -i "$cache/repeats.wav" -i "$cache/boundary-gap.wav" \
  -filter_complex '[0:a]asplit=2[a][b];[a][1:a][b]concat=n=3:v=0:a=1[out]' \
  -map '[out]' -c:a pcm_s16le "$cache/boundaries.wav"

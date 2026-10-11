@@ -1,4 +1,6 @@
 use std::ffi::{CStr, CString, c_char, c_void};
+use std::io::Write;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -78,6 +80,7 @@ impl Api {
 pub struct ParakeetModel {
     api: Api,
     recognizer: Handle,
+    partial_interval: Duration,
 }
 
 impl ParakeetModel {
@@ -86,33 +89,58 @@ impl ParakeetModel {
         directory: &Path,
         threads: i32,
         provider: &str,
+        update_samples: usize,
     ) -> Result<Rc<Self>> {
         use std::os::unix::ffi::OsStrExt;
-        if threads < 1 {
-            return Err("Parakeet threads must be positive".into());
+        if threads < 1 || update_samples == 0 {
+            return Err("Parakeet threads and update_samples must be positive".into());
         }
         let api = Api::open(library)?;
         let paths = ["encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt"]
             .map(|name| CString::new(directory.join(name).as_os_str().as_bytes()))
             .into_iter()
             .collect::<std::result::Result<Vec<_>, _>>()?;
-        let provider = CString::new(provider)?;
-        let mut config: OfflineRecognizerConfig = unsafe { std::mem::zeroed() };
-        config.feat_config.sample_rate = RATE as i32;
-        config.feat_config.feature_dim = 128;
-        config.model_config.transducer.encoder = paths[0].as_ptr();
-        config.model_config.transducer.decoder = paths[1].as_ptr();
-        config.model_config.transducer.joiner = paths[2].as_ptr();
-        config.model_config.tokens = paths[3].as_ptr();
-        config.model_config.num_threads = threads;
-        config.model_config.provider = provider.as_ptr();
-        config.model_config.model_type = c"nemo_transducer".as_ptr();
-        config.decoding_method = c"greedy_search".as_ptr();
-        let recognizer = unsafe { (api.create)(&config) };
-        if recognizer.is_null() {
-            return Err("could not load Parakeet model".into());
+        if !matches!(provider, "cpu" | "coreml")
+            || (provider == "coreml" && !cfg!(target_os = "macos"))
+        {
+            return Err("Parakeet provider must be cpu or coreml".into());
         }
-        Ok(Rc::new(Self { api, recognizer }))
+        let options = directory.join(format!(".sherpa-{}.conf", UtteranceId::random().0));
+        let mut file = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .mode(0o600)
+            .open(&options)?;
+        let loaded: Result<Handle> = (|| {
+            file.write_all(b"EnableCpuMemArena=0\nEnableMemPattern=0\nSessionConfig.session.intra_op.allow_spinning=0\nSessionConfig.session.inter_op.allow_spinning=0\n")?;
+            let provider = CString::new(format!(
+                "{provider}:{}",
+                options.to_str().ok_or("model directory must be UTF-8")?
+            ))?;
+            let mut config: OfflineRecognizerConfig = unsafe { std::mem::zeroed() };
+            config.feat_config.sample_rate = RATE as i32;
+            config.feat_config.feature_dim = 128;
+            config.model_config.transducer.encoder = paths[0].as_ptr();
+            config.model_config.transducer.decoder = paths[1].as_ptr();
+            config.model_config.transducer.joiner = paths[2].as_ptr();
+            config.model_config.tokens = paths[3].as_ptr();
+            config.model_config.num_threads = threads;
+            config.model_config.provider = provider.as_ptr();
+            config.model_config.model_type = c"nemo_transducer".as_ptr();
+            config.decoding_method = c"greedy_search".as_ptr();
+            let recognizer = unsafe { (api.create)(&config) };
+            if recognizer.is_null() {
+                return Err("could not load Parakeet model".into());
+            }
+            Ok(recognizer)
+        })();
+        let _ = std::fs::remove_file(options);
+        let recognizer = loaded?;
+        Ok(Rc::new(Self {
+            api,
+            recognizer,
+            partial_interval: Duration::from_secs_f64(update_samples as f64 / RATE as f64),
+        }))
     }
 
     fn decode(&self, audio: &[i16], offset: usize) -> Result<Vec<Word>> {
@@ -227,7 +255,11 @@ fn text(words: &[Word], first: bool) -> String {
     }
 }
 
-fn merge(previous: &[Word], next: &[Word], middle: usize) -> Vec<Word> {
+fn merge(previous: &[Word], next: &[Word], offset: usize) -> Result<Vec<Word>> {
+    if previous.is_empty() {
+        return Ok(next.to_vec());
+    }
+    let middle = offset + 5 * RATE / 2;
     let mut left = middle;
     let mut right = middle;
     loop {
@@ -242,13 +274,24 @@ fn merge(previous: &[Word], next: &[Word], middle: usize) -> Vec<Word> {
             break;
         }
     }
-    // A boundary-spanning acoustic component belongs entirely to the earlier decode.
-    previous
+    if right > offset + 5 * RATE {
+        if left < offset {
+            return Err("Parakeet overlap has no complete timestamp boundary".into());
+        }
+        return Ok(previous
+            .iter()
+            .filter(|w| w.end <= left)
+            .chain(next.iter().filter(|w| w.start >= left))
+            .cloned()
+            .collect());
+    }
+    // Assign a boundary-spanning acoustic component to one complete decode.
+    Ok(previous
         .iter()
         .filter(|w| w.start < right)
         .chain(next.iter().filter(|w| w.start >= right))
         .cloned()
-        .collect()
+        .collect())
 }
 
 pub struct Parakeet {
@@ -295,7 +338,7 @@ impl Parakeet {
         Ok(if self.offset == 0 {
             decoded
         } else {
-            merge(&self.pending, &decoded, self.offset + 5 * RATE / 2)
+            merge(&self.pending, &decoded, self.offset)?
         })
     }
 
@@ -313,7 +356,7 @@ impl Parakeet {
         self.offset += STRIDE;
         self.decoded_samples = self.audio.len();
         self.emit(EngineEvent::Partial(text(&self.pending, self.first)));
-        self.next_partial = Instant::now() + Duration::from_secs(2);
+        self.next_partial = Instant::now() + self.model.partial_interval;
         Ok(())
     }
 
@@ -334,7 +377,7 @@ impl Parakeet {
             let interval = if partial.is_empty() {
                 Duration::from_millis(500)
             } else {
-                Duration::from_secs(2)
+                self.model.partial_interval
             };
             self.emit(EngineEvent::Partial(partial));
             self.decoded_samples = self.audio.len();
