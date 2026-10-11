@@ -3,7 +3,9 @@
 `said bench <manifest>` replays 16 kHz mono PCM i16 WAVs through the unchanged
 `said-engine` worker and scores its committed text. It concatenates committed
 chunks with no separator. Partial text is timed and recorded, never promoted to
-final text. Recognition has no vocabulary bias or postprocessing.
+final text. Recognition has no text postprocessing.
+
+Run every model-loading command below with the [shared lock and memory scope](../CONTRIBUTING.md#native-verification).
 
 The app provides `said bench` through this library and uses its own `--worker` dispatch.
 The `said-bench` development probe is a workspace target for isolated tests; it is not shipped.
@@ -18,7 +20,6 @@ target/debug/said-bench bench bench/clips.jsonl --ci
 That command selects the bundled platform default. The native Parakeet default runs with no engine flag, or select
 `--engine parakeet-v3-fp32`. `--all` runs the installed manifest catalog. The fake worker is for protocol checks:
 `--engine fake --trace /path/to/scripted-events.json`.
-Scribe has no implemented adapter and cannot be benchmarked yet.
 
 The 12 CI clips are checked into `bench/clips/`. The full corpus adds a long
 synthetic monologue kept outside git. Provision it, then run all engines:
@@ -142,7 +143,7 @@ An incomplete run exits nonzero; failed clips never masquerade as empty success.
   Release is immediately before Finish; final timing includes pending inference.
   p50/p95 use nearest rank; missing partials and sample counts are explicit.
   Release latency is also broken out for the spec's 5–20-second budget.
-  Max replay lag shows host scheduling/backpressure. All runs replay in real time.
+  Max replay lag shows host scheduling/backpressure. Unpaced runs report their separate timing scope.
 - **RAM/load:** sampled total RSS of host plus direct worker every 20 ms; shared
   mappings can be counted twice and short peaks can be missed. On macOS this
   uses `ps`; it does not measure unified-memory physical footprint. Cold load
@@ -154,7 +155,7 @@ Startup and audio/final no-progress floors default to 60/10/30 seconds; override
 with `--startup-seconds`, `--audio-seconds`, `--finish-seconds`. They are not
 production latency recommendations. The engine learns busy real-time factor
 from acknowledgments. It budgets fourfold measured work: the larger of rolling
-median RTF for a bounded 15-second speech segment and recent peak RTF for one
+median RTF for a bounded 30-second speech segment and recent peak RTF for one
 half-second update, plus the caller's floor. Measurements cover the last
 16 seconds of consumed audio; the entire queued recording never multiplies a
 stall allowance. Pending queue age does not shorten later
@@ -165,7 +166,7 @@ Alignment uses two cost rows and a byte per traceback cell. A score exceeding
 64 million cells fails explicitly; split extremely long reference material into
 clips rather than exhausting the server.
 
-## Checks and integration
+## Checks
 
 ```sh
 cargo fmt --manifest-path bench/Cargo.toml --check
@@ -175,26 +176,16 @@ bench/scripts/ci.sh
 ```
 
 The scorer checks run without corpus/audio integration; the external-manifest
-check proves worker use, raw byte preservation and hash rejection. `ci.sh`
-runs the three-minute native synthetic segmentation regression, then executes the real public subset and verifies regression counts, not transcript
-strings. Its smoke gate permits at most three lost and one changed negation
-across the subset (current recognizer limitations), requires clean clear
-negative/affirmative twins, normalized WER ≤30% for eight synthetic speech clips
-and ≤40% for two AMI clips, nonempty text for every speech clip, some filler
-retention and no control hallucinations. Small's completed baseline CI subsets
-had 16/64 errors (25%) on synthetic speech and 12/42 (28.6%) on AMI. These ceilings
-give each subset limited regression headroom without letting one subsidize the
-other; their combined allowance is slightly stricter than the old pooled 35%
-gate. Empty speech fails independently. AMI uses headset-channel meeting audio,
-not far-field microphones; spontaneous disfluencies and background leakage make
-it a separate stress subset. Thresholds were set before the patched run. This gate detects regressions; it does not certify the
-verbatim promise or select a release engine. Model provisioning is a separate CI/cache step.
+check proves worker use, raw byte preservation and hash rejection. `ci.sh` builds the runner, executes the public CI subset and validates the summary
+with `scripts/check-ci.py`. Its thresholds detect lexical regressions; they are
+not a fidelity or release certificate. Run it under the shared model lock and
+memory scope. Real-model provisioning is separate from the pure CI job. See
+[RESULTS.md](RESULTS.md) for dated failures, reference limits and acoustic metrics.
 
 The host owns the production `said` CLI and routes benchmark worker flags through this same
 entrypoint before Tauri initialization. The root workspace/lockfile owns dependencies; pure scorer
 and fake-worker checks run in CI. The real quality gate remains separate and currently fails as
-reported in RESULTS.md. Model defaults remain provisional; no shared engine event, worker wire
-format or schema change is needed for this integration.
+reported in RESULTS.md. Model defaults remain provisional.
 
 ## Precision probes
 
@@ -206,7 +197,7 @@ community mixed export is labeled explicitly. No all-FP16 result is claimed.
 
 ```sh
 crates/engine/scripts/fetch-model.sh parakeet-v3-fp16-int8 bench/precision-models.json
-systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
+flock "$HOME/.cache/said-model.lock" systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
   nice -n 10 target/debug/said-bench bench /private/clips.jsonl --unpaced \
   --engine parakeet-v3-fp16-int8 --model-manifest bench/precision-models.json \
   --output /private/new-result

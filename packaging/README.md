@@ -43,10 +43,10 @@ Show `packaging/linux/niri.kdl` before adding this include to Niri configuration
 include "/usr/share/said/niri.kdl"
 ```
 
-The example binds Super+Ctrl+Alt+Space to `said hotkey`. Match that chord in said's
-Settings for physical hold/release; the default Ctrl+Alt+Space remains independent
-until changed. `sudo usermod -aG input "$USER"` requires logout/login. Without
-readable evdev or the shortcuts portal, the Niri bind toggles recording.
+The binds and settings use the same shortcut defaults, listed in [INSTALL](INSTALL.md).
+Readable keyboards or a working portal provide hold/release; the Niri bind alone
+toggles. `sudo usermod -aG input "$USER"` grants physical keyboard-device access
+and requires logout/login. `said status` reports the active mode.
 
 For a portable directory, after a release build run
 `packaging/linux/install.sh target/packaging/said-0.0.0-linux-x86_64`, then tar that
@@ -64,13 +64,34 @@ nice -n 10 packaging/macos.sh
 
 The arm64 `.app` is under `target/aarch64-apple-darwin/release/bundle/macos/`;
 the compressed `.dmg` and SHA256SUMS are under `target/packaging/`. Deployment
-targets macOS 14. The complete bundle is ad-hoc signed and verified. Developer ID
-signing/notarization in SPEC.md is deferred because no Developer ID exists.
+targets macOS 14. The complete bundle is ad-hoc signed and verified. This script does not perform Developer ID signing or notarization.
 See [INSTALL](INSTALL.md). Builds do not pass the separate-account manual checklist.
 
-The app starts hidden. Open Setup from the tray menu. Brand tray artwork is in
-`app/src-tauri/icons/tray`; selecting idle/recording artwork remains app-module
-integration work. Ship versioned artifacts with SHA256SUMS; verify Linux `ldd`,
-isolated-cache native loading, macOS `otool -L`, and complete bundle signatures.
+First-launch behavior and permission steps are described in [INSTALL](INSTALL.md).
+Versioned artifacts should include SHA256SUMS. Verify Linux `ldd`, isolated-cache
+native loading, macOS `otool -L`, and complete bundle signatures. A successful
+build does not certify the separate-account macOS acceptance checklist.
+
+## Licenses
+
+Both build paths call `packaging/install-notices.sh`. The Arch package and portable
+directory contain `share/licenses/said/` (under `/usr` in the Arch package); the Mac
+app contains `Contents/Resources/licenses/`. Each has the app LICENSE, [NOTICE](../NOTICE),
+model/runtime terms, the matching ONNX Runtime third-party notices, native dependency
+terms, Handy/tauri-nspanel credits, font OFLs and corpus provenance.
+
+`dependencies.txt` is generated from locked Rust/JavaScript package sources using
+Bun and Cargo metadata. It inventories both host targets, including build/test
+packages, plus production frontend dependencies, and retains complete supplied
+terms. Missing terms or a hash mismatch abort packaging. [License sources](../licenses/README.md)
+describes the verified upstream fallbacks and source links.
+
+```sh
+bash packaging/tests/notices.sh
+```
+
+The check stages both layouts, compares complete notice contents, round-trips the
+Linux tree through archives and verifies rejection of a dependency missing terms.
+It does not rebuild/sign the app or establish runtime acceptance.
 
 The PKGBUILD consumes a local clone; a public upstream URL has not been configured.

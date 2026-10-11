@@ -1,14 +1,14 @@
 # One-time macOS acceptance
 
-Pending: run after the host wires the adapter and produces the app bundle.
+Pending live acceptance of the packaged app.
 Use a separate macOS test account and scratch documents, never live conversations.
 The automatic checks require no TCC grants. Keep the bundle ID from product.toml
 and the same signing identity/build location throughout these checks. Re-signing
 an ad-hoc build can invalidate grants; test one unchanged bundle.
 
 1. Build the host's app bundle. Ad-hoc sign that bundle once with
-   `codesign --force --deep --sign - target/release/bundle/macos/said.app`, then
-   verify `codesign --verify --deep --strict target/release/bundle/macos/said.app`.
+   `codesign --force --deep --sign - target/aarch64-apple-darwin/release/bundle/macos/said.app`, then
+   verify `codesign --verify --deep --strict target/aarch64-apple-darwin/release/bundle/macos/said.app`.
    Launch the bundle from Finder. Its Info.plist must contain
    `NSMicrophoneUsageDescription` before using Grant Microphone.
 2. In System Settings > Privacy & Security > Accessibility, add that exact app

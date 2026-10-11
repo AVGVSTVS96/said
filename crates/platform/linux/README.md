@@ -1,93 +1,24 @@
 # Linux adapter
 
-`LinuxPlatform` implements the shared `Platform` trait. Niri focus and window identity come from
-its Unix IPC socket. Clipboard writes use `wl-copy` with the original UTF-8 bytes; insertion uses
-`zwp_virtual_keyboard_v1` directly, with a complete fixed XKB map. The text is never typed as key
-presses. There is no clipboard restoration, uinput device, Enter by default, or uncertain-paste retry.
-GTK layer-shell configures a hidden overlay with exclusive zone zero and no keyboard interactivity.
+`LinuxPlatform` implements `Platform` behind the `native` feature and requires a Wayland session. Niri focus/window identity comes from its IPC socket. Clipboard writes use `wl-copy` with the supplied UTF-8 bytes; a Wayland virtual keyboard posts the configured chord. The text is not typed as key presses. GTK layer-shell keeps the overlay unfocused with exclusive zone zero.
 
-Other Wayland sessions have `Mode::Clipboard`, no focused target, and no automatic input.
-Run core's `Copy` effect through `LinuxPlatform::copy`. `paste` returns an error in this mode so a
-caller cannot mistake copying for a successfully posted chord.
+Other Wayland sessions use `Mode::Clipboard`: no focused target or automatic input. `copy` writes the clipboard; `paste` rejects so the host cannot mistake a copy for delivery. Pure X11 is unsupported.
 
-## Integrator wiring
+## Input and focus
 
-The shared platform manifest and app binary are integrator-owned. This branch changes neither.
-The executable CLI fixture in `tests/said.rs` demonstrates routing `said hotkey`, `toggle`,
-`interactive`, `insert-last`, `cancel` and `status` through `control::run_cli`. Use the stable storage
-key from `product.toml`; the host and CLI must agree on it.
+The host builds `Config::from_environment(storage_key)`, parses settings chords and merges app paste overrides. GlobalShortcuts Activated/Deactivated signals or readable evdev keyboards supply real key edges. Niri compositor commands supply press-only toggles when those edges are unavailable. Setup/status expose the input mode and unavailable reason. Joining the input group requires a new login and grants physical keyboard-device access.
 
-1. Construct `Config::from_environment(storage_key)`. Set `chord` with `Chord::parse(settings.hotkey)`,
-   set `read_input` from the initial unlocked/active session state, set `portal_trigger` to the
-   corresponding XDG accelerator, and merge app overrides into
-   `paste_chords`. A terminal pane and composer sharing an app ID require a user override.
-2. Construct `LinuxPlatform`. The GlobalShortcuts portal is attempted first on Niri. Successful
-   registration supplies Activated/Deactivated events; otherwise readable physical evdev keyboards
-   provide real Down/Up. Without either, the Niri bind supplies press-only toggles. Expose
-   `input_unavailable_reason`, `portal_unavailable_reason` and `mode` in setup. No permission is granted
-   by the adapter. Input access requires joining the input group and a fresh login.
-3. Feed `hotkeys()` to `Session::hotkey` with `release_observable = true`. These are physical or portal
-   edges. Consume `control_requests()` separately: `control_hotkey(command)` returns an optional
-   `(Hotkey, release_observable)` for core. The bind commands are suppressed when real edges are
-   available; explicit `toggle`/`interactive` remain press-only. Answer every request's `reply` with
-   the actual host result. For `status`, return host state and the adapter mode.
-4. Keep `niri().focus_changes()` alive and feed every event into `SessionEvent::FocusChanged`,
-   including `None` on target close or IPC disconnect. `focus()` waits for actual focus and verifies
-   app ID and window ID. `paste()` checks identity before copying, again before posting the chord,
-   and again before an explicitly requested Enter after 50 ms. A return of success means posted,
-   not accepted by the field. Clipboard text remains available when the second focus check fails.
-5. On logind session lock/deactivation, feed `SessionUnavailable` before `set_input_enabled(false)`;
-   on unlock, re-enable input and feed `SessionAvailable`. The host owns this lifecycle signal.
-   Niri focused-window IPC alone is not a lock detector. Do not enable evdev without this wiring.
-6. Create the overlay hidden and without focus. Configure it before GTK realization, then show it
-   on the main thread. `make_overlay` dispatches GTK work to that thread and selects the focused
-   output's logical monitor. `overlay::configure` also provides a fallible GTK entry point for
-   native creation. Interactive editing uses a separate normal window.
+Native events flow through one hotkey receiver. Control requests use `control_hotkey` separately, including their release capability; bind commands are suppressed when native edges already handled the press. Explicit commands still work. Current packaged shortcuts are in [installation](../../../packaging/INSTALL.md) and [niri.kdl](../../../packaging/linux/niri.kdl).
 
-The same niri binds work in toggle, evdev and portal modes:
+Niri's focus-change stream includes target close/disconnect. The host forwards it to core, which inhibits automatic delivery after an observed departure. Explicit focus waits for actual app/window identity. Paste checks identity before copying and again before posting; explicit Enter adds another check. Success means chord posted, not field acceptance. Clipboard text remains available after a failed post check.
 
-```kdl
-binds {
-    Ctrl+Alt+Space repeat=false allow-inhibiting=false {
-        spawn "/absolute/path/to/said" "hotkey";
-    }
-    Ctrl+Alt+Shift+Space repeat=false allow-inhibiting=false {
-        spawn "/absolute/path/to/said" "hotkey" "interactive";
-    }
-    Ctrl+Alt+V repeat=false allow-inhibiting=false {
-        spawn "/absolute/path/to/said" "hotkey" "insert-last";
-    }
-}
-```
+logind lock/deactivation signals make the session unavailable before disabling physical input. Missing logind prevents unsafe physical-input activation. Native overlay creation/configuration happens on the GTK main thread before realization; the interactive editor is a separate normal window.
 
-The socket is `$XDG_RUNTIME_DIR/<storage_key>.sock`, mode 0600. The directory must be owner-only.
-An advisory lock prevents two hosts; stale owned sockets are replaced only while holding that lock.
-Symlinks and non-socket paths are refused. Requests and replies have bounds and timeouts; peer UID
-must match. The socket is removed when the host drops the adapter.
+## Control socket
 
-## Native manifest additions requested
+The socket is `$XDG_RUNTIME_DIR/said.sock`, mode 0600 in an owner-only directory. A lock prevents concurrent hosts. Stale owned sockets are replaced while holding the lock; symlinks/non-sockets are refused. Requests/replies are bounded, peers must have the same UID, and the socket is removed when the adapter drops.
 
-Make these dependencies optional, under the Linux target, and activate them from `native`:
-
-```toml
-serde_json = { workspace = true, optional = true }
-libc = { version = "0.2", optional = true }
-evdev = { version = "0.13", optional = true }
-gtk = { version = "0.18", optional = true }
-gtk-layer-shell = { version = "0.8", features = ["v0_6"], optional = true }
-tauri = { version = "2", default-features = false, features = ["wry"], optional = true }
-ashpd = { version = "0.12.3", optional = true }
-futures-util = { version = "0.3", optional = true }
-tokio = { version = "1", features = ["rt", "sync", "time", "macros"], optional = true }
-wayland-client = { version = "0.31", optional = true }
-wayland-protocols-misc = { version = "0.3", features = ["client"], optional = true }
-xkbcommon = { version = "0.9", default-features = false, optional = true }
-```
-
-`ashpd` 0.12 meets the workspace's Rust 1.90 minimum; 0.13 requires Rust 1.92. System dependencies
-include GTK3, gtk-layer-shell, libxkbcommon and wl-clipboard. The isolated harness builds the actual
-`crates/platform/src/lib.rs` and Linux modules against the current core, without editing the manifest.
-It is a temporary integration check, not an alternative production package.
+System dependencies include GTK 3, gtk-layer-shell, libxkbcommon and wl-clipboard; the host also needs Tauri's WebKit/tray libraries. The crate manifest keeps native dependencies optional so pure tests remain headless.
 
 ## Acceptance checks
 
@@ -96,19 +27,8 @@ CARGO_BUILD_JOBS=2 crates/platform/linux/tests/build.sh
 python3 crates/platform/linux/tests/run.py
 ```
 
-Set `SAID_LINUX_TEST_DIR` to reuse a build directory on disk. The runner creates a fresh 0700
-runtime directory and private D-Bus, headless Cage, and Niri nested inside Cage. GTK3, Ghostty with a
-raw bracketed-paste scratch editor, and Electron's textarea run exclusively inside that Niri.
-The parent compositor receives physical-key-shaped Wayland events to exercise the real Niri bind;
-Niri's own virtual keyboard path bypasses compositor bindings. No kernel input device is created.
-The production evdev dispatcher receives a finite fake event stream in unit tests; no real device
-is opened by tests. Clipboard fallback runs on Cage's separate Wayland socket.
+`SAID_LINUX_TEST_DIR` selects a scratch build directory. The runner creates a private runtime and D-Bus, headless Cage and nested Niri. GTK, Ghostty's bracketed-paste scratch editor and an Electron textarea run inside it. Parent-compositor events exercise the actual Niri bind. No real kernel input device is opened or created; unit tests feed finite fake evdev events. Clipboard fallback uses Cage's separate Wayland socket.
 
-The runner verifies exact leading/trailing spaces, Unicode, punctuation and newlines; no Enter in
-any target; explicit send; focus mismatch; the Niri event stream; nonfocusing overlay; socket bind
-routing; and exact clipboard mode. It retains synthetic receipt files and logs in its scratch
-session directory and stops only its own compositor and target process groups. Tests need `niri`,
-`cage`, `electron`, `ghostty`, `python-gobject`, `wl-clipboard` and the native system dependencies.
-Portal signal mapping is tested with fake edges; a functioning portal backend is not established
-by these headless tests. A real physical keyboard and input-group membership are deliberately not
-part of automated verification.
+Checks cover literal whitespace/Unicode/newlines, no implicit Enter, explicit send, focus mismatch, Niri focus events, a nonfocusing overlay, socket routing and clipboard-only delivery. Synthetic receipts/logs stay in the scratch directory. The runner stops its own processes. It requires `niri`, `cage`, `electron`, `ghostty`, `python-gobject`, `wl-clipboard` and native dependencies.
+
+These checks do not establish a functioning portal backend or physical keyboard permissions. See [recorded results](tests/RESULTS.md) and [product limits](../../../SPEC.md#verification-and-limits). App/model checks additionally need the shared model lock and memory scope in [CONTRIBUTING.md](../../../CONTRIBUTING.md#native-verification).

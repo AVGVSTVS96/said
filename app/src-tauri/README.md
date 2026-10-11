@@ -1,48 +1,22 @@
-# Host
+# Native host
 
-`custom-protocol` embeds the built frontend for a standalone app; build `app/dist` first.
-The `said` binary dispatches `--worker` before initializing Tauri. The host opens owner-only
-storage and a single-process data lock, verifies/downloads the selected model and pinned native
-runtime into `data/models`, warms the worker, and recovers pending recordings without pasting.
-The model manifest remains the source of platform defaults, hashes, source and license.
+The `said` host embeds the built renderer with `custom-protocol`. Build `app/dist` before a standalone host build. `--worker` dispatch happens before Tauri initialization and runs the same Parakeet code used by the benchmark.
 
-`runtime::Host` executes the core's effects. Pending/history saves are durable before capture or
-paste is acknowledged. Audio and worker receivers are bounded and continuously drained; a live
-audio gap invalidates recognition, while capture failure without a durable stop is saved as failed.
-Worker recovery allocates a fresh identity and replays the repaired WAV. Core owns ordering, edits,
-hold/tap, inhibition after focus changes and delivery. Platform success means the chord was posted.
+`runtime::Host` executes core effects on one actor. It opens owner-only storage and a data lock, verifies/downloads the model and native runtime, warms the worker, and recovers pending recordings without automatic paste. Pending saves precede capture; completed durable saves precede focus checks and delivery. Recorder stop drains final frames before engine finish. Live gaps replay the durable WAV with a new recognition identity.
 
-Linux subscribes to Niri focus changes and logind lock/activation signals. A lock stops and saves
-before physical input is disabled; unlock restores it. Missing logind disables physical input.
-Niri binds and native key edges are routed separately so one press cannot toggle twice. Unsupported
-Wayland desktops use clipboard delivery. macOS initialization passively checks grants, keeps native
-calls on AppKit's main thread, configures the hidden nonactivating panel before showing it, and
-positions it at the bottom of the screen with keyboard focus. Permission requests are explicit UI
-actions. Microphone usage text is in `Info.plist`.
+Linux consumes Niri focus events and logind session signals. Native key edges and compositor commands are routed separately to avoid double toggles. Other Wayland desktops provide clipboard-only delivery. macOS checks grants passively, runs AppKit operations on the main thread and configures the nonactivating panel before showing it. Permission requests are explicit actions; microphone usage text lives in `Info.plist`.
 
 ## IPC
 
-- `connect({ updates: Channel<HostSnapshot> })` installs the subscription and returns its initial
-  full snapshot. Every update has a monotonically increasing `sequence`; renderers discard older
-  snapshots and duplicates. Full snapshots make a newer state sufficient even when numbers skip.
-- `ui_action({ action: UiAction })` and `host_action({ action: HostAction })` run on one host actor.
-  Their promises resolve with the applied snapshot after publication; failures reject. Stored
-  history IDs route through SQLite when they are no longer active core sessions.
-- `said-audio://localhost/<utterance-id>` resolves only an existing history row's audio reference.
-  Bounded range responses support native audio controls without loading an entire recording.
-  Filesystem paths are not accepted from the renderer. Moonshine supplies no word timestamps;
-  playback is the whole clip.
+- `connect({ updates: Channel<HostSnapshot> })` returns the bootstrap snapshot and publishes sequenced complete snapshots. Renderers reject older/duplicate sequences.
+- `ui_action({ action: UiAction })` and `host_action({ action: HostAction })` resolve after applying the action and publishing its snapshot. Failed operations reject. Durable history actions must use the stored edited text rather than stale raw session state.
+- `said-audio://localhost/<utterance-id>` resolves the WAV only through an existing history row. Range responses support whole-clip playback with bounded reads. The renderer cannot supply an arbitrary file path.
 
-Settings, microphone, vocabulary and app-rule saves persist to the existing plain files. History
-search uses SQLite FTS, retry creates a fresh row sharing the WAV, and delete/retention use core's
-reference-aware deletion. Setup scratch recordings have no target and suppress clipboard effects,
-including worker replay. History Insert returns to the last external target when the app owns focus.
-Interactive windows activate once per recording; closing them releases completed core views.
-Notifications and local/vocabulary/auto-send indicators come from host state.
+Settings and app rules persist to plain files. History uses SQLite FTS; retry creates a new row sharing the WAV. Reference-aware deletion keeps recordings used by other rows. Setup scratch recording suppresses delivery, including during replay. Interactive insertion refocuses the remembered external target; History insertion uses the last external target when the app owns focus.
 
 ## CLI
 
-The running Linux app owns `$XDG_RUNTIME_DIR/<storage_key>.sock` (0600, same-UID peers).
+Linux control uses the owner-only `$XDG_RUNTIME_DIR/said.sock` with same-UID peers. These commands address the running host:
 
 ```sh
 said hotkey
@@ -54,56 +28,36 @@ said insert-last
 said cancel
 said status
 said history search 'no AND file'
+```
+
+`said hotkey` is the compositor-bind path. Explicit `toggle`, `interactive` and `insert-last` commands remain available. See [installation](../../packaging/INSTALL.md) for the current shortcut defaults and bind file.
+
+The benchmark runs without desktop input:
+
+```sh
 said bench bench/clips.jsonl --model-cache "$HOME/.cache/said-models"
-said import-vocabulary codex [dictionary.json]
-said import-vocabulary wispr /path/to/flow.sqlite
 ```
 
-macOS Wispr import defaults to its Application Support database. It reads active `Dictionary.phrase`
-rows, excludes deleted entries/snippets, and never imports replacements or history. Codex import
-accepts `dictationDictionary` at the JSON root or inside `electron-saved-atom-state`, as strings or
-arrays of terms. Missing/unknown dictionaries fail explicitly. Import adds terms to vocabulary.txt;
-it does not enable recognition bias. The Codex default path is `~/.codex/.codex-global-state.json`.
+Use the [shared model lock and memory scope](../../CONTRIBUTING.md#native-verification) for every model-loading run.
 
-## Proof
-
-Build with `CARGO_BUILD_JOBS=2`. No headless checks acquire a microphone or a physical keyboard.
-Synthetic clips and large model/runtime files stay outside git.
+## Checks and acceptance
 
 ```sh
-CARGO_BUILD_JOBS=2 cargo build -p said-app --features custom-protocol --bin said
-CARGO_BUILD_JOBS=2 cargo clippy -p said-app --all-targets -- -D warnings
-CARGO_BUILD_JOBS=2 cargo test -p said-app --test end_to_end
-CARGO_BUILD_JOBS=2 cargo test -p said-app --test end_to_end -- --ignored --nocapture
+CARGO_BUILD_JOBS=2 cargo check --locked -p said-app --features custom-protocol
+CARGO_BUILD_JOBS=2 cargo clippy --locked -p said-app --all-targets -- -D warnings
+CARGO_BUILD_JOBS=2 cargo test --locked -p said-app --test end_to_end
 ```
 
-The default proof uses a scripted same-binary worker and a disk-backed synthetic recorder. It
-queues final frames during stop, immediately starts another utterance, verifies both complete WAVs
-and ordered exact-byte delivery. Stop drains the old receiver before a new capture replaces it.
+The default end-to-end proof uses a scripted same-binary worker and disk-backed synthetic recorder. It verifies drained final frames, overlapping capture, reopened history, whole-clip range playback and exact fake delivery. Fake paste independently reads SQLite at delivery time to verify save-before-paste.
 
-The ignored proof needs the engine's hash-verified cache and public synthetic `engine-proof` WAVs.
-It compares a direct Moonshine adapter at the recorder's 20 ms cadence with the same-binary worker,
-durable reopened history, bounded playback ranges and the exact bytes received by fake paste. Fake paste independently
-opens SQLite read-only at the instant of delivery and rejects text without an exact durable save.
-Negation, self-repair, repeated words across pauses and silence are exercised. This proves byte
-preservation, not acoustic correctness or an engine ranking.
-
-Use the platform's headless Cage/nested Niri runner for the native terminal flow:
+The ignored Parakeet comparison runs expected recognition in a separate child, waits for its exit, then runs the host. Its parent never loads ONNX. It compares adapter output, saved text and fake paste for public synthetic clips, including negation, self-repair, repetition and silence. It proves preservation of that adapter output, not acoustic correctness or universal destination acceptance.
 
 ```sh
-SAID_APP_BINARY="$PWD/target/debug/said" \
-SAID_APP_E2E="[\"$PWD/target/debug/said\",\"--nested-proof\",\"$HOME/.cache/said-models/engine-proof/negation.wav\",\"--models\",\"$HOME/.cache/said-models\"]" \
-SAID_LINUX_TEST_DIR="$HOME/.cache/said-niri-app" \
-python3 crates/platform/linux/tests/run.py
+flock "$HOME/.cache/said-model.lock" systemd-run --user --scope -q \
+  -p MemoryMax=4G -p MemorySwapMax=0 -- \
+  env CARGO_BUILD_JOBS=2 cargo test -p said-app --test end_to_end -- --ignored --nocapture
 ```
 
-That entry point refuses a runtime/socket outside the fresh nested harness. It disables physical
-input and portals, exercises the actual Niri bind → app CLI → host → Moonshine → durable history →
-Ghostty scratch editor, checks exact terminal bytes and no stray Enter, and searches persistent
-history over the control socket. Keep the test runtime path short enough for Unix sockets.
+The [Linux harness](../../crates/platform/linux/README.md#acceptance-checks) isolates Niri, runtime, clipboard and scratch targets. `--nested-proof` refuses a runtime/socket outside that harness. It exercises bind, CLI, host, Parakeet, durable history and exact terminal input with no Enter. Physical input/portal availability needs separate verification.
 
-The worker's 60/10/30-second startup/audio/final deadlines are diagnostic limits inherited from the
-engine probe. `bench/RESULTS.md` reports failed full-suite/quality gates and supplies no release watchdog recommendation.
-Release defaults and budgets remain uncertified. macOS
-verification is check/build only; the platform's signed test-account manual checklist remains
-separate and is not marked passed by a successful compilation.
+Worker startup/audio/final deadlines are diagnostic limits; benchmark results do not certify them as release budgets. [macOS acceptance](../../crates/platform/macos/MANUAL-CHECKLIST.md) remains pending; passing a compile or native unit test does not establish permission, capture, focus or delivery behavior.
