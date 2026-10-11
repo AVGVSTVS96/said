@@ -106,9 +106,10 @@ impl HostPlatform for Desktop {
                     match crate::login::Login::start() {
                         Ok(login) => self.login = Some(login),
                         Err(error) => {
-                            self.error = Some(format!(
-                                "logind unavailable: {error}; physical input disabled"
-                            ))
+                            eprintln!("said session status: {error}");
+                            self.error = Some(
+                                "Session status unavailable. Hold-to-talk is disabled.".into(),
+                            );
                         }
                     }
                 }
