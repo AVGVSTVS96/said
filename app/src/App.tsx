@@ -1,4 +1,6 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { product } from "./product";
 import {
   type CoreSource,
@@ -7,7 +9,6 @@ import {
   userText,
 } from "./source";
 import type { createFakeSource } from "./fake";
-import { Icon } from "./components";
 import { Overlay } from "./Overlay";
 import { Interactive } from "./Interactive";
 import { History } from "./History";
@@ -31,6 +32,49 @@ const labels: Record<Screen, string> = {
   setup: "Setup",
   overlay: "Overlay",
 };
+const phases = [
+  "recording",
+  "finishing",
+  "saving",
+  "saved",
+  "reviewing",
+  "pasting",
+  "pasted",
+  "failed",
+] as const;
+
+function FloatingPanel({ children }: { children: React.ReactNode }) {
+  const stage = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isTauri() || !stage.current) return;
+    const element = stage.current;
+    const observer = new ResizeObserver(() => {
+      if (element.offsetHeight)
+        void fitWindow(new LogicalSize(element.offsetWidth, element.offsetHeight));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <main className="stage panel-stage" ref={stage}>
+      {children}
+    </main>
+  );
+}
+
+async function fitWindow(size: LogicalSize) {
+  const window = getCurrentWindow();
+  try {
+    await Promise.all([window.setMinSize(size), window.setMaxSize(size)]);
+    await window.setSize(size);
+    // GTK on Wayland keeps the compositor's size while the window is flagged tiled (niri does
+    // that for every window under prefer-no-csd) and applies new bounds only with the next
+    // configure; an unmaximize request makes the compositor send one.
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    await window.unmaximize();
+  } catch {}
+}
 
 export function App({
   source = disconnectedSource,
@@ -85,13 +129,13 @@ export function App({
             delete next[action.id];
             return next;
           });
-      }
-      if (action.type !== "edit")
+      } else if (demo) {
         setFeedback(
-          demo
-            ? `Demo: ${action.type.replaceAll("_", " ")} action recorded. No desktop action was performed.`
-            : "Action sent to core.",
+          `Demo: ${action.type.replaceAll("_", " ")} action recorded. No desktop action was performed.`,
         );
+      } else if (action.type === "copy") {
+        setFeedback("Copied");
+      }
     } catch (error) {
       setError(
         error instanceof Error
@@ -112,106 +156,74 @@ export function App({
     window.history.replaceState(null, "", url);
   }
 
+  const note = error ? (
+    <span className="action-error" role="alert">
+      {error}
+    </span>
+  ) : feedback ? (
+    <span className="action-feedback" role="status">
+      {feedback}
+    </span>
+  ) : null;
+
+  const editor = (onClose?: () => void) => (
+    <Interactive
+      key={selected ?? session?.id ?? "empty"}
+      session={selected ? undefined : session}
+      utterance={utterance}
+      source={source}
+      send={send}
+      draft={drafts[selected ?? session?.id ?? ""] ?? null}
+      onEdit={(draft) => {
+        const id = selected ?? session?.id;
+        if (id) setDrafts((drafts) => ({ ...drafts, [id]: draft }));
+      }}
+      onClose={onClose}
+      note={note}
+    />
+  );
+
   return (
     <>
       {screen === "overlay" ? (
         <Overlay session={session} source={source} send={send} />
+      ) : screen === "interactive" ? (
+        <FloatingPanel>
+          {editor(
+            isTauri() ? () => void getCurrentWindow().close() : undefined,
+          )}
+        </FloatingPanel>
       ) : (
-        <div className="app-shell">
-          <aside className="sidebar">
-            <div className="product-name">
-              {product.name}
-              <span>Dictation</span>
-            </div>
-            <nav aria-label="Main navigation">
-              {(["interactive", "history", "settings", "setup"] as const).map(
-                (item) => (
-                  <button
-                    key={item}
-                    aria-current={screen === item ? "page" : undefined}
-                    onClick={() => navigate(item)}
-                  >
-                    <Icon
-                      name={
-                        item === "interactive" || item === "setup"
-                          ? "mic"
-                          : item
-                      }
-                    />
-                    {labels[item]}
-                  </button>
-                ),
-              )}
-            </nav>
-            <div className="sidebar-note">
-              <span className="status-dot" />
-              {demo
-                ? "Synthetic demo"
-                : source.connected
-                  ? "Connected to core"
-                  : "Core not connected"}
-            </div>
-          </aside>
-          <main className="main-content">
-            {screen === "interactive" ? (
-              <Interactive
-                key={selected ?? session?.id ?? "empty"}
-                session={selected ? undefined : session}
-                utterance={utterance}
-                source={source}
-                send={send}
-                draft={drafts[selected ?? session?.id ?? ""] ?? null}
-                onEdit={(draft) => {
-                  const id = selected ?? session?.id;
-                  if (id) setDrafts((drafts) => ({ ...drafts, [id]: draft }));
-                }}
-              />
-            ) : null}
-            {screen === "history" ? (
-              <History
-                rows={snapshot.history}
-                source={source}
-                send={send}
-                edit={(id) => {
-                  setSelected(id);
-                  setScreen("interactive");
-                }}
-              />
-            ) : null}
-            {screen === "settings" ? (
-              <Settings
-                key={JSON.stringify(snapshot.settings)}
-                settings={snapshot.settings}
-                devices={snapshot.devices}
-                host={snapshot.host}
-                send={send}
-              />
-            ) : null}
-            {screen === "setup" ? (
-              <Setup
-                key={snapshot.settings?.hotkey ?? "loading"}
-                settings={snapshot.settings}
-                devices={snapshot.devices}
-                session={session}
-                host={snapshot.host}
-                send={send}
-              />
-            ) : null}
-            {feedback ? (
-              <p className="action-feedback" role="status">
-                {feedback}
-              </p>
-            ) : null}
-            {error ? (
-              <p className="action-error" role="alert">
-                {error}
-                <button className="text-button" onClick={() => setError("")}>
-                  Dismiss
-                </button>
-              </p>
-            ) : null}
-          </main>
-        </div>
+        <main className="window">
+          {screen === "history" && selected ? (
+            editor(() => setSelected(null))
+          ) : screen === "history" ? (
+            <History
+              rows={snapshot.history}
+              source={source}
+              send={send}
+              edit={setSelected}
+            />
+          ) : screen === "settings" ? (
+            <Settings
+              key={JSON.stringify(snapshot.settings)}
+              settings={snapshot.settings}
+              devices={snapshot.devices}
+              host={snapshot.host}
+              send={send}
+            />
+          ) : (
+            <Setup
+              key={snapshot.settings?.hotkey ?? "loading"}
+              settings={snapshot.settings}
+              devices={snapshot.devices}
+              session={session}
+              host={snapshot.host}
+              send={send}
+            />
+          )}
+          {selected ? null : <p className="window-note">{note}</p>}
+        </main>
       )}
       {screen === "overlay" && error ? (
         <p className="overlay-error" role="alert">
@@ -220,7 +232,15 @@ export function App({
       ) : null}
       {demo && params.get("controls") !== "0" ? (
         <div className="demo-controls" aria-label="Fake stream controls">
-          <span>Synthetic stream</span>
+          {screens.map((item) => (
+            <button
+              key={item}
+              aria-current={screen === item ? "page" : undefined}
+              onClick={() => navigate(item)}
+            >
+              {labels[item]}
+            </button>
+          ))}
           <button onClick={() => demo.next()}>Next event</button>
           <button
             onClick={() => {
@@ -235,31 +255,13 @@ export function App({
             aria-label="Demo phase"
             value={session?.phase ?? "recording"}
             onChange={(event) =>
-              demo.phase(
-                event.target.value as NonNullable<typeof session>["phase"],
-              )
+              demo.phase(event.target.value as (typeof phases)[number])
             }
           >
-            {[
-              "recording",
-              "finishing",
-              "saving",
-              "saved",
-              "reviewing",
-              "pasting",
-              "pasted",
-              "failed",
-            ].map((phase) => (
+            {phases.map((phase) => (
               <option key={phase}>{phase}</option>
             ))}
           </select>
-          <button
-            onClick={() =>
-              navigate(screen === "overlay" ? "interactive" : "overlay")
-            }
-          >
-            {screen === "overlay" ? "Interactive" : "Overlay"}
-          </button>
         </div>
       ) : null}
     </>

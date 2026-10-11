@@ -12,8 +12,8 @@
         "label": "overlay",
         "url": "index.html?screen=overlay",
         "title": "Dictation",
-        "width": 480,
-        "height": 160,
+        "width": 544,
+        "height": 216,
         "visible": false,
         "focus": false,
         "focusable": false,
@@ -26,9 +26,17 @@
         "label": "interactive",
         "url": "index.html?screen=interactive",
         "title": "Review",
-        "width": 720,
-        "height": 560,
-        "visible": false
+        "width": 624,
+        "height": 269,
+        "visible": false,
+        "decorations": false,
+        "transparent": true,
+        "resizable": true,
+        "center": true,
+        "minWidth": 624,
+        "maxWidth": 624,
+        "minHeight": 269,
+        "maxHeight": 269
       },
       {
         "label": "history",
@@ -43,7 +51,7 @@
         "url": "index.html?screen=settings",
         "title": "Settings",
         "width": 640,
-        "height": 560,
+        "height": 680,
         "visible": false
       },
       {
@@ -51,7 +59,7 @@
         "url": "index.html?screen=setup",
         "title": "Setup",
         "width": 640,
-        "height": 560
+        "height": 680
       }
     ],
     "security": {

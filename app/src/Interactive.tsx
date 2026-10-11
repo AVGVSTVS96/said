@@ -1,10 +1,35 @@
 import { useRef, useState } from "react";
-import type { SessionView, UiAction, Utterance } from "./source";
+import type { CoreSource, SessionView, UiAction, Utterance } from "./source";
 import { userText } from "./source";
-import type { CoreSource } from "./source";
 import { Playback } from "./Playback";
-import { duration, Icon, LevelMeter, Status } from "./components";
+import {
+  duration,
+  Icon,
+  LevelMeter,
+  modifier,
+  Status,
+  Target,
+  Transcript,
+} from "./components";
 import { editDraft, editorText, type Draft } from "./editor";
+
+function editedRange(before: string, after: string) {
+  let start = 0;
+  while (
+    start < before.length &&
+    start < after.length &&
+    before[start] === after[start]
+  )
+    start++;
+  let end = 0;
+  while (
+    end < before.length - start &&
+    end < after.length - start &&
+    before[before.length - end - 1] === after[after.length - end - 1]
+  )
+    end++;
+  return [start, after.length - end] as const;
+}
 
 export function Interactive({
   session,
@@ -13,6 +38,8 @@ export function Interactive({
   send,
   draft,
   onEdit,
+  onClose,
+  note,
 }: {
   session?: SessionView;
   utterance?: Utterance;
@@ -20,6 +47,8 @@ export function Interactive({
   send: CoreSource["dispatch"];
   draft: Draft | null;
   onEdit: (draft: Draft) => void;
+  onClose?: () => void;
+  note?: React.ReactNode;
 }) {
   const [original, setOriginal] = useState(false);
   const [pending, setPending] = useState(false);
@@ -36,7 +65,6 @@ export function Interactive({
       ? editDraft(savedEdit)
       : null);
   const text = editorText(protectedDraft, committed, partial);
-  const liveTail = !draft && partial && text.endsWith(partial) ? partial : "";
   const recording =
     session?.phase === "recording" ||
     session?.phase === "finishing" ||
@@ -51,6 +79,9 @@ export function Interactive({
   const insertable = Boolean(
     id && ready && source.connected && text.length > 0,
   );
+  const [from, to] = protectedDraft?.edited
+    ? editedRange(committed + partial, text)
+    : [0, 0];
 
   async function act(type: "insert" | "copy" | "discard" | "cancel") {
     if (!id || pending) return;
@@ -65,148 +96,129 @@ export function Interactive({
   }
 
   return (
-    <section className="interactive-screen">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">Interactive dictation</p>
-          <h1>Your words, with room to edit.</h1>
-        </div>
+    <section
+      className="panel interactive"
+      aria-label="Interactive dictation"
+      onKeyDown={(event) => {
+        if (
+          event.key === "Enter" &&
+          (event.ctrlKey || event.metaKey) &&
+          !event.nativeEvent.isComposing &&
+          !composing.current
+        ) {
+          event.preventDefault();
+          if (insertable) void act("insert");
+        }
+      }}
+    >
+      <div className="row" data-tauri-drag-region>
         {session ? (
           <Status session={session} />
         ) : (
-          <span className="quiet">
-            {utterance ? "Saved recording" : "Ready when you are"}
+          <Status
+            label={
+              utterance ? "Saved" : source.connected ? "Ready" : "Not connected"
+            }
+          />
+        )}
+        {session?.phase === "recording" ? (
+          <LevelMeter level={session.level} />
+        ) : null}
+        {!session && utterance ? (
+          <span className="quiet">{duration(utterance.duration_ms)}</span>
+        ) : null}
+        <Target name={session?.target?.name ?? utterance?.pasted_to?.name} />
+        {onClose ? (
+          <button className="close" aria-label="Close" onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        ) : null}
+      </div>
+      <div className="editor">
+        <div className="editor-mirror" aria-hidden="true">
+          {protectedDraft?.edited ? (
+            <>
+              {text.slice(0, from)}
+              <mark className="edited">{text.slice(from, to)}</mark>
+              {text.slice(to)}
+            </>
+          ) : (
+            <Transcript committed={committed} partial={partial} />
+          )}
+          {text.endsWith("\n") ? "\n" : ""}
+        </div>
+        <textarea
+          aria-label="Dictation text"
+          value={text}
+          disabled={!id || !source.connected || !editable}
+          spellCheck={false}
+          autoCapitalize="off"
+          autoCorrect="off"
+          autoFocus={Boolean(id)}
+          onCompositionStart={() => {
+            composing.current = true;
+            onEdit(editDraft(text));
+            if (id) void send({ type: "edit", id, text }).catch(() => {});
+          }}
+          onCompositionEnd={() => {
+            composing.current = false;
+          }}
+          onChange={(event) => {
+            const next = event.target.value;
+            onEdit(editDraft(next));
+            if (id) void send({ type: "edit", id, text: next }).catch(() => {});
+          }}
+          onScroll={(event) => {
+            const mirror = event.currentTarget.previousElementSibling;
+            if (mirror) mirror.scrollTop = event.currentTarget.scrollTop;
+          }}
+        />
+      </div>
+      {original ? (
+        <div className="original">
+          <b>Original recognition</b>
+          <span className="record">
+            {committed}
+            <span className="provisional">{partial}</span>
+          </span>
+        </div>
+      ) : null}
+      <div className="foot">
+        <button
+          className="quiet"
+          aria-expanded={original}
+          onClick={() => setOriginal(!original)}
+        >
+          {original ? "Hide original" : "Show original"}
+        </button>
+        {note ?? (
+          <span className="hint">
+            <kbd>{modifier}</kbd>
+            <kbd>↩</kbd> inserts
           </span>
         )}
-      </header>
-      <div className="editor-card">
-        <div className="editor-toolbar">
-          <span className="target">
-            <Icon name="arrow" />
-            {session?.target?.name ??
-              utterance?.pasted_to?.name ??
-              "Recorded target"}
-          </span>
-          {session ? (
-            <LevelMeter level={session.level} />
-          ) : (
-            <span className="quiet">
-              {utterance
-                ? duration(utterance.duration_ms)
-                : "Local recognition"}
-            </span>
-          )}
-        </div>
-        <div className="editor-surface">
-          <div className="editor-mirror" aria-hidden="true">
-            <span>
-              {liveTail ? text.slice(0, text.length - liveTail.length) : text}
-            </span>
-            <span className="provisional">{liveTail}</span>
-            {text.endsWith("\n") ? "\n" : ""}
-          </div>
-          <textarea
-            aria-label="Dictation text"
-            placeholder="Your words will appear here. You can edit at any time."
-            value={text}
-            disabled={!id || !source.connected || !editable}
-            spellCheck={false}
-            autoCapitalize="off"
-            autoCorrect="off"
-            autoFocus={Boolean(id)}
-            onCompositionStart={() => {
-              composing.current = true;
-              onEdit(editDraft(text));
-              if (id) void send({ type: "edit", id, text }).catch(() => {});
-            }}
-            onCompositionEnd={() => {
-              composing.current = false;
-            }}
-            onChange={(event) => {
-              const next = event.target.value;
-              onEdit(editDraft(next));
-              if (id)
-                void send({ type: "edit", id, text: next }).catch(() => {});
-            }}
-            onScroll={(event) => {
-              const mirror = event.currentTarget.previousElementSibling;
-              if (mirror) {
-                mirror.scrollTop = event.currentTarget.scrollTop;
-                mirror.scrollLeft = event.currentTarget.scrollLeft;
-              }
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                (event.ctrlKey || event.metaKey) &&
-                !event.nativeEvent.isComposing &&
-                !composing.current
-              ) {
-                event.preventDefault();
-                if (insertable) void act("insert");
-              }
-            }}
-          />
-        </div>
-        <div className="editor-caption">
-          <span>
-            {protectedDraft?.edited
-              ? "Your edits stay yours. New words keep streaming."
-              : "Underlined words are provisional."}
-          </span>
-          <button
-            className="text-button"
-            aria-expanded={original}
-            onClick={() => setOriginal(!original)}
-          >
-            Original {original ? "−" : "+"}
-          </button>
-        </div>
-        {original ? (
-          <div className="original-panel">
-            <p className="eyebrow">
-              Original recognition · never changed by edits
-            </p>
-            <p className="verbatim">
-              {committed}
-              <span className="provisional">{partial}</span>
-            </p>
-          </div>
-        ) : null}
-        <div className="editor-actions">
-          <div className="button-group">
-            <button
-              disabled={!id || !source.connected || pending}
-              onClick={() => void act(recording ? "cancel" : "discard")}
-            >
-              {recording ? "Cancel recording" : "Discard"}
-            </button>
-            <button
-              disabled={
-                !id || !source.connected || !text || recording || pending
-              }
-              onClick={() => void act("copy")}
-            >
-              <Icon name="copy" />
-              Copy
-            </button>
-          </div>
-          <button
-            className="primary"
-            disabled={!insertable || pending}
-            onClick={() => void act("insert")}
-          >
-            Insert
-            <Icon name="arrow" />
-          </button>
-        </div>
-      </div>
-      <div className="below-editor">
-        <p>
-          Enter adds a line. <kbd>Ctrl / ⌘</kbd> + <kbd>Enter</kbd> inserts into
-          the recorded app.
-        </p>
-        <Playback id={id} />
+        <span className="spacer" />
+        {ready ? <Playback id={id} /> : null}
+        <button
+          disabled={!id || !source.connected || pending}
+          onClick={() => void act(recording ? "cancel" : "discard")}
+        >
+          {recording ? "Cancel recording" : "Discard"}
+        </button>
+        <button
+          disabled={!id || !source.connected || !text || recording || pending}
+          onClick={() => void act("copy")}
+        >
+          Copy
+        </button>
+        <button
+          className="primary"
+          disabled={!insertable || pending}
+          onClick={() => void act("insert")}
+        >
+          Insert
+          <Icon name="arrow" />
+        </button>
       </div>
     </section>
   );
