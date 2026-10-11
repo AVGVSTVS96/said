@@ -204,7 +204,7 @@ fn run() -> Result<()> {
                     .collect::<Vec<_>>(),
             )?;
             TrayIconBuilder::with_id("main")
-                .icon(ipc::tray_icon(false)?)
+                .icon(ipc::tray_icon(false))
                 .icon_as_template(cfg!(target_os = "macos"))
                 .menu(&menu)
                 .tooltip(env!("PRODUCT_NAME"))
