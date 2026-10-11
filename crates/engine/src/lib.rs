@@ -13,7 +13,7 @@ pub mod worker;
 use said_core::Result;
 
 pub trait Engine {
-    fn start(&mut self, vocabulary: &[String]) -> Result<()>;
+    fn start(&mut self) -> Result<()>;
     fn feed(&mut self, pcm16k: &[i16]);
     fn finish(&mut self);
     fn cancel(&mut self);

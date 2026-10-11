@@ -43,7 +43,7 @@ fn main() -> Result<()> {
             }
         }
     });
-    engine.start(&[])?;
+    engine.start()?;
     let mut wav = Wav::open(&PathBuf::from(&args[1]))?;
     let mut samples = 0_u64;
     while let Some(block) = wav.read()? {

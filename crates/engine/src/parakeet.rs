@@ -464,7 +464,7 @@ impl Parakeet {
 }
 
 impl Engine for Parakeet {
-    fn start(&mut self, _vocabulary: &[String]) -> Result<()> {
+    fn start(&mut self) -> Result<()> {
         if self.started {
             return Err("Parakeet instance already started".into());
         }

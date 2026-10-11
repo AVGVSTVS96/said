@@ -207,7 +207,7 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
         return Err("history search CLI did not return the persisted row".into());
     }
     println!(
-        "PASS Niri bind → said CLI → real host → same-binary Moonshine worker → durable history → scratch terminal: {} exact UTF-8 bytes, no Enter",
+        "PASS Niri bind → said CLI → real host → same-binary Parakeet worker → durable history → scratch terminal: {} exact UTF-8 bytes, no Enter",
         raw.len()
     );
     println!("PASS persistent history search over the owner-only control socket");

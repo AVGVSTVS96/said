@@ -22,10 +22,7 @@ fn requests_round_trip_on_one_stream_without_changing_pcm() {
     let samples = vec![i16::MIN, -1, 0, 1, i16::MAX];
     let frames = vec![
         RequestFrame {
-            message: WorkerRequest::Start {
-                id,
-                vocabulary: vec!["synthetic_term".into()],
-            },
+            message: WorkerRequest::Start { id },
             pcm: None,
         },
         RequestFrame {

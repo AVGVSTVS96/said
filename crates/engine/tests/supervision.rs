@@ -90,7 +90,7 @@ impl Drop for Fixture {
 fn same_binary_worker_recognizes_file_without_changing_bytes() {
     let fixture = Fixture::new();
     assert_eq!(
-        recognize_file(UtteranceId::random(), &fixture.config(), &fixture.wav, &[]).unwrap(),
+        recognize_file(UtteranceId::random(), &fixture.config(), &fixture.wav).unwrap(),
         "no no  café\t\n"
     );
 }
@@ -102,7 +102,7 @@ fn crash_hang_and_bad_framing_restart_with_a_fresh_id_and_the_same_audio() {
         let config = fixture.failing_once(first);
         let old = UtteranceId::random();
         let (mut engine, output) = WorkerEngine::new(old, config.clone()).unwrap();
-        engine.start(&[]).unwrap();
+        engine.start().unwrap();
         engine.feed(&[0]);
         engine.finish();
         let error = output.recv_timeout(Duration::from_secs(10)).unwrap();
@@ -112,7 +112,7 @@ fn crash_hang_and_bad_framing_restart_with_a_fresh_id_and_the_same_audio() {
         let new = UtteranceId::random();
         assert_ne!(old, new);
         assert_eq!(
-            recognize_file(new, &config, &fixture.wav, &[]).unwrap(),
+            recognize_file(new, &config, &fixture.wav).unwrap(),
             "no no  café\t\n"
         );
     }
@@ -157,7 +157,7 @@ fn hung_final_is_recovered_even_after_finish_was_sent() {
         );
     fs::write(fixture.directory.join("worker.sh"), script).unwrap();
     let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config.clone()).unwrap();
-    engine.start(&[]).unwrap();
+    engine.start().unwrap();
     engine.feed(&[0]);
     engine.finish();
     assert!(matches!(
@@ -166,7 +166,7 @@ fn hung_final_is_recovered_even_after_finish_was_sent() {
     ));
     assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
     assert_eq!(
-        recognize_file(UtteranceId::random(), &config, &fixture.wav, &[]).unwrap(),
+        recognize_file(UtteranceId::random(), &config, &fixture.wav).unwrap(),
         "tail"
     );
 }
@@ -176,10 +176,10 @@ fn cancellation_stops_a_hung_worker_without_late_usable_events() {
     let fixture = Fixture::new();
     let (mut engine, output) =
         WorkerEngine::new(UtteranceId::random(), fixture.failing_once("exec sleep 10")).unwrap();
-    engine.start(&[]).unwrap();
+    engine.start().unwrap();
     engine.feed(&[0]);
     engine.cancel();
-    assert!(engine.start(&[]).is_err());
+    assert!(engine.start().is_err());
     assert!(output.recv_timeout(Duration::from_secs(1)).is_err());
     assert_eq!(
         output.try_recv(),
@@ -211,7 +211,7 @@ fn replay_uses_new_identity_and_never_revises_failed_live_text() {
     let old = UtteranceId::random();
     let new = UtteranceId::random();
     let (mut engine, output) = WorkerEngine::new(old, config.clone()).unwrap();
-    engine.start(&[]).unwrap();
+    engine.start().unwrap();
     engine.feed(&[0]);
     engine.feed(&[0]);
     engine.finish();
@@ -225,7 +225,7 @@ fn replay_uses_new_identity_and_never_revises_failed_live_text() {
     );
     assert_ne!(old, new);
     assert_eq!(
-        recognize_file(new, &config, &fixture.wav, &[]).unwrap(),
+        recognize_file(new, &config, &fixture.wav).unwrap(),
         "no no  café\t\n"
     );
     assert!(fixture.wav.exists());
@@ -268,7 +268,7 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
     .unwrap();
     let (mut first, first_output) = client.engine(UtteranceId::random()).unwrap();
     let (mut second, second_output) = client.engine(UtteranceId::random()).unwrap();
-    first.start(&[]).unwrap();
+    first.start().unwrap();
     first.feed(&[0]);
     assert_eq!(
         first_output
@@ -277,7 +277,7 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
             .event,
         EngineEvent::Partial("active".into())
     );
-    second.start(&[]).unwrap();
+    second.start().unwrap();
     assert!(!client.unload_if_idle(Duration::ZERO));
     second.feed(&[0]);
     second.finish();
@@ -304,7 +304,6 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
             .recognize_file(
                 UtteranceId::random(),
                 &fixture.wav,
-                &[],
                 &crossbeam_channel::never()
             )
             .unwrap(),
@@ -361,7 +360,7 @@ while prefix := r.read(4):
     }
     assert!(!client.unload_if_idle(Duration::ZERO));
     let (mut engine, output) = client.engine(UtteranceId::random()).unwrap();
-    engine.start(&[]).unwrap();
+    engine.start().unwrap();
     let samples: Vec<i16> = (0..12_800).map(|index| (index % 32_767) as i16).collect();
     engine.feed(&samples);
     engine.finish();
@@ -422,7 +421,7 @@ while prefix := r.read(4):
             ..fixture.config()
         };
         let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config).unwrap();
-        engine.start(&[]).unwrap();
+        engine.start().unwrap();
         let samples: Vec<_> = (0..160000).map(|sample| sample as i16).collect();
         for block in samples.chunks(1600) {
             engine.feed(block);
@@ -454,7 +453,7 @@ while prefix := r.read(4):
 fn accepted_finish_completes_after_the_producer_handle_is_dropped() {
     let fixture = Fixture::new();
     let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), fixture.config()).unwrap();
-    engine.start(&[]).unwrap();
+    engine.start().unwrap();
     engine.feed(&[7; 3200]);
     engine.finish();
     drop(engine);
@@ -478,5 +477,110 @@ fn cancellation_before_start_closes_the_event_stream() {
     assert_eq!(
         output.try_recv(),
         Err(crossbeam_channel::TryRecvError::Disconnected)
+    );
+}
+
+#[test]
+fn queued_finish_returns_before_the_lease_and_preserves_every_spooled_sample() {
+    let fixture = Fixture::new();
+    let script = fixture.directory.join("capture.py");
+    fs::write(
+        &script,
+        r#"import sys, struct, json
+from pathlib import Path
+r = sys.stdin.buffer
+w = sys.stdout.buffer
+audio = None
+def send(value):
+    data = json.dumps(value).encode()
+    w.write(struct.pack('<I', len(data)) + data)
+    w.flush()
+while prefix := r.read(4):
+    value = json.loads(r.read(struct.unpack('<I', prefix)[0]))
+    if value['type'] == 'start':
+        audio = open(Path(sys.argv[1]) / (value['id'] + '.pcm'), 'wb')
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'partial', 'text': 'active'}})
+    elif value['type'] == 'audio':
+        audio.write(r.read(struct.unpack('<I', r.read(4))[0]))
+        audio.flush()
+        send({'type': 'audio_ack', 'id': value['id'], 'sequence': value['sequence']})
+    elif value['type'] == 'finish':
+        audio.close()
+        send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
+    elif value['type'] == 'cancel':
+        audio.close()
+"#,
+    )
+    .unwrap();
+    let client = said_engine::host::WorkerClient::warm(WorkerConfig {
+        executable: "python3".into(),
+        args: vec![
+            script.display().to_string(),
+            fixture.directory.display().to_string(),
+        ],
+        queue_frames: 1,
+        ..fixture.config()
+    })
+    .unwrap();
+    let (mut first, first_output) = client.engine(UtteranceId::random()).unwrap();
+    first.start().unwrap();
+    assert_eq!(
+        first_output
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .event,
+        EngineEvent::Partial("active".into())
+    );
+    let second_id = UtteranceId::random();
+    let (mut second, second_output) = client.engine(second_id).unwrap();
+    second.start().unwrap();
+    let samples: Vec<i16> = (0..400).collect();
+    for sample in &samples {
+        second.feed(&[*sample]);
+    }
+    let (returned, finished) = crossbeam_channel::bounded(1);
+    let finishing = std::thread::spawn(move || {
+        second.finish();
+        drop(second);
+        returned.send(()).unwrap();
+    });
+    let nonblocking = finished.recv_timeout(Duration::from_millis(200)).is_ok();
+    assert!(
+        second_output.try_recv().is_err(),
+        "second worker must still await the lease"
+    );
+    first.finish();
+    finishing.join().unwrap();
+    assert!(
+        nonblocking,
+        "Finish must return while the first utterance owns the worker"
+    );
+    assert_eq!(
+        first_output
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .event,
+        EngineEvent::Final
+    );
+    assert_eq!(
+        second_output
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .event,
+        EngineEvent::Partial("active".into())
+    );
+    assert_eq!(
+        second_output
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .event,
+        EngineEvent::Final
+    );
+    assert_eq!(
+        fs::read(fixture.directory.join(format!("{}.pcm", second_id.0))).unwrap(),
+        samples
+            .iter()
+            .flat_map(|sample| sample.to_le_bytes())
+            .collect::<Vec<_>>()
     );
 }

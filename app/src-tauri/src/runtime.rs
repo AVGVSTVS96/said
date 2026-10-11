@@ -102,6 +102,21 @@ pub fn worker_config(models: &Path, model: &str) -> Result<WorkerConfig> {
         queue_frames: 256,
     })
 }
+
+impl<P: HostPlatform, R: Recorder> Drop for Host<P, R> {
+    fn drop(&mut self) {
+        if self.capture.take().is_some() {
+            let _ = self.recorder.stop();
+            self.platform.recording(false);
+        }
+        for active in self.engines.values_mut() {
+            active.engine.cancel();
+        }
+        for cancellation in self.replaying.values() {
+            let _ = cancellation.try_send(());
+        }
+    }
+}
 impl<P: HostPlatform, R: Recorder> Host<P, R> {
     pub fn open(mut platform: P, recorder: R, paths: Paths) -> Result<Self> {
         let lock = paths.lock()?;
@@ -124,8 +139,6 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     id: id.clone(),
                     license: model.license.clone(),
                     source: model.source.clone(),
-                    cloud: false,
-                    vocabulary: model.adapter == "moonshine",
                 })
                 .collect(),
             download: DownloadState {
@@ -138,9 +151,8 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             permissions,
             instructions,
             notifications: BTreeMap::new(),
-            vocabulary_text: fs::read_to_string(paths.config.join("vocabulary.txt"))
-                .unwrap_or_default(),
             disk_bytes: 0,
+            disk_error: None,
             unavailable: None,
             scratch: None,
             setup_complete: paths.config.join("setup-complete").is_file(),
@@ -250,16 +262,6 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             engine: self.settings.engine.clone(),
             target,
             mode,
-            vocabulary: if self.settings.vocabulary {
-                self.state
-                    .vocabulary_text
-                    .lines()
-                    .filter(|term| !term.is_empty())
-                    .map(str::to_owned)
-                    .collect()
-            } else {
-                vec![]
-            },
             send,
         }
     }
@@ -323,6 +325,22 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         self.execute(effects)
     }
     pub fn ui(&mut self, action: UiAction) -> Result<()> {
+        if let UiAction::Edit { id, text } = &action {
+            let view = self.session.views().find(|view| view.id == *id);
+            match view.map(|view| (view.mode, view.phase)) {
+                Some((Mode::Interactive, Phase::Recording | Phase::Finishing | Phase::Saving)) => {
+                    return self.event(SessionEvent::Ui(action));
+                }
+                Some((_, Phase::Recording | Phase::Finishing | Phase::Saving | Phase::Pasting)) => {
+                    return Err("finish recognition and delivery before editing this entry".into());
+                }
+                _ => {
+                    self.history.edit(*id, text)?;
+                    self.session.history_edited(*id, text.clone());
+                    return Ok(());
+                }
+            }
+        }
         let id = match &action {
             UiAction::Insert { id }
             | UiAction::Copy { id }
@@ -412,10 +430,6 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 }
                 self.state.instructions = self.platform.instructions();
             }
-            HostAction::VocabularySave { text } => {
-                atomic_write(&self.paths.config.join("vocabulary.txt"), text.as_bytes())?;
-                self.state.vocabulary_text = text;
-            }
             HostAction::DownloadModel => self.install()?,
             HostAction::Permission { permission } => {
                 crate::desktop::request_permission(&permission)?
@@ -501,11 +515,21 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         self.state.notifications.remove(&id);
         Ok(())
     }
+    pub fn recording(&self) -> bool {
+        self.capture.is_some()
+    }
     pub fn snapshot(&mut self) -> Result<HostSnapshot> {
         self.sequence += 1;
         self.state.unavailable = self.session.unavailable_reason().map(str::to_owned);
         self.state.permissions = self.platform.permissions();
-        self.state.disk_bytes = disk_bytes(&self.paths.data)?;
+        self.state.instructions = self.platform.instructions();
+        match disk_bytes(&self.paths.data) {
+            Ok(bytes) => {
+                self.state.disk_bytes = bytes;
+                self.state.disk_error = None;
+            }
+            Err(error) => self.state.disk_error = Some(error.to_string()),
+        }
         let sessions: Vec<_> = self.session.views().cloned().collect();
         self.state
             .notifications
@@ -706,11 +730,11 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                         },
                     });
                 }
-                Effect::StartEngine { id, vocabulary } => {
+                Effect::StartEngine { id } => {
                     let result: Result<ActiveEngine> = (|| {
                         let (mut engine, events) =
                             self.client.as_ref().ok_or("model not ready")?.engine(id)?;
-                        engine.start(&vocabulary)?;
+                        engine.start()?;
                         Ok(ActiveEngine { engine, events })
                     })();
                     match result {
@@ -803,7 +827,6 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     id,
                     audio_id,
                     engine,
-                    vocabulary,
                 } => {
                     let (cancel, cancellation) = bounded(1);
                     self.replaying.insert(id, cancel);
@@ -817,16 +840,10 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                         let result = (|| {
                             let samples = said_audio::wav::recover_wav(&path)?;
                             let text = match client {
-                                Some(client) => {
-                                    client.recognize_file(id, &path, &vocabulary, &cancellation)?
+                                Some(client) => client.recognize_file(id, &path, &cancellation)?,
+                                None => {
+                                    recognize_file_with_cancel(id, &config, &path, &cancellation)?
                                 }
-                                None => recognize_file_with_cancel(
-                                    id,
-                                    &config,
-                                    &path,
-                                    &vocabulary,
-                                    &cancellation,
-                                )?,
                             };
                             Ok((samples * 1000 / 16000, text))
                         })();
@@ -885,7 +902,14 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 }
                 Effect::Show { .. } => {}
                 Effect::Notify { id, message } => {
-                    self.state.notifications.insert(id, message);
+                    self.state.notifications.insert(
+                        id,
+                        if message == "Saved. Use Insert last to insert." {
+                            self.settings.saved_hint()
+                        } else {
+                            message
+                        },
+                    );
                 }
             }
             if let Some(event) = response {

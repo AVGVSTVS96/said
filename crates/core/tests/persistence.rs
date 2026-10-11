@@ -175,14 +175,12 @@ fn settings_round_trip_atomic_save_defaults_and_invalid_file() {
     let path = directory.0.join("config/settings.toml");
     let defaults = Settings::load(&path, "manifest-engine").unwrap();
     assert_eq!(defaults.engine, "manifest-engine");
-    assert!(!defaults.vocabulary);
     assert!(defaults.apps.values().all(|app| !app.send));
     let mut settings = defaults;
     settings.microphone = Some("synthetic-mic".into());
     settings.hotkey = "super+d".into();
     settings.interactive_hotkey = "super+g".into();
     settings.insert_last_hotkey = "super+i".into();
-    settings.vocabulary = true;
     settings.apps.insert(
         "synthetic.editor".into(),
         AppSettings {
@@ -197,14 +195,19 @@ fn settings_round_trip_atomic_save_defaults_and_invalid_file() {
     assert_eq!(fs::read_dir(path.parent().unwrap()).unwrap().count(), 1);
     assert_eq!(Settings::load(&path, "unused").unwrap(), settings);
     fs::write(&path, "unknown_setting = true").unwrap();
-    assert!(Settings::load(&path, "manifest-engine").is_err());
+    assert_eq!(
+        Settings::load(&path, "manifest-engine").unwrap(),
+        Settings::defaults("manifest-engine")
+    );
     fs::write(&path, "hotkey = \"\"").unwrap();
     assert!(Settings::load(&path, "manifest-engine").is_err());
-    fs::write(&path, "vocabulary = true").unwrap();
-    assert_eq!(
-        Settings::load(&path, "manifest-engine").unwrap().engine,
-        "manifest-engine"
+    let mut old = toml::to_string(&settings).unwrap();
+    old.insert_str(
+        0,
+        "vocabulary = true\nfuture_setting = 'preserved on load'\n",
     );
+    fs::write(&path, old).unwrap();
+    assert_eq!(Settings::load(&path, "manifest-engine").unwrap(), settings);
 }
 
 #[cfg(unix)]
@@ -280,7 +283,7 @@ fn restart_recovery_and_insert_last_run_against_sqlite_and_fake_adapters() {
                                 ..Default::default()
                             },
                         );
-                        engine.start(&[]).unwrap();
+                        engine.start().unwrap();
                         engine.feed(&[1, -1]);
                         engine.finish();
                         events.push_back(SessionEvent::Audio(AudioEvent::Stopped {

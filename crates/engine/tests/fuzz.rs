@@ -25,10 +25,7 @@ fn mutation_fuzzing_request_and_response_decoders() {
     let id: UtteranceId = serde_json::from_str("\"00000000-0000-4000-8000-000000000001\"").unwrap();
     let mut corpus = vec![vec![], vec![255; 4], br#"\x00{"type":"bogus"}"#.to_vec()];
     for message in [
-        WorkerRequest::Start {
-            id,
-            vocabulary: vec!["no no café\n".into()],
-        },
+        WorkerRequest::Start { id },
         WorkerRequest::Audio { id, sequence: 0 },
         WorkerRequest::Finish { id },
         WorkerRequest::Cancel { id },

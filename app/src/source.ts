@@ -30,6 +30,7 @@ export type CoreSnapshot = Readonly<{
   devices: readonly InputDevice[];
   sequence?: number;
   host?: HostState;
+  connectionError?: string;
 }>;
 
 export interface CoreSource {
@@ -47,9 +48,10 @@ export function createCoreSource(send: (action: AppAction) => Promise<void>) {
     devices: [],
   };
   let pending = Promise.resolve();
+  let connected = true;
   const listeners = new Set<() => void>();
   return {
-    connected: true,
+    get connected() { return connected; },
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) {
       listeners.add(listener);
@@ -58,12 +60,21 @@ export function createCoreSource(send: (action: AppAction) => Promise<void>) {
       };
     },
     dispatch(action: AppAction) {
-      pending = pending.catch(() => {}).then(() => send(action));
+      pending = pending.catch(() => {}).then(() => {
+        if (!connected) throw new Error(snapshot.connectionError ?? "The host connection is not available.");
+        return send(action);
+      });
       return pending;
     },
     receive(next: CoreSnapshot) {
+      if (!connected) return;
       if (next.sequence !== undefined && snapshot.sequence !== undefined && next.sequence <= snapshot.sequence) return;
       snapshot = next;
+      listeners.forEach((listener) => listener());
+    },
+    disconnect(error: string) {
+      connected = false;
+      snapshot = { ...snapshot, sessions: [], settings: null, devices: [], host: undefined, connectionError: error };
       listeners.forEach((listener) => listener());
     },
   };
