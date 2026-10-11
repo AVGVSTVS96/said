@@ -30,7 +30,11 @@ said status
 said history search 'no AND file'
 ```
 
-`said hotkey` is the compositor-bind path. Explicit `toggle`, `interactive` and `insert-last` commands remain available. See [installation](../../packaging/INSTALL.md) for the current shortcut defaults and bind file.
+`said hotkey` is the compositor-bind path. Explicit `toggle`, `interactive` and `insert-last` commands remain available. The three editable settings are `hotkey`, `interactive_hotkey` and
+`insert_last_hotkey`. Linux defaults are Super+Z, Super+X and Super+A;
+macOS defaults are Option+Space, Option+X and Option+A, respectively.
+The saved-transcript hint uses the configured insert-last chord. See
+[installation](../../packaging/INSTALL.md) for the matching Niri bind file.
 
 The benchmark runs without desktop input:
 

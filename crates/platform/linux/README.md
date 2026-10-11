@@ -8,7 +8,8 @@ Other Wayland sessions use `Mode::Clipboard`: no focused target or automatic inp
 
 The host builds `Config::from_environment(storage_key)`, parses settings chords and merges app paste overrides. GlobalShortcuts Activated/Deactivated signals or readable evdev keyboards supply real key edges. Niri compositor commands supply press-only toggles when those edges are unavailable. Setup/status expose the input mode and unavailable reason. Joining the input group requires a new login and grants physical keyboard-device access.
 
-Native events flow through one hotkey receiver. Control requests use `control_hotkey` separately, including their release capability; bind commands are suppressed when native edges already handled the press. Explicit commands still work. Current packaged shortcuts are in [installation](../../../packaging/INSTALL.md) and [niri.kdl](../../../packaging/linux/niri.kdl).
+Native events flow through one hotkey receiver. Control requests use `control_hotkey` separately, including their release capability; bind commands are suppressed when native edges already handled the press. Explicit commands still work. The three configurable defaults are Super+Z for dictation, Super+X for interactive
+review and Super+A for insert-last. Packaged shortcuts are in [installation](../../../packaging/INSTALL.md) and [niri.kdl](../../../packaging/linux/niri.kdl).
 
 Niri's focus-change stream includes target close/disconnect. The host forwards it to core, which inhibits automatic delivery after an observed departure. Explicit focus waits for actual app/window identity. Paste checks identity before copying and again before posting; explicit Enter adds another check. Success means chord posted, not field acceptance. Clipboard text remains available after a failed post check.
 

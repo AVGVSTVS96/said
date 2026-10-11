@@ -12,7 +12,7 @@ Pending history is saved before capture starts. Audio streams to a durable WAV w
 
 ## Interaction
 
-Hold the configured shortcut to record and release to finish. A tap shorter than 300 ms starts toggle recording; the next press stops it. Linux compositor-only input has no release edge, so every press toggles. Setup/status describe the selected input mode; the current shortcut and Niri binds are documented in [installation](packaging/INSTALL.md).
+Quick dictation and interactive review have separate configurable shortcuts; insert-last has a third. Hold the selected recording shortcut to record and release to finish. A tap shorter than 300 ms starts toggle recording; the next press stops it. Linux compositor-only input has no release edge, so every press toggles. Setup/status describe the selected input mode; the current shortcut and Niri binds are documented in [installation](packaging/INSTALL.md).
 
 Quick dictation remembers the external target, shows live text in a nonfocusing overlay, finishes recognition, saves and checks focus before delivery. Observed departures inhibit automatic paste even after returning. Linux consumes Niri focus events. macOS focus observation and live delivery acceptance are subject to the limits below.
 

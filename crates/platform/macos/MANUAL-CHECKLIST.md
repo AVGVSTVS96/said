@@ -16,10 +16,11 @@ an ad-hoc build can invalidate grants; test one unchanged bundle.
    Use the setup screen's **Grant Microphone** once, choose **Allow**, and confirm
    the app appears enabled under **Microphone**. A denial must show its exact
    Settings recovery path; a policy restriction must say to contact an admin.
-3. Focus a scratch field. Hold Control+Option+Space for over 300 ms and release:
+3. Focus a scratch field. Hold Option+Space for over 300 ms and release:
    exactly one capture starts and ends. Repeat releasing Option before Space.
    Tap for under 300 ms: capture stays on; the next tap stops. Hold the chord
-   through key repeat: no duplicate start. Shift+the chord starts interactive mode.
+   through key repeat: no duplicate start. Option+X starts interactive mode; Option+A inserts the latest stored transcript.
+   Change all three shortcuts in Settings and verify the new bindings and hint.
    Escape cancels hold and toggle recordings, leaves a canceled history entry,
    and inserts nothing. Escape passes through normally when idle.
 4. While recording, type in the scratch field and click the overlay close button.

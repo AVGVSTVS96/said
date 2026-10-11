@@ -3,7 +3,7 @@
 Use Rust 1.90+, Bun 1.4+, curl, jq, OpenSSL and bzip2. The build verifies the native
 archive pinned in `crates/engine/models.json` and rejects build-machine library
 paths. Linux libraries use `$ORIGIN`; macOS uses `@rpath`. All sherpa/ONNX libraries
-ship compressed in the archive. The host finds the archive beside the installed
+ship compressed in the archive. The host finds the archive in the installed
 layout, stages it in private app data, rechecks its SHA-256 before extraction and
 loads the C ABI from there.
 No runtime library relies on a build directory or Python installation.
@@ -51,7 +51,8 @@ and requires logout/login. `said status` reports the active mode.
 
 For a portable directory, after a release build run
 `packaging/linux/install.sh target/packaging/said-0.0.0-linux-x86_64`, then tar that
-directory. Run its `bin/said`; moving the directory preserves relative paths.
+directory. Run its `bin/said`; the runtime archive stays at `lib/said/runtime.archive`, so
+moving the directory preserves relative paths.
 It needs the listed desktop libraries and compatible glibc. This is not a
 clean-distro-tested AppImage; cross-distro compatibility remains unverified.
 
@@ -65,7 +66,8 @@ nice -n 10 packaging/macos.sh
 
 The arm64 `.app` is under `target/aarch64-apple-darwin/release/bundle/macos/`;
 the compressed `.dmg` and SHA256SUMS are under `target/packaging/`. Deployment
-targets macOS 14. The complete bundle is ad-hoc signed and verified. This script does not perform Developer ID signing or notarization.
+targets macOS 14. The host stays at `Contents/MacOS/said`, with `runtime.archive` in Resources.
+The complete bundle is ad-hoc signed and verified. This script does not perform Developer ID signing or notarization.
 See [INSTALL](INSTALL.md). Builds do not pass the separate-account manual checklist.
 
 First-launch behavior and permission steps are described in [INSTALL](INSTALL.md).

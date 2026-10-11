@@ -204,8 +204,8 @@ flock "$HOME/.cache/said-model.lock" systemd-run --user --scope -q -p MemoryMax=
 ```
 
 That resource scope is Linux-specific. Run one model-loading probe at a time;
-on macOS use `nice -n 10`. The private headline comparison uses the original
-external silver scorer, not this public scorer's narrower negation/repetition
+on macOS use `nice -n 10`. The external silver-reference comparison uses a separate
+scorer, not this public scorer's narrower negation/repetition
 classes. Only aggregate precision receipts are published in
 [RESULTS.md](RESULTS.md#precision-and-idle-memory-polish); audio, manifests with
 private references, clip identifiers and transcripts stay outside the repository.
