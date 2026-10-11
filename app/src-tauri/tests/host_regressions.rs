@@ -58,6 +58,7 @@ impl Directory {
                     name: "Scratch".into(),
                 })),
                 copies: RefCell::new(vec![]),
+                instructions: RefCell::new(vec![]),
             },
             FakeRecorder::new(vec![(vec![1, 2], 0.2)], 1),
             Paths::new(self.0.clone(), self.0.join("config")),
@@ -75,6 +76,7 @@ impl Drop for Directory {
 struct TestPlatform {
     inner: FakePlatform,
     copies: RefCell<Vec<String>>,
+    instructions: RefCell<Vec<String>>,
 }
 impl Platform for TestPlatform {
     type Window = ();
@@ -95,6 +97,9 @@ impl Platform for TestPlatform {
     }
 }
 impl HostPlatform for TestPlatform {
+    fn instructions(&self) -> Vec<String> {
+        self.instructions.borrow().clone()
+    }
     fn copy(&self, text: &str) -> Result<()> {
         self.copies.borrow_mut().push(text.to_owned());
         Ok(())
@@ -267,7 +272,7 @@ fn optional_disk_metrics_fail_without_stopping_capture_or_losing_the_last_value(
     let previous = host.snapshot().unwrap().host.disk_bytes;
     let denied = directory.0.join("statistics");
     fs::create_dir(&denied).unwrap();
-    fs::set_permissions(&denied, fs::Permissions::from_mode(0)).unwrap();
+    fs::set_permissions(&denied, fs::Permissions::from_mode(0o0)).unwrap();
     let snapshot = host.snapshot().unwrap();
     assert_eq!(snapshot.host.disk_bytes, previous);
     assert!(
@@ -380,4 +385,20 @@ fn tray_recording_art_differs_from_the_idle_icon() {
         (recording.width(), recording.height())
     );
     assert_ne!(idle.rgba(), recording.rgba());
+}
+
+#[test]
+fn snapshot_refreshes_capabilities_without_a_settings_or_session_change() {
+    let directory = Directory::new();
+    let mut host = directory.host();
+    *host.platform.instructions.borrow_mut() = vec!["Shortcut registration pending".into()];
+    assert_eq!(
+        host.snapshot().unwrap().host.instructions,
+        ["Shortcut registration pending"]
+    );
+    *host.platform.instructions.borrow_mut() = vec!["Shortcut release available".into()];
+    assert_eq!(
+        host.snapshot().unwrap().host.instructions,
+        ["Shortcut release available"]
+    );
 }
