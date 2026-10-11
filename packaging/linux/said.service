@@ -1,0 +1,14 @@
+[Unit]
+Description=said local dictation
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/said
+MemoryMax=4G
+MemorySwapMax=0
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

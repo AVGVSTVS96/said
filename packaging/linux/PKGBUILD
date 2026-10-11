@@ -1,0 +1,25 @@
+pkgname=said
+pkgver=0.0.0
+pkgrel=1
+pkgdesc='Local dictation with Parakeet v3'
+arch=('x86_64')
+license=('MIT')
+depends=('webkit2gtk-4.1' 'libayatana-appindicator' 'gtk-layer-shell' 'alsa-lib' 'wl-clipboard' 'libxkbcommon' 'util-linux')
+makedepends=('rust' 'bun' 'git' 'curl' 'jq' 'openssl' 'bzip2')
+options=('!lto' '!debug' '!strip')
+source=("said::git+file://${SAID_REPO:-$(cd "$startdir/../.." && pwd)}#commit=${SAID_REVISION:-$(git -C "$startdir/../.." rev-parse HEAD)}")
+sha256sums=('SKIP')
+
+build() {
+    cd "$srcdir/said"
+    export CARGO_BUILD_JOBS=2 RUSTFLAGS='' CFLAGS='-O2 -pipe' CXXFLAGS='-O2 -pipe' MAKEFLAGS='-j2'
+    cd app
+    bun install --frozen-lockfile
+    bun run build
+    cd ..
+    cargo build --locked --release -p said-app --features custom-protocol --bin said
+}
+
+package() {
+    "$srcdir/said/packaging/linux/install.sh" "$pkgdir/usr"
+}
