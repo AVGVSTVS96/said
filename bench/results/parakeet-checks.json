@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "native_model": "parakeet-v3-fp32",
+  "scope": {
+    "MemoryMax": 4294967296,
+    "MemorySwapMax": 0
+  },
+  "linux_golden": {
+    "exit": 0,
+    "test_seconds": 74.75,
+    "observed_cgroup_peak_bytes": 4294967296,
+    "repeated_go": 6
+  },
+  "linux_native_app_plain": {
+    "result": "oom-kill",
+    "exit": 143,
+    "cgroup_peak_bytes": 4294967296
+  },
+  "linux_native_app_bounded_allocator": {
+    "exit": 0,
+    "test_seconds": 101.19,
+    "fixtures": 4,
+    "environment": {
+      "MALLOC_ARENA_MAX": "1",
+      "MALLOC_TRIM_THRESHOLD_": "131072"
+    },
+    "cgroup_peak_bytes": 3947511808
+  },
+  "macos_golden": {
+    "exit": 0,
+    "test_seconds": 20.12
+  },
+  "macos_native_app": {
+    "exit": 0,
+    "test_seconds": 22.59,
+    "fixtures": 4
+  },
+  "linux_public_regressions": {
+    "exit": 0,
+    "test_seconds": 160.79,
+    "commits": 4,
+    "transcript_words": 303,
+    "passage_anchor_count": 4,
+    "observed_cgroup_peak_bytes": 3424395264
+  },
+  "required_checks": {
+    "cargo test -p voice-engine": "pass",
+    "bench/scripts/ci.sh": "pass on Linux and macOS",
+    "cargo test -p voice-app --test end_to_end": "pass",
+    "bench pure tests": "13 passed",
+    "engine/bench clippy -D warnings": "pass",
+    "cargo fmt --all --check": "pass"
+  }
+}

@@ -43,8 +43,23 @@ enum Input {
     Finish,
 }
 
-type IdleWorker = Arc<Mutex<Option<Transport>>>;
+struct WorkerSlot {
+    transport: Mutex<Option<Transport>>,
+    available: Receiver<()>,
+    release: Sender<()>,
+}
 
+struct Lease<'a>(&'a Sender<()>);
+
+impl Drop for Lease<'_> {
+    fn drop(&mut self) {
+        let _ = self.0.try_send(());
+    }
+}
+
+type IdleWorker = Arc<WorkerSlot>;
+
+#[derive(Clone)]
 pub struct WorkerClient {
     config: WorkerConfig,
     idle: IdleWorker,
@@ -78,18 +93,76 @@ impl WorkerClient {
             }
         }
         worker.send(WorkerRequest::Cancel { id }, None)?;
+        let (release, available) = bounded(1);
+        release.send(())?;
         Ok(Self {
             config,
-            idle: Arc::new(Mutex::new(Some(worker))),
+            idle: Arc::new(WorkerSlot {
+                transport: Mutex::new(Some(worker)),
+                available,
+                release,
+            }),
         })
     }
 
     pub fn measured_real_time_factor(&self) -> Option<f64> {
         self.idle
+            .transport
             .lock()
             .ok()?
             .as_ref()
             .map(|worker| worker.watchdog.real_time_factor())
+    }
+
+    pub fn recognize_file(
+        &self,
+        id: UtteranceId,
+        path: &std::path::Path,
+        vocabulary: &[String],
+        cancellation: &Receiver<()>,
+    ) -> Result<String> {
+        let (mut engine, output) = self.engine(id)?;
+        let cancelled = engine.cancelled.clone();
+        let cancel_signal = engine.cancel_signal.clone();
+        engine.start(vocabulary)?;
+        thread::scope(|scope| {
+            let feeder = scope.spawn(move || -> Result<()> {
+                let mut wav = Wav::open(path)?;
+                while let Some(samples) = wav.read()? {
+                    if engine.cancelled.load(Ordering::Acquire) {
+                        return Err("recognition canceled".into());
+                    }
+                    engine.feed(&samples);
+                }
+                engine.finish();
+                Ok(())
+            });
+            let mut text = String::new();
+            let result = loop {
+                select! {
+                    recv(cancellation) -> _ => break Err("recognition canceled".into()),
+                    recv(output) -> message => match message {
+                        Ok(EngineOutput { event: EngineEvent::Committed(chunk), .. }) => text.push_str(&chunk),
+                        Ok(EngineOutput { event: EngineEvent::Partial(_), .. }) => {},
+                        Ok(EngineOutput { event: EngineEvent::Final, .. }) => break Ok(text),
+                        Ok(EngineOutput { event: EngineEvent::Error(error), .. }) => break Err(error.into()),
+                        Err(_) => break Err("worker closed during file recognition".into()),
+                    }
+                }
+            };
+            if result.is_err() {
+                cancelled.store(true, Ordering::Release);
+                let _ = cancel_signal.try_send(());
+            }
+            let feeding = feeder.join().map_err(|_| "audio file feeder panicked")?;
+            match result {
+                Ok(text) => {
+                    feeding?;
+                    Ok(text)
+                }
+                Err(error) => Err(error),
+            }
+        })
     }
 
     pub fn engine(&self, id: UtteranceId) -> Result<(WorkerEngine, Receiver<EngineOutput>)> {
@@ -292,7 +365,29 @@ fn supervise(
             }
         }
     };
-    let existing = idle.as_ref().and_then(|idle| idle.lock().ok()?.take());
+    let _lease = if let Some(idle) = &idle {
+        loop {
+            if cancelled.load(Ordering::Acquire) {
+                return;
+            }
+            select! {
+                recv(idle.available) -> ready => {
+                    if ready.is_err() { return; }
+                    break;
+                },
+                recv(cancellation) -> signal => {
+                    if signal.is_ok() { return; }
+                    cancellation = crossbeam_channel::never();
+                }
+            }
+        }
+        Some(Lease(&idle.release))
+    } else {
+        None
+    };
+    let existing = idle
+        .as_ref()
+        .and_then(|idle| idle.transport.lock().ok()?.take());
     let existing_is_warm = existing.is_some();
     let mut transport = existing
         .map(Ok)
@@ -416,7 +511,7 @@ fn supervise(
                         EngineEvent::Final => {
                             if finishing.is_none() || !pending.is_empty() { transport = Err("worker Final before all audio was acknowledged".into()); continue; }
                             if let (Some(idle), Ok(worker)) = (&idle, transport)
-                                && let Ok(mut slot) = idle.lock()
+                                && let Ok(mut slot) = idle.transport.lock()
                                 && slot.is_none() {
                                 *slot = Some(worker);
                             }

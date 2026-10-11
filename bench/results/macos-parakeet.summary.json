@@ -1,0 +1,227 @@
+{
+  "binary_sha256": "222bd0190d61a88ab0511d64b6c7063cc159864532030b19588408c11b8b35d2",
+  "build": {
+    "dependency_lock_sha256": "a69383f3c7397b6ba59bc0d88923e3b537decd87bde996b50bc602c89290c660",
+    "rust": "rustc 1.89.0 (29483883e 2025-08-04) (Homebrew)"
+  },
+  "ci": false,
+  "clips": 28,
+  "corpus_sha256": "650c19b6436e8840c0f01d02fb2d8546e364c275d4761847268b017f132cbb6c",
+  "engine_crate": "0.0.0",
+  "engines": {
+    "parakeet-v3-fp32": {
+      "cold_load_ms": 1701.8365,
+      "failed_clips": 0,
+      "filler": {
+        "matched": 13,
+        "opportunities": 18,
+        "precision": 0.9285714285714286,
+        "predicted": 14,
+        "recall": 0.7222222222222222
+      },
+      "hallucinated_words": 0,
+      "identifiers": {
+        "matched": 1,
+        "opportunities": 8,
+        "precision": 1.0,
+        "predicted": 1,
+        "recall": 0.125
+      },
+      "latency": {
+        "audio_seconds": 208.336875,
+        "first_partial_missing": 0,
+        "first_partial_p50_ms": 568.3312080000001,
+        "first_partial_p95_ms": 1188.4602499999999,
+        "first_partial_samples": 28,
+        "first_text_p50_ms": 568.3312080000001,
+        "first_text_p95_ms": 1188.4602499999999,
+        "max_replay_lag_ms": 5.188040999999885,
+        "release_5_to_20s_p50_ms": 235.10820800000002,
+        "release_5_to_20s_p95_ms": 762.364416,
+        "release_5_to_20s_samples": 8,
+        "release_to_final_p50_ms": 171.844208,
+        "release_to_final_p95_ms": 762.364416
+      },
+      "literal": {
+        "deletions": 26,
+        "hypothesis_words": 575,
+        "insertions": 13,
+        "reference_words": 588,
+        "substitutions": 66
+      },
+      "literal_wer": 0.17857142857142858,
+      "measured_busy_real_time_factor": 0.00170275,
+      "negation": {
+        "matched": 30,
+        "opportunities": 31,
+        "precision": 1.0,
+        "predicted": 30,
+        "recall": 0.967741935483871
+      },
+      "negations_added": 0,
+      "negations_changed": 0,
+      "negations_dropped": 1,
+      "normalized": {
+        "deletions": 22,
+        "hypothesis_words": 580,
+        "insertions": 10,
+        "reference_words": 592,
+        "substitutions": 25
+      },
+      "normalized_wer": 0.09628378378378379,
+      "peak_rss_bytes": 3415474176,
+      "pins": {
+        "adapter": "parakeet",
+        "chunk_seconds": 30,
+        "files": {
+          "decoder.onnx": "d593cdb0e571f5a457ec2219af9968cbf6b0e8198e8f7839b40a8754593bf68c",
+          "encoder.onnx": "3eed7ce424bf8339ad09233533c687e2dbd07e74ccf5027b5e7344019ea373b0",
+          "encoder.weights": "3af3f51af5f2d01dbbf5af47d42c7962a2c205f11004254bb4f2b979862f39a8",
+          "joiner.onnx": "b9b0bcf88ac571902e69a6536223ed2d94885e981b85045410f1403d53121a63",
+          "tokens.txt": "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"
+        },
+        "license": "CC-BY-4.0",
+        "overlap_seconds": 5,
+        "provider": "cpu",
+        "ranking_candidate": true,
+        "runtime_files_sha256": {
+          "libonnxruntime.dylib": "3567d114f7299d559993e536d605a6f46d7bc9d2542004accc80ee9bf5457f0b",
+          "libsherpa-onnx-c-api.dylib": "ae729669633008692c670d4e4c942db7ea5bdc38abc2f479516062d48849e9d1",
+          "libsherpa-onnx-cxx-api.dylib": "7d9529551bea7e63d795a6c8d02b746bca06c1ab3080f2f14698d945b6810c8d"
+        },
+        "runtime_library_sha256": "ae729669633008692c670d4e4c942db7ea5bdc38abc2f479516062d48849e9d1",
+        "runtime_source_revision": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf",
+        "runtime_source_sha256": "0a8db6c55dd318f4a688faba85f7760b99a6c92e8ef8864479d418531bee1ac2",
+        "runtime_version": "1.13.8",
+        "source": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3/resolve/1a468a35cbba69418f126de829e75261dea4a4e4/",
+        "threads": 8,
+        "update_samples": 32000
+      },
+      "repetition": {
+        "matched": 9,
+        "opportunities": 14,
+        "precision": 1.0,
+        "predicted": 9,
+        "recall": 0.6428571428571429
+      },
+      "strata": {
+        "filler": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 10,
+          "reference_words": 317
+        },
+        "flag": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 23
+        },
+        "identifier": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 8
+        },
+        "long": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 8,
+          "reference_words": 304
+        },
+        "natural": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 1,
+          "normalized_errors": 23,
+          "reference_words": 111
+        },
+        "negation": {
+          "clips": 11,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 20,
+          "reference_words": 401
+        },
+        "noise": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "path": {
+          "clips": 2,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 4,
+          "reference_words": 23
+        },
+        "repetition": {
+          "clips": 3,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 10,
+          "reference_words": 327
+        },
+        "silence": {
+          "clips": 1,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 0,
+          "reference_words": 0
+        },
+        "technical": {
+          "clips": 5,
+          "negations_added": 0,
+          "negations_dropped": 0,
+          "normalized_errors": 22,
+          "reference_words": 345
+        }
+      },
+      "successful_clips": 28,
+      "technical": {
+        "matched": 17,
+        "opportunities": 18,
+        "precision": 1.0,
+        "predicted": 17,
+        "recall": 0.9444444444444444
+      }
+    }
+  },
+  "host": {
+    "architecture": "aarch64",
+    "cpu": "Apple M1 Max",
+    "kernel": "25.6.0",
+    "logical_cpus": 10,
+    "os": "macos"
+  },
+  "mode": "real_time",
+  "model_manifest_sha256": "b75b1b12a542acf5e3b00a224d82ed1180cb99c14ad95288ce4ebd79c33e6d4b",
+  "postprocessing": "none",
+  "reference_statuses": {
+    "authored_unreviewed": 21,
+    "deterministic": 2,
+    "upstream_verbatim": 5
+  },
+  "requested_engines": [
+    "parakeet-v3-fp32"
+  ],
+  "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
+  "runtime_version": "1.13.8",
+  "schema": 1,
+  "started_unix_ms": 1791679616089,
+  "vocabulary": [],
+  "watchdog": {
+    "policy": "acknowledgment progress; max(seed floor, 4 * max(recent median busy RTF * min(uncommitted seconds, 30), recent peak busy RTF * min(uncommitted seconds, 0.5)))"
+  },
+  "worker_deadlines_seconds": {
+    "audio": 10,
+    "finish": 30,
+    "startup": 60
+  }
+}

@@ -234,6 +234,19 @@ fn replay_uses_new_identity_and_never_revises_failed_live_text() {
 #[test]
 fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
     let fixture = Fixture::new();
+    fs::write(
+        &fixture.trace,
+        serde_json::to_vec(&Trace {
+            start: vec![EngineEvent::Partial("active".into())],
+            finish: vec![
+                EngineEvent::Committed("no no  café\t\n".into()),
+                EngineEvent::Final,
+            ],
+            ..Trace::default()
+        })
+        .unwrap(),
+    )
+    .unwrap();
     let script = fixture.directory.join("counted.sh");
     let starts = fixture.directory.join("starts");
     fs::write(
@@ -253,20 +266,49 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
         ..fixture.config()
     })
     .unwrap();
-    for _ in 0..2 {
-        let (mut engine, output) = client.engine(UtteranceId::random()).unwrap();
-        engine.start(&[]).unwrap();
-        engine.feed(&[0]);
-        engine.finish();
-        assert_eq!(
-            output.recv_timeout(Duration::from_secs(2)).unwrap().event,
-            EngineEvent::Committed("no no  café\t\n".into())
-        );
-        assert_eq!(
-            output.recv_timeout(Duration::from_secs(2)).unwrap().event,
-            EngineEvent::Final
-        );
+    let (mut first, first_output) = client.engine(UtteranceId::random()).unwrap();
+    let (mut second, second_output) = client.engine(UtteranceId::random()).unwrap();
+    first.start(&[]).unwrap();
+    first.feed(&[0]);
+    assert_eq!(
+        first_output
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .event,
+        EngineEvent::Partial("active".into())
+    );
+    second.start(&[]).unwrap();
+    second.feed(&[0]);
+    second.finish();
+    assert!(
+        second_output
+            .recv_timeout(Duration::from_millis(100))
+            .is_err()
+    );
+    first.finish();
+    for output in [first_output, second_output] {
+        let mut text = String::new();
+        loop {
+            match output.recv_timeout(Duration::from_secs(2)).unwrap().event {
+                EngineEvent::Committed(chunk) => text.push_str(&chunk),
+                EngineEvent::Final => break,
+                EngineEvent::Partial(_) => {}
+                EngineEvent::Error(error) => panic!("{error}"),
+            }
+        }
+        assert_eq!(text, "no no  café\t\n");
     }
+    assert_eq!(
+        client
+            .recognize_file(
+                UtteranceId::random(),
+                &fixture.wav,
+                &[],
+                &crossbeam_channel::never()
+            )
+            .unwrap(),
+        "no no  café\t\n"
+    );
     assert_eq!(fs::read(starts).unwrap(), b"x");
 }
 

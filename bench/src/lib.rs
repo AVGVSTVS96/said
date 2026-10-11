@@ -40,7 +40,7 @@ pub fn cli(args: &[String]) -> Result<()> {
         return worker_main(Some(model), &manifest, &cache);
     }
     if args.first().map(String::as_str) != Some("bench") {
-        return Err("usage: voice bench <manifest.jsonl> [--engine NAME|--all] [--ci] [--audio-root DIR] [--output DIR] [--trace FILE] [--model-manifest FILE] [--model-cache DIR]".into());
+        return Err("usage: voice bench <manifest.jsonl> [--engine NAME|--all] [--ci] [--unpaced] [--audio-root DIR] [--output DIR] [--trace FILE] [--model-manifest FILE] [--model-cache DIR]".into());
     }
     runner::run(runner::Options::parse(&args[1..])?)
 }

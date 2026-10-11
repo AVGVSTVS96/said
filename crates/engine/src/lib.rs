@@ -1,9 +1,10 @@
 pub mod fake;
 pub mod host;
 pub mod manifest;
-pub mod moonshine;
 mod native;
+pub mod parakeet;
 pub mod protocol;
+mod sherpa_abi;
 mod spool;
 mod watchdog;
 pub mod wav;
