@@ -111,7 +111,7 @@ fn parakeet_worker_host_history_and_paste_preserve_exact_bytes() {
 }
 
 #[test]
-fn stop_drains_final_frames_before_the_next_recording_starts() {
+fn cold_start_spools_frames_and_stop_drains_before_the_next_recording() {
     use crossbeam_channel::{Receiver, Sender, bounded};
     use said_app::{runtime::Host, storage::Paths};
     use said_audio::{Recorder, wav::WavWriter};
@@ -177,6 +177,7 @@ fn stop_drains_final_frames_before_the_next_recording_starts() {
         queue_frames: 16,
     })
     .unwrap();
+    assert!(client.unload_if_idle(Duration::ZERO));
     let platform = FakePlatform::new(Some(Target {
         app_id: "scratch".into(),
         window_id: "1".into(),

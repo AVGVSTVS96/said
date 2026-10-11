@@ -8,3 +8,10 @@ The distributed ONNX export is provided by the sherpa-onnx maintainer:
 https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3
 Revision: 1a468a35cbba69418f126de829e75261dea4a4e4
 The app uses this unquantized export without modifying its weights.
+
+Experimental benchmark exports, also derived from NVIDIA Parakeet TDT v3:
+Official INT8 export:
+https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/tree/2bda32ec70b097a55adaa07d9a7173915b43cc78
+Community FP16 encoder / INT8 decoder-and-joiner export:
+https://huggingface.co/ako101/parakeet-tdt-0.6b-v3-sherpa-onnx-fp16/tree/960f38997f4d70341fbd1ffc1de61a226c959cf8
+These benchmark exports are not application defaults. They retain CC-BY-4.0 attribution.
