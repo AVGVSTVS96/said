@@ -5,4 +5,4 @@ Comment=Local dictation
 Exec=said
 Icon=said
 Terminal=false
-Categories=Utility;Audio;
+Categories=Utility;
