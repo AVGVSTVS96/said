@@ -178,6 +178,9 @@ fn settings_round_trip_atomic_save_defaults_and_invalid_file() {
     assert!(defaults.apps.values().all(|app| !app.send));
     let mut settings = defaults;
     settings.microphone = Some("synthetic-mic".into());
+    settings.hotkey = "super+d".into();
+    settings.interactive_hotkey = "super+g".into();
+    settings.insert_last_hotkey = "super+i".into();
     settings.apps.insert(
         "synthetic.editor".into(),
         AppSettings {

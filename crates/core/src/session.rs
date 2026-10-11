@@ -492,7 +492,7 @@ impl Session {
                     entry.manual = false;
                     effects.push(Effect::Notify {
                         id,
-                        message: "Saved. Press Ctrl+Alt+V to insert".into(),
+                        message: "Saved. Use Insert last to insert.".into(),
                     });
                 }
             }
