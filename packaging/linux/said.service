@@ -5,6 +5,8 @@ After=graphical-session.target
 
 [Service]
 ExecStart=/usr/bin/said
+MemoryMax=4G
+MemorySwapMax=0
 Restart=on-failure
 RestartSec=3
 

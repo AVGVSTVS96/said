@@ -19,14 +19,14 @@ alsa-lib wl-clipboard libxkbcommon curl jq openssl bzip2`, then:
 
 ```sh
 cd packaging/linux
-CARGO_BUILD_JOBS=2 makepkg
+systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- env CARGO_BUILD_JOBS=2 makepkg
 sudo pacman -U said-*.pkg.tar.zst
 systemctl --user enable --now said.service
 ```
 
 The PKGBUILD builds the committed checkout with two Cargo jobs and locked Rust/Bun
 dependencies. `SAID_REPO` and `SAID_REVISION` select another local clone/commit.
-Models are not packaged. `said` is on PATH. The user service starts/stops with
+Models are not packaged. `said` is on PATH. The service has a 4G memory cap and no swap. The user service starts/stops with
 `graphical-session.target`; Niri's systemd session imports Wayland environment
 before activating that target. Enable it in a systemd graphical session.
 
