@@ -1,6 +1,6 @@
 # Builds
 
-Use Rust 1.90+, Bun, curl, jq, OpenSSL and bzip2. The build verifies the native
+Use Rust 1.90+, Bun 1.4+, curl, jq, OpenSSL and bzip2. The build verifies the native
 archive pinned in `crates/engine/models.json` and rejects build-machine library
 paths. Linux libraries use `$ORIGIN`; macOS uses `@rpath`. All sherpa/ONNX libraries
 ship compressed in the archive. A native launcher stages it in private app data;

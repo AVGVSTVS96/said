@@ -26,7 +26,7 @@ MIT for this code. Models and third-party runtimes will have their own licenses,
 
 ## Build from source
 
-Install Rust 1.90+ and Bun, then clone the repository. Arch/CachyOS dependencies
+Install Rust 1.90+ and Bun 1.4+, then clone the repository. Arch/CachyOS dependencies
 and the package build are in [packaging](packaging/README.md): run
 `CARGO_BUILD_JOBS=2 makepkg` from `packaging/linux`. On Apple Silicon, install
 Xcode command-line tools, jq and OpenSSL, then run
