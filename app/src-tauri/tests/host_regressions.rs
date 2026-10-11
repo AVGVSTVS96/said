@@ -283,3 +283,101 @@ fn optional_disk_metrics_fail_without_stopping_capture_or_losing_the_last_value(
     fs::set_permissions(&denied, fs::Permissions::from_mode(0o700)).unwrap();
     assert!(host.snapshot().unwrap().host.disk_error.is_none());
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn expired_control_requests_cannot_start_or_toggle_a_recording() {
+    use said_platform::linux::control::{ControlCommand, ControlRequest};
+    let directory = Directory::new();
+    let mut host = directory.host();
+    let (reply, response) = crossbeam_channel::bounded(1);
+    said_app::ipc::reply_control(
+        ControlRequest {
+            command: ControlCommand::Toggle,
+            reply,
+            deadline: Instant::now(),
+        },
+        |command| said_app::cli::control(&mut host, command),
+    );
+    assert!(response.recv().unwrap().unwrap_err().contains("expired"));
+    assert_eq!(host.session.views().count(), 0);
+    assert!(host.history.search("").unwrap().is_empty());
+    let (reply, response) = crossbeam_channel::bounded(1);
+    said_app::ipc::reply_control(
+        ControlRequest {
+            command: ControlCommand::Toggle,
+            reply,
+            deadline: Instant::now() + Duration::from_secs(3),
+        },
+        |command| said_app::cli::control(&mut host, command),
+    );
+    assert_eq!(response.recv().unwrap().unwrap(), "applied");
+    assert_eq!(host.session.views().count(), 1);
+    host.stop().unwrap();
+}
+
+#[test]
+fn actor_startup_returns_while_initialization_waits_for_the_main_thread() {
+    let (initialize, initialization) = crossbeam_channel::bounded(1);
+    let (returned, connection) = crossbeam_channel::bounded(1);
+    let (failed, failure) = crossbeam_channel::bounded(1);
+    let starting = std::thread::spawn(move || {
+        let actor = said_app::ipc::Connection::start(
+            move |requests| {
+                initialization.recv()?;
+                assert!(matches!(requests.recv()?, said_app::ipc::Request::Shutdown));
+                Ok(())
+            },
+            move |error| {
+                failed.send(error).unwrap();
+            },
+        )
+        .unwrap();
+        returned.send(actor).unwrap();
+    });
+    let result = connection.recv_timeout(Duration::from_millis(200));
+    initialize.send(()).unwrap();
+    let actor = result.expect(
+        "setup must receive the connection before main-thread-dependent initialization finishes",
+    );
+    actor.0.send(said_app::ipc::Request::Shutdown).unwrap();
+    starting.join().unwrap();
+    assert!(failure.recv_timeout(Duration::from_secs(1)).is_err());
+}
+
+#[test]
+fn actor_initialization_failure_and_panic_both_publish_terminal_errors() {
+    for panic in [false, true] {
+        let (failed, failure) = crossbeam_channel::bounded(1);
+        let actor = said_app::ipc::Connection::start(
+            move |_| {
+                assert!(!panic, "synthetic actor panic");
+                Err("synthetic initialization failure".into())
+            },
+            move |error| {
+                failed.send(error).unwrap();
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            failure.recv_timeout(Duration::from_secs(1)).unwrap(),
+            if panic {
+                "host actor panicked"
+            } else {
+                "synthetic initialization failure"
+            }
+        );
+        assert!(actor.0.send(said_app::ipc::Request::Shutdown).is_err());
+    }
+}
+
+#[test]
+fn tray_recording_art_differs_from_the_idle_icon() {
+    let idle = said_app::ipc::tray_icon(false);
+    let recording = said_app::ipc::tray_icon(true);
+    assert_eq!(
+        (idle.width(), idle.height()),
+        (recording.width(), recording.height())
+    );
+    assert_ne!(idle.rgba(), recording.rgba());
+}

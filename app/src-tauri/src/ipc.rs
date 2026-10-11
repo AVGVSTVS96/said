@@ -3,7 +3,7 @@ use crate::{
     runtime::{Host, HostPlatform},
     storage::Paths,
 };
-use crossbeam_channel::{Sender, bounded};
+use crossbeam_channel::{Receiver, Sender, bounded};
 use said_audio::CpalRecorder;
 use said_core::History;
 use said_core::{Result, *};
@@ -33,6 +33,23 @@ pub enum Request {
 #[derive(Clone)]
 pub struct Connection(pub Sender<Request>);
 impl Connection {
+    pub fn start(
+        run: impl FnOnce(Receiver<Request>) -> Result<()> + Send + 'static,
+        failed: impl FnOnce(String) + Send + 'static,
+    ) -> Result<Self> {
+        let (sender, requests) = bounded(32);
+        std::thread::Builder::new()
+            .name("said-host".into())
+            .spawn(move || {
+                let result =
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(requests)))
+                        .unwrap_or_else(|_| Err("host actor panicked".into()));
+                if let Err(error) = result {
+                    failed(error.to_string());
+                }
+            })?;
+        Ok(Self(sender))
+    }
     fn response(
         &self,
         request: impl FnOnce(Sender<std::result::Result<HostSnapshot, String>>) -> Request,
@@ -78,15 +95,38 @@ pub async fn host_action(
     .await
     .map_err(|e| e.to_string())?
 }
+
+#[cfg(target_os = "linux")]
+pub fn reply_control(
+    request: said_platform::linux::control::ControlRequest,
+    apply: impl FnOnce(said_platform::linux::control::ControlCommand) -> Result<String>,
+) {
+    let result = if request.expired() {
+        Err("control request expired".into())
+    } else {
+        apply(request.command)
+    };
+    let _ = request
+        .reply
+        .try_send(result.map_err(|error| error.to_string()));
+}
+
+pub fn tray_icon(recording: bool) -> tauri::image::Image<'static> {
+    match (cfg!(target_os = "macos"), recording) {
+        (true, false) => tauri::include_image!("icons/tray/iconTemplate@2x.png"),
+        (true, true) => tauri::include_image!("icons/tray/iconRecordingTemplate@2x.png"),
+        (false, false) => tauri::include_image!("icons/tray/said-tray-idle-paper-48.png"),
+        (false, true) => tauri::include_image!("icons/tray/said-tray-recording-paper-48.png"),
+    }
+}
+
 pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
-    let (sender, requests) = bounded(32);
-    let (ready, started) = bounded(1);
-    std::thread::spawn(move || {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| -> Result<()> {
+    let errors = app.clone();
+    Connection::start(
+        move |requests| {
             let recorder = CpalRecorder::new(paths.data.join("audio"));
             let mut host = Host::open(Desktop::default(), recorder, paths)?;
             host.install()?;
-            ready.send(Ok(())).map_err(|_| "app startup canceled")?;
             if let Some(overlay) = app
                 .get_webview_window("overlay")
                 .map(|view| view.as_ref().window().clone())
@@ -100,6 +140,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
             let mut interactive_id = None;
             let mut interactive_closed = false;
             let mut tray_label = String::new();
+            let mut tray_recording = None;
             loop {
                 let mut changed = host.poll()?;
                 for hotkey in host.platform.hotkeys().try_iter() {
@@ -111,21 +152,21 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                 #[cfg(target_os = "linux")]
                 for request in host.platform.control_requests().try_iter() {
                     use said_platform::linux::control::ControlCommand as C;
-                    let result = if matches!(
-                        request.command,
-                        C::Hotkey | C::HotkeyInteractive | C::HotkeyInsertLast
-                    ) {
-                        match host.platform.control_hotkey(request.command) {
-                            Some((hotkey, observable)) => {
-                                host.hotkey(hotkey, observable).map(|_| "applied".into())
+                    reply_control(request, |command| {
+                        if matches!(
+                            command,
+                            C::Hotkey | C::HotkeyInteractive | C::HotkeyInsertLast
+                        ) {
+                            match host.platform.control_hotkey(command) {
+                                Some((hotkey, observable)) => {
+                                    host.hotkey(hotkey, observable).map(|_| "applied".into())
+                                }
+                                None => Ok("handled by native key edges".into()),
                             }
-                            None => Ok("handled by native key edges".into()),
+                        } else {
+                            crate::cli::control(&mut host, command)
                         }
-                    } else {
-                        crate::cli::control(&mut host, request.command)
-                    }
-                    .map_err(|e| e.to_string());
-                    let _ = request.reply.send(result);
+                    });
                     changed = true;
                 }
                 let mut reply = None;
@@ -198,18 +239,25 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                         }
                     }
                     let snapshot = host.snapshot()?;
+                    let recording = host.recording();
+                    if tray_recording != Some(recording) {
+                        if let Some(tray) = app.tray_by_id("main") {
+                            let _ = tray.set_icon(Some(tray_icon(recording)));
+                            tray_recording = Some(recording);
+                        }
+                    }
                     let label = if let Some(reason) = &snapshot.host.unavailable {
-                        format!("{} — {reason}", env!("PRODUCT_NAME"))
+                        format!("{} · {reason}", env!("PRODUCT_NAME"))
                     } else if snapshot
                         .host
                         .permissions
                         .values()
                         .any(|status| status != "authorized")
                     {
-                        format!("{} — Grant permissions in Setup", env!("PRODUCT_NAME"))
+                        format!("{} · Grant permissions in Setup", env!("PRODUCT_NAME"))
                     } else if snapshot.host.download.state != "ready" {
                         format!(
-                            "{} — Model {}",
+                            "{} · Model {}",
                             env!("PRODUCT_NAME"),
                             snapshot.host.download.state
                         )
@@ -279,19 +327,19 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                 }
             }
             Ok(())
-        }))
-        .unwrap_or_else(|_| Err("host actor panicked".into()));
-        if let Err(error) = result {
-            let _ = ready.send(Err(error.to_string()));
+        },
+        move |error| {
             eprintln!("host stopped: {error}");
-            let _ = app.emit("host-error", error.to_string());
-        }
-    });
-    started
-        .recv()
-        .map_err(|_| "host startup thread exited")?
-        .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> { error.into() })?;
-    Ok(Connection(sender))
+            if let Some(tray) = errors.tray_by_id("main") {
+                let _ = tray.set_icon(Some(tray_icon(false)));
+                let _ = tray.set_tooltip(Some(format!(
+                    "{} · Host stopped: {error}",
+                    env!("PRODUCT_NAME")
+                )));
+            }
+            let _ = errors.emit("host-error", error);
+        },
+    )
 }
 pub fn audio(
     connection: &Connection,

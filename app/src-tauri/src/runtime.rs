@@ -515,10 +515,14 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         self.state.notifications.remove(&id);
         Ok(())
     }
+    pub fn recording(&self) -> bool {
+        self.capture.is_some()
+    }
     pub fn snapshot(&mut self) -> Result<HostSnapshot> {
         self.sequence += 1;
         self.state.unavailable = self.session.unavailable_reason().map(str::to_owned);
         self.state.permissions = self.platform.permissions();
+        self.state.instructions = self.platform.instructions();
         match disk_bytes(&self.paths.data) {
             Ok(bytes) => {
                 self.state.disk_bytes = bytes;
@@ -898,7 +902,14 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 }
                 Effect::Show { .. } => {}
                 Effect::Notify { id, message } => {
-                    self.state.notifications.insert(id, message);
+                    self.state.notifications.insert(
+                        id,
+                        if message == "Saved. Use Insert last to insert." {
+                            self.settings.saved_hint()
+                        } else {
+                            message
+                        },
+                    );
                 }
             }
             if let Some(event) = response {

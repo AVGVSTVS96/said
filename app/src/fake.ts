@@ -14,7 +14,9 @@ const target = {
   name: "Text editor",
 };
 const settings: Settings = {
-  hotkey: "ctrl+alt+space",
+  hotkey: "super+z",
+  interactive_hotkey: "super+x",
+  insert_last_hotkey: "super+a",
   engine: "parakeet-v3-fp32",
   microphone: null,
   apps: {
