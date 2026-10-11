@@ -9,7 +9,7 @@
 
 Hold a key and talk. What the recognizer heard is what gets pasted, ums and all.
 
-said is a local dictation app for macOS and Linux (Niri), built for talking to Claude Code, Codex and terminals. It saves the recognizer's finalized text before pasting it. There is no language model cleanup pass. Your own edits stay separate from the original recognition. Enter is sent only when you enable it for an app.
+said is a local dictation app for macOS and Linux (Niri), built for talking to Claude Code, Codex and terminals. It saves the recognizer's finalized text before pasting it and never edits that text. There is no language model cleanup pass. Your own edits stay separate from the original recognition. By default it does not press Enter; you can enable that per app.
 
 Any recognizer can mishear. Both platforms use Parakeet TDT v3 FP32 through sherpa-onnx on CPU. [Benchmark results](bench/RESULTS.md) report errors, performance and reference limitations. The default is provisional; it has not passed every fidelity and delivery gate.
 
@@ -21,13 +21,21 @@ The Apple Silicon app has build and [native unit-test receipts](crates/platform/
 
 ## Install
 
-Build the artifacts below. For an Arch package:
+Release [v0.1.1](../../releases/tag/v0.1.1) ships a macOS app for Apple Silicon (ad-hoc signed, not notarized), an Arch package and a portable Linux tarball, with `SHA256SUMS`. The repository is private while in preview, so the release is reachable by people with access; everyone else builds from source below. For the Arch package:
 
 ```sh
 sudo pacman -U said-*.pkg.tar.zst
 ```
 
-On Niri, add the provided configuration includes after reviewing them. Setup and `said status` explain the active input mode. Readable keyboards or a working shortcuts portal provide hold and release; a compositor bind alone toggles on each press. Input-group access requires a new login and permits reading physical keyboard events. See [Linux setup](packaging/INSTALL.md#linux).
+Default shortcuts, all three editable in Settings:
+
+| | Linux | macOS |
+| --- | --- | --- |
+| Dictate | Super+Z | Option+Space |
+| Review before inserting | Super+X | Option+X |
+| Insert the last dictation | Super+A | Option+A |
+
+On Niri, add the provided include after reviewing it: three bind lines, one per shortcut. Setup and `said status` explain the active input mode. Readable keyboards or a working shortcuts portal provide hold and release; a compositor bind alone toggles on each press. Input-group access requires a new login and permits reading physical keyboard events. See [Linux setup](packaging/INSTALL.md#linux).
 
 On macOS, copy `said.app` from the DMG into `/Applications`, open it in Finder, then grant Microphone, Accessibility and Input Monitoring in Setup/System Settings. An ad-hoc build needs macOS's explicit first-open approval. See [macOS setup](packaging/INSTALL.md#macos).
 
