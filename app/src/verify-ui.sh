@@ -33,19 +33,19 @@ browser eval --stdin <<'JS'
   return {pass: 'Draft survives late partials, commits and final'};
 })()
 JS
-browser find role button click --name 'Original +'
+browser find role button click --name 'Show original'
 browser eval --stdin <<'JS'
 (() => {
-  if (document.querySelector('.original-panel .verbatim').textContent !== "um, no, keep the the old value, actually no, use cache_key, no no don't rename it.") throw Error('Original text was rewritten');
+  if (document.querySelector('.original .record').textContent !== "um, no, keep the the old value, actually no, use cache_key, no no don't rename it.") throw Error('Original text was rewritten');
   return {pass: 'Original recognition remains byte-identical'};
 })()
 JS
 browser find role button click --name 'History'
 browser find label 'Search history' fill 'my edit'
-browser wait --fn "document.querySelectorAll('.history-entry').length === 1"
+browser wait --fn "document.querySelectorAll('.entry').length === 1"
 browser eval --stdin <<'JS'
 (() => {
-  if (document.querySelector('.history-text').textContent !== "  my edit stays  \nuse cache_key, no no don't rename it.") throw Error('History lost the edited bytes');
+  if (document.querySelector('.entry-text').textContent !== "  my edit stays  \nuse cache_key, no no don't rename it.") throw Error('History lost the edited bytes');
   return {pass: 'History searches edited text'};
 })()
 JS
@@ -59,7 +59,7 @@ JS
 browser press Tab
 browser eval --stdin <<'JS'
 (() => {
-  if (!document.activeElement.textContent.includes('Original') || getComputedStyle(document.activeElement).outlineStyle === 'none') throw Error('Keyboard focus is not visible');
+  if (!document.activeElement.textContent.toLowerCase().includes('original') || getComputedStyle(document.activeElement).outlineStyle === 'none') throw Error('Keyboard focus is not visible');
   return {pass: 'Keyboard navigation has a visible focus ring'};
 })()
 JS

@@ -1,6 +1,8 @@
 # UI module
 
-Five neutral screens share `tokens.css`. The system color scheme selects light or dark; reduced motion removes transitions. Product naming comes from generated `product.ts`.
+Five screens share `tokens.css`, the app half of the brand (paper, ink, the blue pencil for focus and selection, Courier Prime only for the original recognition). The system color scheme selects light or dark; reduced motion removes transitions. Product naming comes from generated `product.ts`.
+
+The overlay and the interactive panel are transparent windows: the panel sits inside a stage with enough margin for its shadow, and `FloatingPanel` keeps the interactive window's size and min/max bounds equal to the stage so compositors treat it as a fixed-size floating window. Window geometry lives in `../src-tauri/tauri.base.json`.
 
 From `app`, run `bun run dev`, then open `/?demo=1&screen=interactive`. The same route accepts `overlay`, `history`, `settings` and `setup`; `controls=0` hides the development toolbar. Next event advances a finite synthetic stream without microphone, clipboard, hotkeys or desktop input. Production builds exclude the fake stream and show the disconnected state until the host supplies core data.
 
