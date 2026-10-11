@@ -34,6 +34,11 @@ pub unsafe fn send2<A, B, R>(object: Ref, selector: &CStr, a: A, b: B) -> R {
         unsafe { transmute(ffi::objc_msgSend as *const ()) };
     unsafe { function(object, ffi::sel_registerName(selector.as_ptr()), a, b) }
 }
+pub unsafe fn send4<A, B, C, D, R>(object: Ref, selector: &CStr, a: A, b: B, c: C, d: D) -> R {
+    let function: unsafe extern "C" fn(Ref, Ref, A, B, C, D) -> R =
+        unsafe { transmute(ffi::objc_msgSend as *const ()) };
+    unsafe { function(object, ffi::sel_registerName(selector.as_ptr()), a, b, c, d) }
+}
 pub unsafe fn string(object: Ref) -> Option<String> {
     if object.is_null() {
         return None;

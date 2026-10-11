@@ -10,13 +10,13 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use crossbeam_channel::{Receiver, unbounded};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use said_core::{Hotkey, Result, Target};
 
 use crate::Platform;
 use control::{ControlCommand, ControlRequest, ControlSocket};
 use gtk::prelude::*;
-use input::{Chord, InputListener};
+use input::{InputListener, Shortcuts};
 use keyboard::VirtualKeyboard;
 use niri::Niri;
 use paste::PasteChord;
@@ -36,9 +36,9 @@ pub struct Config {
     pub wayland_display: OsString,
     pub niri_socket: Option<PathBuf>,
     pub storage_key: String,
-    pub chord: Chord,
+    pub shortcuts: Shortcuts,
     pub read_input: bool,
-    pub portal_trigger: Option<String>,
+    pub portal_enabled: bool,
     pub paste_chords: BTreeMap<String, PasteChord>,
 }
 
@@ -52,9 +52,9 @@ impl Config {
                 .ok_or("a Wayland session is required")?,
             niri_socket: std::env::var_os("NIRI_SOCKET").map(Into::into),
             storage_key: storage_key.into(),
-            chord: Chord::default(),
+            shortcuts: Shortcuts::default(),
             read_input: true,
-            portal_trigger: Some("CTRL+ALT+space".into()),
+            portal_enabled: true,
             paste_chords: paste::default_chords(),
         })
     }
@@ -70,6 +70,7 @@ pub struct LinuxPlatform {
     portal_unavailable_reason: Option<String>,
     input_unavailable_reason: Option<String>,
     hotkeys: Receiver<Hotkey>,
+    sender: Sender<Hotkey>,
 }
 
 impl LinuxPlatform {
@@ -84,38 +85,21 @@ impl LinuxPlatform {
             })
             .transpose()?;
         let (sender, hotkeys) = unbounded();
-        let (portal, portal_unavailable_reason) = match (&niri, &config.portal_trigger) {
-            (Some(_), Some(trigger)) => match PortalHotkeys::start(trigger.clone(), sender.clone())
-            {
-                Ok(portal) => (Some(portal), None),
-                Err(error) => (None, Some(error.to_string())),
-            },
-            _ => (None, None),
-        };
-        let (input, input_unavailable_reason) =
-            if niri.is_some() && portal.is_none() && config.read_input {
-                match InputListener::start(
-                    std::path::Path::new("/dev/input"),
-                    config.chord.clone(),
-                    sender.clone(),
-                ) {
-                    Ok(input) => (Some(input), None),
-                    Err(error) => (None, Some(error.to_string())),
-                }
-            } else {
-                (None, None)
-            };
-        Ok(Self {
+        let read_input = config.read_input;
+        let mut platform = Self {
             config,
             niri,
             control,
             keyboard,
-            input,
-            portal,
-            portal_unavailable_reason,
-            input_unavailable_reason,
+            input: None,
+            portal: None,
+            portal_unavailable_reason: None,
+            input_unavailable_reason: None,
             hotkeys,
-        })
+            sender,
+        };
+        platform.set_input_enabled(read_input);
+        Ok(platform)
     }
 
     pub fn input_unavailable_reason(&self) -> Option<&str> {
@@ -125,17 +109,33 @@ impl LinuxPlatform {
     pub fn mode(&self) -> Mode {
         if self.niri.is_none() {
             Mode::Clipboard
-        } else if self.portal.as_ref().is_some_and(PortalHotkeys::available) {
-            Mode::NiriPortal
         } else if self.input.as_ref().is_some_and(InputListener::available) {
             Mode::NiriHold
+        } else if self.portal.as_ref().is_some_and(PortalHotkeys::available) {
+            Mode::NiriPortal
         } else {
             Mode::NiriToggle
         }
     }
 
-    pub fn portal_unavailable_reason(&self) -> Option<&str> {
-        self.portal_unavailable_reason.as_deref()
+    pub fn portal_unavailable_reason(&self) -> Option<String> {
+        self.portal_unavailable_reason.clone().or_else(|| {
+            self.portal
+                .as_ref()
+                .and_then(PortalHotkeys::unavailable_reason)
+        })
+    }
+
+    pub fn configure(&mut self, shortcuts: Shortcuts, paste_chords: BTreeMap<String, PasteChord>) {
+        if self.config.shortcuts != shortcuts {
+            self.input = None;
+            self.portal = None;
+            self.config.shortcuts = shortcuts;
+            self.input_unavailable_reason = None;
+            self.portal_unavailable_reason = None;
+            self.set_input_enabled(self.config.read_input);
+        }
+        self.config.paste_chords = paste_chords;
     }
 
     pub fn control_requests(&self) -> Receiver<ControlRequest> {
@@ -146,6 +146,29 @@ impl LinuxPlatform {
     }
 
     pub fn set_input_enabled(&mut self, enabled: bool) {
+        self.config.read_input = enabled;
+        if enabled && self.niri.is_some() && self.input.is_none() && self.portal.is_none() {
+            match InputListener::start(
+                std::path::Path::new("/dev/input"),
+                self.config.shortcuts.clone(),
+                self.sender.clone(),
+            ) {
+                Ok(input) => {
+                    self.input = Some(input);
+                    self.input_unavailable_reason = None;
+                }
+                Err(error) => self.input_unavailable_reason = Some(error.to_string()),
+            }
+            if self.input.is_none() && self.config.portal_enabled {
+                match PortalHotkeys::start(
+                    self.config.shortcuts.chords_for_portal(),
+                    self.sender.clone(),
+                ) {
+                    Ok(portal) => self.portal = Some(portal),
+                    Err(error) => self.portal_unavailable_reason = Some(error.to_string()),
+                }
+            }
+        }
         if let Some(portal) = &self.portal {
             portal.set_enabled(enabled);
         }
@@ -238,5 +261,47 @@ impl Platform for LinuxPlatform {
         }) {
             eprintln!("said overlay: {error}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use input::Chord;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+
+    #[test]
+    fn settings_updates_keep_the_control_socket_and_focus_adapter_alive() {
+        let directory = std::env::temp_dir().join(format!("said-configure-{}", std::process::id()));
+        std::fs::create_dir(&directory).unwrap();
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut platform = LinuxPlatform::new(Config {
+            runtime_dir: directory.clone(),
+            wayland_display: "unused-test-display".into(),
+            niri_socket: None,
+            storage_key: "configure".into(),
+            shortcuts: Shortcuts::default(),
+            read_input: false,
+            portal_enabled: false,
+            paste_chords: BTreeMap::new(),
+        })
+        .unwrap();
+        let socket = platform.control.path().to_path_buf();
+        let inode = std::fs::metadata(&socket).unwrap().ino();
+        platform.configure(
+            Shortcuts::parse("super+d", "super+g", "super+i").unwrap(),
+            BTreeMap::from([("synthetic-app".into(), PasteChord::CtrlV)]),
+        );
+        assert_eq!(std::fs::metadata(&socket).unwrap().ino(), inode);
+        assert_eq!(
+            platform.config.shortcuts.dictation,
+            Chord::parse("super+d").unwrap()
+        );
+        assert_eq!(
+            platform.config.paste_chords["synthetic-app"],
+            PasteChord::CtrlV
+        );
+        drop(platform);
+        std::fs::remove_dir_all(directory).unwrap();
     }
 }
