@@ -1,0 +1,90 @@
+said: third-party attribution and distribution notices
+
+said code is MIT; see LICENSE. Other components keep their own terms.
+This file accompanies the installed notices directory. In the repository,
+engine terms live in crates/engine/licenses, font terms in licenses/fonts,
+macOS adaptation credits in crates/platform/macos/THIRD-PARTY.md, and corpus
+provenance in bench/LICENSES.md. packaging/install-notices.sh collects them
+with generated Rust/JavaScript dependency terms into each artifact.
+
+1. Recognition model
+
+NVIDIA Parakeet-TDT-0.6B-v3, Copyright NVIDIA Corporation.
+Original: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+CC-BY-4.0: https://creativecommons.org/licenses/by/4.0/
+ONNX export by the sherpa-onnx maintainer:
+https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3
+Revision 1a468a35cbba69418f126de829e75261dea4a4e4.
+said uses the FP32 export without changing weights; weights download separately.
+See engine/parakeet.txt and CC-BY-4.0.txt. Benchmark-only precision exports
+are attributed there too; they are not application defaults.
+
+2. Native runtime
+
+sherpa-onnx 1.13.8, https://github.com/k2-fsa/sherpa-onnx
+Source revision 11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf.
+Copyright sherpa-onnx contributors; source files retain their individual notices,
+including Xiaomi Corporation. Apache-2.0; see engine/sherpa-onnx.txt.
+The supplied runtime archives are used unchanged. Native dependency terms
+are retained in engine/sherpa-dependencies.txt, including kaldi-native-fbank,
+kaldi-decoder, OpenFst, simple-sentencepiece, JSON, hclust-cpp and Eigen.
+
+ONNX Runtime 1.28.2, Copyright Microsoft Corporation.
+https://github.com/microsoft/onnxruntime/tree/v1.28.2
+MIT; see engine/onnxruntime.txt. The matching upstream ThirdPartyNotices.txt
+is preserved in engine/onnxruntime-third-party.txt:
+https://raw.githubusercontent.com/microsoft/onnxruntime/v1.28.2/ThirdPartyNotices.txt
+The upstream notice set covers optional runtime components as well; its inclusion
+does not imply that every provider is enabled in the packaged CPU libraries.
+
+3. Adapted macOS code
+
+Command-modified keyboard layout handling adapts Handy by CJ Pais (MIT).
+NSPanel conversion/activation handling adapts tauri-nspanel by Victor Aremu
+(MIT selected from its dual license). Full copyrights, permission text and
+pinned source links are retained in macos-adaptations.md.
+These adaptations do not include Handy's text cleanup behavior.
+
+4. Fonts and artwork
+
+Courier Prime, Copyright 2015 The Courier Prime Project Authors.
+https://github.com/quoteunquoteapps/CourierPrime
+Embedded app font and README artwork; SIL Open Font License 1.1.
+See fonts/courier-prime.txt.
+
+Instrument Sans, Copyright 2022 The Instrument Sans Project Authors.
+https://github.com/Instrument/instrument-sans
+README artwork; SIL Open Font License 1.1. See fonts/instrument-sans.txt.
+The artwork is a raster rendering; the application embeds only Courier Prime.
+
+5. Benchmark corpus and generation tools
+
+AMI Consortium, AMI Meeting Corpus, ES2002a, manual annotations v1.6.2.
+Five cropped headset excerpts retain CC-BY-4.0 attribution. WAV headers are
+rewritten; samples are unchanged. References join the supplied word annotations.
+Source: https://groups.inf.ed.ac.uk/ami/download/
+See corpus.md (bench/LICENSES.md in source), CC-BY-4.0.txt, and the benchmark's
+recipes.jsonl, clips.jsonl and sources.json for crop/annotation provenance.
+AMI audio is part of the source benchmark, not the installed app.
+
+Synthetic benchmark scripts/audio and deterministic controls are CC0-1.0.
+See CC0-1.0.txt. Generation uses OHF-Voice Piper 1.3.0 (GPL-3.0) as a development
+tool, https://github.com/OHF-Voice/piper1-gpl, with rhasspy/piper-voices
+revision c10ece1aade47bb51c153c893d14e5bf8e5b7117, en_US-ljspeech-high.
+https://huggingface.co/rhasspy/piper-voices/tree/c10ece1aade47bb51c153c893d14e5bf8e5b7117/en/en_US/ljspeech/high
+The model card states training from scratch on public-domain LJ Speech:
+https://keithito.com/LJ-Speech-Dataset/
+Piper/model binaries are not distributed in said artifacts. Generated public
+clips retain their provenance in corpus.md; no Lessac voice is shipped.
+
+6. Rust and JavaScript dependencies
+
+Packaging generates dependencies.txt from locked package sources for the
+Linux/macOS host and production frontend. It retains upstream copyright,
+license and NOTICE files, including source links for MPL-covered components.
+The inventory also includes build/test dependencies; presence in that inventory
+does not assert that a component is linked into every artifact.
+
+Linux relies on separately installed desktop libraries, including GTK,
+WebKitGTK, gtk-layer-shell and wl-clipboard. Their system packages supply
+licenses and sources; they are not copied into the portable directory.

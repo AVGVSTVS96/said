@@ -14,8 +14,7 @@ install -Dm644 "$root/packaging/linux/niri.kdl" "$destination/share/said/niri.kd
 install -Dm644 "$root/packaging/linux/autostart.kdl" "$destination/share/said/autostart.kdl"
 mkdir -p "$destination/share/said/tray"
 install -m644 "$root"/app/src-tauri/icons/tray/*.png "$destination/share/said/tray/"
-install -Dm644 "$root/LICENSE" "$destination/share/licenses/said/LICENSE"
-cp -r "$root/crates/engine/licenses" "$destination/share/licenses/said/engine"
+"$root/packaging/install-notices.sh" "$destination/share/licenses/said"
 for icon in "$root"/app/src-tauri/icons/linux/*.png; do
     size="${icon##*-}"; size="${size%.png}"
     install -Dm644 "$icon" "$destination/share/icons/hicolor/${size}x${size}/apps/said.png"

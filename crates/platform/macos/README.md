@@ -1,7 +1,7 @@
 # macOS adapter
 
 Enable `said-platform/native`. No additional crate dependencies are needed.
-`MacosPlatform::<tauri::Window>::start(Shortcut::default(), configure_overlay)`
+`MacosPlatform::<tauri::Window>::start(Shortcuts::default(), configure_overlay)`
 implements the shared `Platform` trait. Start only after the user grants
 Accessibility and Input Monitoring: every permission check is passive, and
 failure provides the precise Settings path. Microphone checks belong to setup;
@@ -20,16 +20,18 @@ conversion returns an error: leave the overlay hidden. Consume `overlay_errors()
 because the shared `make_overlay` signature cannot return errors. Panel creation,
 positioning, content, fade and reduced-motion handling remain host/UI effects.
 
-`set_shortcut` replaces the input listener while retaining desktop window identities. The host
-uses it for settings changes so an open interactive review can still refocus its original window.
-Consume one `hotkeys()` receiver. Feed each event to
-`Session::hotkey(event, context, monotonic_ms, true)`: the adapter supplies real
-Down/Up, ignores repeats and pairs swallowed key releases, even when modifiers
-are released first. Core decides the 300 ms hold/tap boundary. Shift plus the
-shortcut emits Interactive on down and Up on release. Default shortcuts are
-Control+Option+Space and Control+Option+V; Fn/Globe is not used. Configuration
-uses a physical macOS virtual keycode and CONTROL/OPTION/COMMAND flags, with
-Shift reserved for interactive mode. Reject collisions with Insert last in setup.
+`set_shortcuts` replaces the input listener while retaining desktop window identities.
+The host uses it for settings changes so an interactive review can still refocus
+its original window. One `hotkeys()` consumer receives Down/Up, Interactive,
+InsertLast and Cancel. The decoder ignores repeats and pairs swallowed key
+releases even when modifiers are released first. Core decides the 300 ms
+hold/tap boundary.
+
+The three configurable defaults are Option+Space for quick dictation, Option+X
+for interactive review and Option+A for insert-last. Shift is not reserved for
+interactive mode. The shortcut configuration resolves each chord to a physical
+macOS virtual keycode/modifier mask; settings reject conflicting action chords.
+Fn/Globe is not used. See [installation](../../../packaging/INSTALL.md#macos).
 
 Call `set_recording(true)` while any capture is active, and false when none is.
 Escape is intercepted only while recording; it then emits Cancel. Consume
@@ -44,9 +46,9 @@ grants. Drop removes the tap and joins its worker.
 `focused_target()` returns a detailed error instead of the trait's None. Focus
 identity is bundle ID plus an opaque process/window token backed by retained
 AX window references and CFEqual, not a window title or just a PID. Tokens are
-valid for this adapter's lifetime; recovered recordings never auto-paste. The
-host must feed `FocusChanged` for desktop focus changes, including switching
-windows in one app, to preserve core's inhibition after an away-and-back change.
+valid for this adapter's lifetime; recovered recordings never auto-paste. Native application/window notifications queue focus invalidations through
+`focus_changes()`. The host forwards those events to core before checking the
+current target, preserving observed departures even when focus has returned.
 `focus()` raises the remembered window, activates its app and verifies focus;
 the main loop is serviced until actual focus arrives, with a 500 ms failure
 bound and no paste on failure. The host AppKit main loop must be running when
