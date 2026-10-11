@@ -6,8 +6,6 @@ test "$(uname -m)" = arm64
 idle="$(ioreg -c IOHIDSystem | awk '/HIDIdleTime/ && !seen {print int($NF/1e9); seen=1}')"
 test "$idle" -ge 300 || { echo "Mac active ($idle idle seconds); build postponed" >&2; exit 1; }
 export CARGO_BUILD_JOBS=2 MACOSX_DEPLOYMENT_TARGET=14.0
-DYLD_FALLBACK_LIBRARY_PATH="$(rustc --print sysroot)/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
-export DYLD_FALLBACK_LIBRARY_PATH
 runtime="$root/target/packaging/runtime"
 "$root/packaging/runtime.sh" "$runtime"
 cd app
