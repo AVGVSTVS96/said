@@ -37,6 +37,20 @@ include "/usr/share/said/autostart.kdl"
 
 The startup include runs `/usr/bin/said` directly in a 4 GiB/no-swap scope tied to the graphical session. Use one startup mechanism; the [user service](README.md#arch-and-cachyos) is an alternative.
 
+For a one-time installed-app launch on Niri:
+
+```sh
+niri msg action spawn -- said
+```
+
+Or start it under the user service:
+
+```sh
+systemctl --user start said.service
+```
+
+Let the compositor or user service own the app's lifetime. Running `said` as a child of a build terminal can stop it when that terminal exits.
+
 | Action | Default shortcut |
 | --- | --- |
 | Quick dictation | Super+Z |

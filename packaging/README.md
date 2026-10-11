@@ -75,6 +75,35 @@ Versioned artifacts should include SHA256SUMS. Verify Linux `ldd`, isolated-cach
 native loading, macOS `otool -L`, and complete bundle signatures. A successful
 build does not certify the separate-account macOS acceptance checklist.
 
+## Release verification
+
+Build and install one final artifact from the intended committed revision, using
+the platform recipes above. Linux release builds use the 4 GiB/no-swap scope;
+model-loading acceptance checks also use the shared lock from
+[CONTRIBUTING.md](../CONTRIBUTING.md#native-verification). macOS builds run at low
+priority on an idle desktop. Do not substitute an old locally built host for the
+new artifact during release acceptance.
+
+On Linux, launch the installed host through the compositor or the user service:
+
+```sh
+niri msg action spawn -- said
+# Alternatively:
+systemctl --user start said.service
+said status
+```
+
+Choose one launch path. The Niri startup include and user service retain their
+memory caps and start the host directly. Compositor/service ownership keeps the
+process alive independently of the build terminal. Inspect Setup, input mode,
+model readiness and the configured bind instructions before scratch delivery.
+
+On macOS, copy the final app from its DMG to `/Applications` and open that bundle
+in Finder. Verify its complete signature and [permission/input/delivery checklist](../crates/platform/macos/MANUAL-CHECKLIST.md)
+against that same bundle. A rebuilt ad-hoc signature can invalidate previous
+grants. Record the artifact hash, source revision, platform and observed results;
+compilation and model benchmark receipts do not certify installed desktop behavior.
+
 ## Licenses
 
 Both build paths call `packaging/install-notices.sh`. The Arch package and portable
