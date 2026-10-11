@@ -1,5 +1,5 @@
 pkgname=said
-pkgver=0.0.0
+pkgver=$(sed -n 's/^version = "\(.*\)"/\1/p' "${SAID_REPO:-$startdir/../..}/Cargo.toml" | head -n1)
 pkgrel=1
 pkgdesc='Local dictation with Parakeet v3'
 arch=('x86_64')

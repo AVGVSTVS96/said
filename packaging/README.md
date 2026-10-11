@@ -49,9 +49,9 @@ Readable keyboards or a working portal provide hold/release; the Niri bind alone
 toggles. `sudo usermod -aG input "$USER"` grants physical keyboard-device access
 and requires logout/login. `said status` reports the active mode.
 
-For a portable directory, after a release build run
-`packaging/linux/install.sh target/packaging/said-0.0.0-linux-x86_64`, then tar that
-directory. Run its `bin/said`; the runtime archive stays at `lib/said/runtime.archive`, so
+For a portable directory, after a release build read the workspace version from
+`Cargo.toml`, run `packaging/linux/install.sh target/packaging/said-VERSION-linux-x86_64`
+with that version, then tar that directory. Run its `bin/said`; the runtime archive stays at `lib/said/runtime.archive`, so
 moving the directory preserves relative paths.
 It needs the listed desktop libraries and compatible glibc. This is not a
 clean-distro-tested AppImage; cross-distro compatibility remains unverified.
