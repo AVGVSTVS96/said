@@ -68,7 +68,13 @@ errors and the performance targets that remain unmet.
 
 ## One loaded worker and recovery
 
-`WorkerClient` keeps one warm native process. Concurrent utterances wait for its
+`WorkerClient` keeps at most one warm native process. The app unloads it after
+five minutes without dictation. `SAID_MODEL_IDLE_SECONDS` is the single setting
+(seconds; default 300, zero unloads immediately once idle). It is read at app
+startup. Capture starts independently of model loading; the next hotkey starts
+a fresh worker while every captured sample continues into the private disk spool.
+Active and queued utterances retain the worker lease; unload never interrupts
+recognition. Concurrent utterances wait for its
 lease while their input continues into separate private disk spools. Successful
 Final returns the worker; cancellation, a crash or malformed output destroys
 it. The next lease starts a fresh process. A queued utterance's inference
@@ -76,11 +82,9 @@ watchdog starts after it acquires the worker, not while capture waits.
 
 `WorkerClient::recognize_file` uses that same lease with a fresh utterance ID.
 The existing standalone `recognize_file` helpers create independent workers.
-**The host retry executor must call the shared-client method for its current
-model** to avoid retaining an idle model beside a second replay model. This
-app executor change is outside the engine module's owned paths; the handoff
-contains an apply-ready patch. No core trait, event or worker wire change is
-needed. Apply that integration before claiming bounded memory for app retries.
+The host retry executor calls the shared-client method for its current model,
+avoiding a second loaded model beside live dictation. No core trait, event or
+worker wire change is needed.
 
 PCM spools are 0600 files in a 0700 cache directory, immediately unlinked after
 opening. Bounded queues signal available audio; original samples remain in
