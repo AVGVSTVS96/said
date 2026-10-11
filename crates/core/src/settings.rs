@@ -30,6 +30,12 @@ impl Settings {
             "org.wezfurlong.wezterm",
             "org.gnome.Terminal",
             "foot",
+            "footclient",
+            "org.gnome.Console",
+            "konsole",
+            "org.kde.konsole",
+            "wezterm",
+            "rio",
         ]
         .into_iter()
         .map(|id| {

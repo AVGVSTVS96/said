@@ -19,6 +19,15 @@ pub enum PasteChord {
 }
 
 impl PasteChord {
+    pub fn parse(value: &str) -> Result<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "ctrl+v" => Ok(Self::CtrlV),
+            "ctrl+shift+v" => Ok(Self::CtrlShiftV),
+            "shift+insert" => Ok(Self::ShiftInsert),
+            _ => Err("supported paste shortcuts: ctrl+v, ctrl+shift+v, shift+insert".into()),
+        }
+    }
+
     fn post(self, keyboard: &mut VirtualKeyboard) -> Result<()> {
         match self {
             Self::CtrlV => keyboard.tap(47, true, false, false),
@@ -29,23 +38,16 @@ impl PasteChord {
 }
 
 pub fn default_chords() -> BTreeMap<String, PasteChord> {
-    [
-        "com.mitchellh.ghostty",
-        "Alacritty",
-        "kitty",
-        "foot",
-        "footclient",
-        "org.gnome.Terminal",
-        "org.gnome.Console",
-        "konsole",
-        "org.kde.konsole",
-        "wezterm",
-        "org.wezfurlong.wezterm",
-        "rio",
-    ]
-    .into_iter()
-    .map(|app| (app.into(), PasteChord::CtrlShiftV))
-    .collect()
+    said_core::Settings::defaults("")
+        .apps
+        .into_iter()
+        .map(|(app, rule)| {
+            (
+                app,
+                PasteChord::parse(&rule.paste).expect("valid default paste shortcut"),
+            )
+        })
+        .collect()
 }
 
 pub fn copy(runtime: &Path, display: &OsStr, text: &str) -> Result<()> {
@@ -114,4 +116,20 @@ fn command(program: &str, runtime: &Path, display: &OsStr) -> Command {
         .env_remove("WAYLAND_SOCKET")
         .env_remove("DISPLAY");
     command
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn terminal_defaults_are_visible_in_settings_and_used_by_the_adapter() {
+        let settings = said_core::Settings::defaults("");
+        let chords = default_chords();
+        assert_eq!(chords.len(), settings.apps.len());
+        for app in ["footclient", "org.gnome.Console", "konsole", "rio"] {
+            assert_eq!(settings.apps[app].paste, "ctrl+shift+v");
+            assert_eq!(chords[app], PasteChord::CtrlShiftV);
+        }
+    }
 }

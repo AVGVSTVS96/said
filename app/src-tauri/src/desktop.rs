@@ -73,6 +73,7 @@ impl Platform for Desktop {
 impl HostPlatform for Desktop {
     fn is_self(&self, target: &Target) -> bool {
         target.app_id == env!("PRODUCT_BUNDLE_ID")
+            || cfg!(target_os = "linux") && target.app_id == env!("PRODUCT_STORAGE_KEY")
             || target.app_id == format!("pid:{}", std::process::id())
     }
     fn copy(&self, text: &str) -> Result<()> {
@@ -93,17 +94,7 @@ impl HostPlatform for Desktop {
                 .apps
                 .iter()
                 .map(|(app, rule)| {
-                    let chord = match rule.paste.to_ascii_lowercase().as_str() {
-                        "ctrl+v" => linux::paste::PasteChord::CtrlV,
-                        "ctrl+shift+v" => linux::paste::PasteChord::CtrlShiftV,
-                        "shift+insert" => linux::paste::PasteChord::ShiftInsert,
-                        _ => {
-                            return Err(
-                                "supported paste shortcuts: ctrl+v, ctrl+shift+v, shift+insert"
-                                    .into(),
-                            );
-                        }
-                    };
+                    let chord = linux::paste::PasteChord::parse(&rule.paste)?;
                     Ok((app.clone(), chord))
                 })
                 .collect::<Result<BTreeMap<_, _>>>()?;
@@ -349,6 +340,7 @@ impl HostPlatform for Desktop {
         steps
     }
 }
+
 #[cfg(target_os = "macos")]
 fn shortcut(value: &str) -> Result<macos::Shortcut> {
     let mut parts = value.split('+');
@@ -451,5 +443,24 @@ pub fn request_permission(permission: &str) -> Result<()> {
             ))
             .spawn()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_native_app_id_is_never_an_external_paste_target() {
+        let app_id = if cfg!(target_os = "linux") {
+            env!("PRODUCT_STORAGE_KEY")
+        } else {
+            env!("PRODUCT_BUNDLE_ID")
+        };
+        assert!(Desktop::default().is_self(&Target {
+            app_id: app_id.into(),
+            window_id: "native-setup".into(),
+            name: "Setup".into(),
+        }));
     }
 }
