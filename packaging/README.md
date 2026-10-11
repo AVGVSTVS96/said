@@ -64,7 +64,7 @@ nice -n 10 packaging/macos.sh
 
 The arm64 `.app` is under `target/aarch64-apple-darwin/release/bundle/macos/`;
 the compressed `.dmg` and SHA256SUMS are under `target/packaging/`. Deployment
-targets macOS 14. The complete bundle is ad-hoc signed and verified. Developer ID
+targets macOS 14. The build tools resolve LLVM from the selected Rust sysroot. The complete bundle is ad-hoc signed and verified. Developer ID
 signing/notarization in SPEC.md is deferred because no Developer ID exists.
 See [INSTALL](INSTALL.md). Builds do not pass the separate-account manual checklist.
 
