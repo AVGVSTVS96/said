@@ -30,6 +30,12 @@ Models are not packaged. `said` is on PATH. The service has a 4G memory cap and 
 `graphical-session.target`; Niri's systemd session imports Wayland environment
 before activating that target. Enable it in a systemd graphical session.
 
+On Niri, prefer its native startup hook: include `/usr/share/said/autostart.kdl`
+from the compositor configuration instead of enabling the user service. It starts
+a 4G/no-swap scope tied to `graphical-session.target`, inheriting the actual login
+environment and groups. This matters for input-group changes when the user manager
+lingers between logins. Choose one startup mechanism, so only one app runs.
+
 Show `packaging/linux/niri.kdl` before adding this include to Niri configuration:
 
 ```kdl
