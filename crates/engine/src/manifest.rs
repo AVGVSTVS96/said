@@ -56,6 +56,27 @@ pub struct Model {
     pub files: BTreeMap<String, String>,
 }
 
+impl Model {
+    fn transducer_files(&self) -> Result<[&str; 4]> {
+        let mut files = Vec::new();
+        for stem in ["encoder", "decoder", "joiner"] {
+            let mut matches = self
+                .files
+                .keys()
+                .filter(|name| name.starts_with(&format!("{stem}.")) && name.ends_with(".onnx"));
+            let name = matches.next().ok_or("missing transducer ONNX file")?;
+            if matches.next().is_some() {
+                return Err("ambiguous transducer ONNX files".into());
+            }
+            files.push(name.as_str());
+        }
+        if !self.files.contains_key("tokens.txt") {
+            return Err("missing transducer tokens".into());
+        }
+        Ok([files[0], files[1], files[2], "tokens.txt"])
+    }
+}
+
 impl Manifest {
     pub fn bundled() -> Result<Self> {
         Ok(serde_json::from_str(include_str!("../models.json"))?)
@@ -84,6 +105,7 @@ impl Manifest {
                 let loaded = ParakeetModel::load(
                     &cache.join(library),
                     &cache.join(&config.directory),
+                    config.transducer_files()?,
                     config.threads,
                     &config.provider,
                     config.update_samples,
@@ -125,6 +147,7 @@ pub fn worker_main(model: Option<&str>, manifest: &Manifest, cache: &Path) -> Re
         let loaded = ParakeetModel::load(
             &cache.join(library),
             &cache.join(&config.directory),
+            config.transducer_files()?,
             config.threads,
             &config.provider,
             config.update_samples,

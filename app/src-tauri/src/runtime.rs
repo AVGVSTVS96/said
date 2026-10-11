@@ -69,6 +69,7 @@ pub struct Host<P: HostPlatform, R: Recorder> {
     capture: Option<(UtteranceId, Receiver<AudioEvent>)>,
     engines: BTreeMap<UtteranceId, ActiveEngine>,
     client: Option<WorkerClient>,
+    model_idle_timeout: Duration,
     background: Receiver<Background>,
     sender: Sender<Background>,
     clock: Instant,
@@ -155,6 +156,13 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             capture: None,
             engines: BTreeMap::new(),
             client: None,
+            model_idle_timeout: Duration::from_secs(
+                std::env::var("SAID_MODEL_IDLE_SECONDS")
+                    .ok()
+                    .map(|value| value.parse::<u64>())
+                    .transpose()?
+                    .unwrap_or(300),
+            ),
             background,
             sender,
             clock: Instant::now(),
@@ -512,6 +520,13 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         })
     }
     pub fn poll(&mut self) -> Result<bool> {
+        if self.capture.is_none()
+            && self.engines.is_empty()
+            && self.replaying.is_empty()
+            && let Some(client) = &self.client
+        {
+            client.unload_if_idle(self.model_idle_timeout);
+        }
         let mut events = vec![];
         let focused = self.platform.focused();
         if let Some(target) = focused

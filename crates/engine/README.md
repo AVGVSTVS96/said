@@ -68,7 +68,13 @@ errors and the performance targets that remain unmet.
 
 ## One loaded worker and recovery
 
-`WorkerClient` keeps one warm native process. Concurrent utterances wait for its
+`WorkerClient` keeps at most one warm native process. The app unloads it after
+five minutes without dictation. `SAID_MODEL_IDLE_SECONDS` is the single setting
+(seconds; default 300, zero unloads immediately once idle). It is read at app
+startup. Capture starts independently of model loading; the next hotkey starts
+a fresh worker while every captured sample continues into the private disk spool.
+Active and queued utterances retain the worker lease; unload never interrupts
+recognition. Concurrent utterances wait for its
 lease while their input continues into separate private disk spools. Successful
 Final returns the worker; cancellation, a crash or malformed output destroys
 it. The next lease starts a fresh process. A queued utterance's inference
@@ -76,11 +82,9 @@ watchdog starts after it acquires the worker, not while capture waits.
 
 `WorkerClient::recognize_file` uses that same lease with a fresh utterance ID.
 The existing standalone `recognize_file` helpers create independent workers.
-**The host retry executor must call the shared-client method for its current
-model** to avoid retaining an idle model beside a second replay model. This
-app executor change is outside the engine module's owned paths; the handoff
-contains an apply-ready patch. No core trait, event or worker wire change is
-needed. Apply that integration before claiming bounded memory for app retries.
+The host retry executor calls the shared-client method for its current model,
+avoiding a second loaded model beside live dictation. No core trait, event or
+worker wire change is needed.
 
 PCM spools are 0600 files in a 0700 cache directory, immediately unlinked after
 opening. Bounded queues signal available audio; original samples remain in
@@ -94,6 +98,22 @@ of the caller's floor and four times the larger of recent median work for a
 bounded 30-second window and recent peak work for one half-second update.
 Loading and the first nonempty decode retain the cold budget. Partial output
 cannot keep a hung worker alive.
+
+## Precision evaluation
+
+FP32 remains the only application model. [The benchmark-only manifest](../../bench/precision-models.json)
+pins the official INT8 export and the available community mixed FP16-encoder /
+INT8-decoder-and-joiner export. Its filenames are selected from the hashed
+manifest entries; there are no renamed-weight aliases or precision fallbacks
+in the adapter. These exports are experimental benchmark options, not weaker
+application choices. See [precision results](../../bench/RESULTS.md#precision-and-idle-memory-polish)
+for both platforms, memory, the acceptance gate and reference limitations.
+
+The fetch helper accepts a model ID and an optional manifest path:
+
+```sh
+crates/engine/scripts/fetch-model.sh parakeet-v3-int8 bench/precision-models.json
+```
 
 ## Selection
 
@@ -147,19 +167,21 @@ pages after a direct model is dropped. Their cgroup budget includes reclaimable
 file cache as well as resident allocations; keep these checks outside the editor's
 own memory scope. The warm production worker reuses its loaded model.
 
-The app's ignored direct/host comparison also needs
-`MALLOC_ARENA_MAX=1 MALLOC_TRIM_THRESHOLD_=131072` in its Linux test environment
-to pass under that cap. Without those settings, the proof was OOM-killed in its
-isolated scope. With them, all four fixtures passed. Benchmark measurements
-use the ordinary allocator environment; these settings are not model defaults.
+The app's ignored worker/host comparison starts the expected recognizer in a
+separate worker and waits for its exit before running the host. The test parent
+never loads ONNX, so allocator tuning is unnecessary for that proof.
 
 ```sh
-MALLOC_ARENA_MAX=1 MALLOC_TRIM_THRESHOLD_=131072 CARGO_BUILD_JOBS=2 \
-  systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
-  nice -n 10 cargo test -p said-app --test end_to_end -- --ignored --nocapture
+CARGO_BUILD_JOBS=2 systemd-run --user --scope -q \
+  -p MemoryMax=4G -p MemorySwapMax=0 -- \
+  nice -n 10 cargo test -p said-app --test end_to_end -- --include-ignored
 ```
 
 Protocol fuzzing, truncated/oversized frames, lifecycle identity, literal fake
 traces, crashes, hangs, cancellation, producer drop after Finish and disk backlog
-remain covered. The warm-worker regression now also queues overlapping
-utterances and file replay, verifying that only one process is started.
+remain covered. The warm-worker regression also queues overlapping utterances
+and file replay, verifying that only one process is started. Idle polling is
+checked against its real deadline; an active lease resists unload. A delayed
+cold-start worker receives all 12,800 samples fed before it loads, in order.
+The native public regression preserves the initial “don't delete” phrase and
+requires byte-identical warm/cold transcripts after unloading.

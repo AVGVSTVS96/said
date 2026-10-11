@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-manifest="$(cd "$(dirname "$0")/.." && pwd)/models.json"
+manifest="${2:-$(cd "$(dirname "$0")/.." && pwd)/models.json}"
 cache="$HOME/.cache/said-models"
 case "$(uname -s)" in Linux) platform=linux ;; Darwin) platform=macos ;; *) exit 1 ;; esac
 case "$(uname -m)" in x86_64) arch=x86_64 ;; arm64|aarch64) arch=aarch64 ;; *) exit 1 ;; esac

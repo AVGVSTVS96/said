@@ -375,10 +375,9 @@ Final. No core trait, event or protocol change is needed.
 
 The shared client serializes overlapping utterances while capture continues
 into private disk spools. Its file-replay method reuses the same model slot.
-The app retry executor still needs the supplied integration patch to use that
-method; until then, a standalone history replay can coexist with an idle model
-copy. That executor is integrator-owned. Apply the handoff before claiming
-bounded app-retry memory.
+The app retry executor uses that method for its current model, sharing the
+loaded slot with live dictation. A canceled or failed worker is discarded; the
+next lease loads a fresh process while audio continues into the disk spool.
 
 Moonshine's optional low-memory entry, adapter, patch and runtime-build machinery
 are removed. Its measured fidelity losses do not serve the verbatim contract.
@@ -473,3 +472,87 @@ Inspect the [check receipt](results/parakeet-checks.json). Cgroup peaks include
 reclaimable file cache and cannot be compared directly with sampled RSS. The
 app retry integration described above and unmet SPEC RAM targets remain explicit
 handoff limits; no shared-type change is required.
+
+## Precision and idle memory polish
+
+Measured 2026-10-11 UTC on the same Linux and macOS CPUs, with the same native
+sherpa-onnx 1.13.8 CPU provider, eight threads, 30-second windows / five-second
+overlap, and original private scorer. Every candidate completed the full
+170-clip headline set, with unchanged audio hashes and silver references:
+10,116 words, 222 protected negative/scope tokens, 72 hesitation tokens and
+200 repetition-span tokens. No private audio, identifiers or transcripts are
+published. macOS runs were idle-checked and niced at 10; no GUI or permission
+prompt was used. The final Linux mixed-precision run used a separate 4 GiB /
+no-swap scope and completed without an OOM kill; one model ran at a time after
+the resource rule was introduced. Earlier uncapped in-progress probes were
+stopped and are not used as completed mixed-precision evidence.
+
+**Keep FP32 as the default on both platforms.** INT8 adds protected tokens,
+loses eight or nine repetition tokens and worsens WER beyond measured sampling
+noise. The available mixed FP16/INT8 export retains protected tokens but loses
+three hesitation tokens on Linux and two on macOS, exceeding the one-token
+allowance. Its sampled memory is also higher than FP32 on both CPUs.
+
+| Configuration | Private silver WER | Protected kept; extra | um/uh kept; extra | Repetition-span tokens | Sampled parent + worker RSS |
+|---|---:|---:|---:|---:|---:|
+| Retained FP32, Linux | 1.95% (197/10,116) | 222/222; +0 | 69/72; +7 | 196/200 | 2.71 GiB |
+| Retained FP32, macOS | 1.95% (197/10,116) | 222/222; +0 | 69/72; +7 | 196/200 | 2.92 GiB |
+| INT8, Linux | 2.56% (259/10,116) | 222/222; +2 | 69/72; +5 | 187/200 | 1.25 GiB |
+| INT8, macOS | 2.71% (274/10,116) | 222/222; +3 | 68/72; +5 | 188/200 | 1.81 GiB |
+| FP16 encoder / INT8 decoder+joiner, Linux | 2.10% (212/10,116) | 222/222; +0 | 66/72; +7 | 195/200 | 3.96 GiB |
+| FP16 encoder / INT8 decoder+joiner, macOS | 2.10% (212/10,116) | 222/222; +0 | 67/72; +7 | 195/200 | 3.53 GiB |
+
+The gate requires 222/222 protected tokens with zero extras, at least 68/72
+hesitations and 195/200 repetition tokens, and WER within sampling noise.
+A paired clip bootstrap (5,000 resamples, seed 170) gives INT8 WER deltas of
++0.61 percentage points on Linux (95% interval +0.22 to +1.07) and +0.76 on
+macOS (+0.37 to +1.18). Mixed precision adds 0.15 points on both platforms;
+its intervals include zero, but that is not an equivalence proof and its hard
+hesitation gate fails independently. Silver includes correlated recognizers;
+these intervals do not certify acoustic truth or population accuracy.
+
+The [benchmark-only manifest](precision-models.json) pins both candidate exports
+and keeps FP32 as its default. The application's manifest continues to expose
+FP32 alone. The official INT8 export is pinned to
+`2bda32ec70b097a55adaa07d9a7173915b43cc78`. The upstream FP16 repository at
+`abb5c91f99d8fbcfd62b39af1014e044c392d248` contains no model files. The available
+community export at `960f38997f4d70341fbd1ffc1de61a226c959cf8` has an FP16 encoder
+and INT8 decoder/joiner; it is labeled as mixed precision throughout. No all-FP16
+result or inference-memory benefit is claimed. All weight hashes, native-library
+hashes, binary hashes and parameters are retained in the private run receipts;
+[the public aggregate receipt](results/parakeet-precision.json) contains the gate
+counts and paired intervals. RSS can double-count shared mappings and miss
+brief peaks; macOS RSS is not unified-memory physical footprint. The 4 GiB scope
+peak includes file cache and is a different measurement from sampled RSS.
+
+### Idle unload and target names
+
+The app releases an idle worker after **five minutes**. This keeps nearby
+utterances warm while freeing model memory between dictation sessions.
+`SAID_MODEL_IDLE_SECONDS` is the single setting, read at startup (default 300;
+zero unloads as soon as idle). A busy or queued utterance keeps its worker lease.
+Polling never resets the idle deadline. The client stays available after unload;
+engine start returns immediately, capture proceeds independently of model load,
+and the original private disk spool retains samples from the first frame.
+Active dictation's FP32 footprint is unchanged.
+
+The delayed-reload regression checks all 12,800 early samples in order. The
+native public regression checks the initial “don't delete” phrase and exact
+warm/cold transcript bytes after unload, on both platforms. The host fake-capture
+test starts with an unloaded client and verifies its first and final frames are
+saved before the next recording. The optional real worker/host/history/paste
+proof now loads the expected recognizer in a separate worker, which exits before
+host recognition starts; its parent never holds another loaded model.
+
+Linux target names come from the localized desktop-entry Name through GIO;
+macOS uses the application's localized name. Empty or missing names fall back
+to the raw app ID in both the overlay and interactive panel. Window identity
+and automatic-paste checks continue to use the app/window IDs.
+
+Linux workspace tests, workspace clippy with `-D warnings`, bench tests,
+benchmark CI and bun tests pass. macOS workspace tests and native reload/proof
+checks pass; clippy on core/engine/platform/app/bench passes. Full macOS workspace
+clippy exposes three existing non-Linux warnings in the audio hour-test's Linux
+RSS counters (`crates/audio/src/tests.rs:410–412`); that module is outside this
+implementation's ownership, and an apply-ready fix is supplied privately to the
+integrator. No shared type or packaging change is needed.

@@ -3,6 +3,7 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use gtk::gio::{DesktopAppInfo, prelude::AppInfoExt};
 use said_core::{Result, Target};
 use serde_json::{Value, json};
 
@@ -105,16 +106,23 @@ fn read_reply(reader: &mut impl BufRead) -> Result<Value> {
 }
 
 fn target(window: &Value) -> Result<Target> {
+    let app_id = window["app_id"].as_str().ok_or("window has no app_id")?;
+    let desktop_id = if app_id.ends_with(".desktop") {
+        app_id.to_owned()
+    } else {
+        format!("{app_id}.desktop")
+    };
+    let name = DesktopAppInfo::new(&desktop_id)
+        .map(|app| app.name().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| app_id.to_owned());
     Ok(Target {
         window_id: window["id"]
             .as_u64()
             .ok_or("window has no numeric id")?
             .to_string(),
-        app_id: window["app_id"]
-            .as_str()
-            .ok_or("window has no app_id")?
-            .into(),
-        name: window["title"].as_str().unwrap_or_default().into(),
+        app_id: app_id.into(),
+        name,
     })
 }
 

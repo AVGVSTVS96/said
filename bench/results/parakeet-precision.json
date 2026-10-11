@@ -1,0 +1,183 @@
+{
+  "measured_utc": "2026-10-11",
+  "decision": "retain parakeet-v3-fp32 on linux and macos",
+  "cohort": {
+    "clips": 170,
+    "reference_words": 10116,
+    "reference_status": "original high/medium-confidence private machine silver; not listening gold",
+    "scorer": "original external private scorer; protected negative/scope words and repeated spans of one to four words"
+  },
+  "gate": {
+    "protected_matched": 222,
+    "protected_extra": 0,
+    "min_hesitation_matched": 68,
+    "min_repetition_matched": 195,
+    "wer": "no detectable worsening by paired 95% clip bootstrap (5000 resamples, seed 170)"
+  },
+  "wer_interval_method": "paired 95% clip bootstrap, 5000 resamples, seed 170; sampling variation on this fixed silver cohort, not acoustic certainty or an equivalence proof",
+  "fp32_baseline": {
+    "wer": 0.01947410043495453,
+    "errors": {
+      "substitutions": 107,
+      "deletions": 40,
+      "insertions": 50
+    },
+    "protected": {
+      "matched": 222,
+      "opportunities": 222,
+      "extra": 0
+    },
+    "hesitation": {
+      "matched": 69,
+      "opportunities": 72,
+      "extra": 7
+    },
+    "repetition_span": {
+      "matched": 196,
+      "opportunities": 200,
+      "extra": 0
+    }
+  },
+  "candidates": [
+    {
+      "platform": "linux",
+      "precision": "int8",
+      "completed": 170,
+      "wer": 0.025603005140371688,
+      "errors": {
+        "substitutions": 148,
+        "deletions": 58,
+        "insertions": 53
+      },
+      "protected": {
+        "matched": 222,
+        "opportunities": 222,
+        "extra": 2
+      },
+      "hesitation": {
+        "matched": 69,
+        "opportunities": 72,
+        "extra": 5
+      },
+      "repetition_span": {
+        "matched": 187,
+        "opportunities": 200,
+        "extra": 0
+      },
+      "peak_rss_bytes": 1336852480,
+      "wer_delta": 0.00612890470541716,
+      "wer_delta_95_percent_interval": [
+        0.0021614611477358695,
+        0.010727520967427346
+      ],
+      "gate_passed": false,
+      "binary_sha256": "3f1dc0b4abb58d92c10405f271d0a4a24137a8f5d033d7b31fa8a379aaab1776",
+      "model_manifest_sha256": "ecaf42f0316c4ee6ae06eef5e2ae7f926393bc4337474c6a141a895b45e56453"
+    },
+    {
+      "platform": "macos",
+      "precision": "int8",
+      "completed": 170,
+      "wer": 0.02708580466587584,
+      "errors": {
+        "substitutions": 159,
+        "deletions": 55,
+        "insertions": 60
+      },
+      "protected": {
+        "matched": 222,
+        "opportunities": 222,
+        "extra": 3
+      },
+      "hesitation": {
+        "matched": 68,
+        "opportunities": 72,
+        "extra": 5
+      },
+      "repetition_span": {
+        "matched": 188,
+        "opportunities": 200,
+        "extra": 0
+      },
+      "peak_rss_bytes": 1947680768,
+      "wer_delta": 0.00761170423092131,
+      "wer_delta_95_percent_interval": [
+        0.003708167238342449,
+        0.011807447774750226
+      ],
+      "gate_passed": false,
+      "binary_sha256": "222bd0190d61a88ab0511d64b6c7063cc159864532030b19588408c11b8b35d2",
+      "model_manifest_sha256": "3d64949661fed677605a9ff2dfcf9e7f4dcaa169b3e7318a0fadfeb0c83bd779"
+    },
+    {
+      "platform": "linux",
+      "precision": "fp16 encoder + int8 decoder/joiner",
+      "completed": 170,
+      "wer": 0.02095689996045868,
+      "errors": {
+        "substitutions": 113,
+        "deletions": 43,
+        "insertions": 56
+      },
+      "protected": {
+        "matched": 222,
+        "opportunities": 222,
+        "extra": 0
+      },
+      "hesitation": {
+        "matched": 66,
+        "opportunities": 72,
+        "extra": 7
+      },
+      "repetition_span": {
+        "matched": 195,
+        "opportunities": 200,
+        "extra": 0
+      },
+      "peak_rss_bytes": 4252266496,
+      "wer_delta": 0.0014827995255041505,
+      "wer_delta_95_percent_interval": [
+        -0.00042494422607032827,
+        0.003420306850386006
+      ],
+      "gate_passed": false,
+      "binary_sha256": "9ca5932a030c2b74ee1b1a9e02226a5c48f87c4a7c0f79d4bde5a418beb3e0be",
+      "model_manifest_sha256": "3d64949661fed677605a9ff2dfcf9e7f4dcaa169b3e7318a0fadfeb0c83bd779"
+    },
+    {
+      "platform": "macos",
+      "precision": "fp16 encoder + int8 decoder/joiner",
+      "completed": 170,
+      "wer": 0.02095689996045868,
+      "errors": {
+        "substitutions": 113,
+        "deletions": 43,
+        "insertions": 56
+      },
+      "protected": {
+        "matched": 222,
+        "opportunities": 222,
+        "extra": 0
+      },
+      "hesitation": {
+        "matched": 67,
+        "opportunities": 72,
+        "extra": 7
+      },
+      "repetition_span": {
+        "matched": 195,
+        "opportunities": 200,
+        "extra": 0
+      },
+      "peak_rss_bytes": 3795615744,
+      "wer_delta": 0.0014827995255041505,
+      "wer_delta_95_percent_interval": [
+        -0.00040404040404040404,
+        0.003446625179511728
+      ],
+      "gate_passed": false,
+      "binary_sha256": "222bd0190d61a88ab0511d64b6c7063cc159864532030b19588408c11b8b35d2",
+      "model_manifest_sha256": "3d64949661fed677605a9ff2dfcf9e7f4dcaa169b3e7318a0fadfeb0c83bd779"
+    }
+  ]
+}

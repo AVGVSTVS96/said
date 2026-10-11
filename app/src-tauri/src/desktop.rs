@@ -390,11 +390,11 @@ pub fn show_overlay(window: &tauri::Window) -> Result<()> {
     {
         let window = window.clone();
         window.clone().run_on_main_thread(move || {
-            if let Ok(pointer) = window.ns_window() {
-                if let Some(pointer) = std::ptr::NonNull::new(pointer) {
-                    crate::permissions::position_overlay(pointer);
-                    let _ = unsafe { macos::overlay::show(pointer) };
-                }
+            if let Ok(pointer) = window.ns_window()
+                && let Some(pointer) = std::ptr::NonNull::new(pointer)
+            {
+                crate::permissions::position_overlay(pointer);
+                let _ = unsafe { macos::overlay::show(pointer) };
             }
         })?;
     }

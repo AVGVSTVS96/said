@@ -44,16 +44,29 @@ enum Input {
 }
 
 struct WorkerSlot {
-    transport: Mutex<Option<Transport>>,
+    transport: Mutex<IdleState>,
     available: Receiver<()>,
     release: Sender<()>,
 }
 
-struct Lease<'a>(&'a Sender<()>);
+struct IdleState {
+    worker: Option<Transport>,
+    since: Instant,
+}
+
+struct Lease<'a> {
+    slot: &'a WorkerSlot,
+    used: bool,
+}
 
 impl Drop for Lease<'_> {
     fn drop(&mut self) {
-        let _ = self.0.try_send(());
+        if self.used
+            && let Ok(mut idle) = self.slot.transport.lock()
+        {
+            idle.since = Instant::now();
+        }
+        let _ = self.slot.release.try_send(());
     }
 }
 
@@ -98,11 +111,32 @@ impl WorkerClient {
         Ok(Self {
             config,
             idle: Arc::new(WorkerSlot {
-                transport: Mutex::new(Some(worker)),
+                transport: Mutex::new(IdleState {
+                    worker: Some(worker),
+                    since: Instant::now(),
+                }),
                 available,
                 release,
             }),
         })
+    }
+
+    pub fn unload_if_idle(&self, timeout: Duration) -> bool {
+        if self.idle.available.try_recv().is_err() {
+            return false;
+        }
+        let _lease = Lease {
+            slot: &self.idle,
+            used: false,
+        };
+        let worker = self.idle.transport.lock().ok().and_then(|mut idle| {
+            (idle.since.elapsed() >= timeout)
+                .then(|| idle.worker.take())
+                .flatten()
+        });
+        let unloaded = worker.is_some();
+        drop(worker);
+        unloaded
     }
 
     pub fn measured_real_time_factor(&self) -> Option<f64> {
@@ -110,6 +144,7 @@ impl WorkerClient {
             .transport
             .lock()
             .ok()?
+            .worker
             .as_ref()
             .map(|worker| worker.watchdog.real_time_factor())
     }
@@ -381,13 +416,16 @@ fn supervise(
                 }
             }
         }
-        Some(Lease(&idle.release))
+        Some(Lease {
+            slot: idle,
+            used: true,
+        })
     } else {
         None
     };
     let existing = idle
         .as_ref()
-        .and_then(|idle| idle.transport.lock().ok()?.take());
+        .and_then(|idle| idle.transport.lock().ok()?.worker.take());
     let existing_is_warm = existing.is_some();
     let mut transport = existing
         .map(Ok)
@@ -512,8 +550,8 @@ fn supervise(
                             if finishing.is_none() || !pending.is_empty() { transport = Err("worker Final before all audio was acknowledged".into()); continue; }
                             if let (Some(idle), Ok(worker)) = (&idle, transport)
                                 && let Ok(mut slot) = idle.transport.lock()
-                                && slot.is_none() {
-                                *slot = Some(worker);
+                                && slot.worker.is_none() {
+                                slot.worker = Some(worker);
                             }
                             emit(&events, id, event);
                             return;

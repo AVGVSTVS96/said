@@ -53,8 +53,9 @@ impl Desktop {
             let pid: i32 = objc::send(app, c"processIdentifier");
             let app_id = objc::string(objc::send(app, c"bundleIdentifier"))
                 .unwrap_or_else(|| format!("pid:{pid}"));
-            let name =
-                objc::string(objc::send(app, c"localizedName")).unwrap_or_else(|| app_id.clone());
+            let name = objc::string(objc::send(app, c"localizedName"))
+                .filter(|name| !name.is_empty())
+                .unwrap_or_else(|| app_id.clone());
             let application = Owned::new(ffi::AXUIElementCreateApplication(pid))?;
             ffi::AXUIElementSetMessagingTimeout(application.0, 0.2);
             let window = attribute(application.0, "AXFocusedWindow")?;

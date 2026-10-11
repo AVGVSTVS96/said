@@ -112,11 +112,25 @@ fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() 
             "identifiers",
             "paths-flags",
         ] {
-            assert!(
-                !recognize(&client, bench.join(format!("{name}.wav")))
-                    .0
-                    .is_empty()
-            );
+            let path = bench.join(format!("{name}.wav"));
+            let warm = recognize(&client, path.clone()).0;
+            assert!(!warm.is_empty());
+            if name == "dont-delete" {
+                assert!(warm.to_lowercase().starts_with("don't delete"));
+                let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                while !client.unload_if_idle(Duration::ZERO) {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "worker lease must return after Final"
+                    );
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert_eq!(
+                    recognize(&client, path).0,
+                    warm,
+                    "cold reload must retain the first spoken words"
+                );
+            }
         }
         let tail = AlignedTail::new(&bench);
         let text = recognize(&client, tail.0.clone()).0;
