@@ -112,7 +112,7 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
     )?;
     let mut config = Config::from_environment(env!("PRODUCT_STORAGE_KEY"))?;
     config.read_input = false;
-    config.portal_trigger = None;
+    config.portal_enabled = false;
     let native = LinuxPlatform::new(config)?;
     let changes = native
         .niri()

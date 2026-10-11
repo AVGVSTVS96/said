@@ -169,6 +169,7 @@ pub struct OfflineModelConfig {
     pub nemo_ctc: OfflineNemoEncDecCtcModelConfig,
     pub whisper: OfflineWhisperModelConfig,
     pub tdnn: OfflineTdnnModelConfig,
+
     pub tokens: *const c_char,
     pub num_threads: i32,
     pub debug: i32,
@@ -177,6 +178,7 @@ pub struct OfflineModelConfig {
     pub modeling_unit: *const c_char,
     pub bpe_vocab: *const c_char,
     pub telespeech_ctc: *const c_char,
+
     pub sense_voice: OfflineSenseVoiceModelConfig,
     pub moonshine: OfflineMoonshineModelConfig,
     pub fire_red_asr: OfflineFireRedAsrModelConfig,
@@ -198,6 +200,7 @@ pub struct OfflineRecognizerConfig {
     pub feat_config: FeatureConfig,
     pub model_config: OfflineModelConfig,
     pub lm_config: OfflineLMConfig,
+
     pub decoding_method: *const c_char,
     pub max_active_paths: i32,
     pub hotwords_file: *const c_char,
