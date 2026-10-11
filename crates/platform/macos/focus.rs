@@ -114,7 +114,7 @@ fn observer_class() -> Ref {
         assert!(ffi::class_addMethod(
             class,
             ffi::sel_registerName(c"focusChanged:".as_ptr()),
-            application_changed as *const (),
+            application_changed as *const std::ffi::c_void,
             c"v@:@".as_ptr()
         ));
         ffi::objc_registerClassPair(class);
@@ -178,12 +178,9 @@ impl FocusChanges {
         self.events.clone()
     }
 }
-impl Drop for FocusChanges {
-    fn drop(&mut self) {
-        if self.object.get_mut().unwrap().is_none() {
-            return;
-        }
-        objc::main_thread(|| unsafe {
+impl FocusChanges {
+    fn remove(&self) {
+        unsafe {
             if let Some(object) = self.object.lock().unwrap().take() {
                 let workspace = objc::send::<Ref>(objc::class(c"NSWorkspace"), c"sharedWorkspace");
                 let center = objc::send::<Ref>(workspace, c"notificationCenter");
@@ -191,7 +188,15 @@ impl Drop for FocusChanges {
                 ffi::object_setInstanceVariable(object.0, c"context".as_ptr(), null_mut());
                 self.state.watch.lock().unwrap().take();
             }
-        });
+        }
+    }
+}
+impl Drop for FocusChanges {
+    fn drop(&mut self) {
+        if self.object.get_mut().unwrap().is_none() {
+            return;
+        }
+        objc::main_thread(|| self.remove());
     }
 }
 

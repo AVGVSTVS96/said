@@ -69,18 +69,6 @@ fn run() -> Result<()> {
             &option(&args, "--models").ok_or("supply --models")?,
         );
     }
-    if args.first().map(String::as_str) == Some("--install-model") {
-        let models = option(&args, "--models").ok_or("supply --models destination")?;
-        let manifest = Manifest::bundled()?;
-        return said_app::download::install(
-            &manifest,
-            manifest.default_model()?,
-            &models,
-            |progress| {
-                eprintln!("{}: {} bytes", progress.file, progress.received);
-            },
-        );
-    }
     if args.first().map(String::as_str) == Some("--replay") {
         let wav = args.get(1).ok_or("--replay needs a synthetic WAV")?;
         let data = option(&args, "--data").ok_or("--replay needs an isolated --data directory")?;
@@ -216,11 +204,8 @@ fn run() -> Result<()> {
                     .collect::<Vec<_>>(),
             )?;
             TrayIconBuilder::with_id("main")
-                .icon(
-                    app.default_window_icon()
-                        .ok_or("missing tray icon")?
-                        .clone(),
-                )
+                .icon(ipc::tray_icon(false)?)
+                .icon_as_template(cfg!(target_os = "macos"))
                 .menu(&menu)
                 .tooltip(env!("PRODUCT_NAME"))
                 .on_menu_event(|app, event| {
@@ -245,10 +230,13 @@ fn run() -> Result<()> {
                     }
                 })
                 .build(app)?;
-            if paths.config.join("setup-complete").is_file()
-                && let Some(window) = app.get_webview_window("setup")
-            {
-                window.hide()?;
+            if let Some(window) = app.get_webview_window("setup") {
+                if paths.config.join("setup-complete").is_file() {
+                    window.hide()?;
+                } else {
+                    window.show()?;
+                    window.set_focus()?;
+                }
             }
             Ok(())
         })

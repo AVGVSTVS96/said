@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { CoreSource, InputDevice, Settings as SettingsValue } from "./source";
 import type { HostState } from "./contracts";
+import { DesktopStatus, ShortcutFields, shortcutError } from "./shortcuts";
 
 export function Settings({
   settings,
@@ -20,7 +21,9 @@ export function Settings({
   if (!value) return <p className="quiet">Waiting for settings.</p>;
   const update = (patch: Partial<SettingsValue>) =>
     setDraft({ ...value, ...patch });
-  const paste = host && "accessibility" in host.permissions ? "cmd+v" : "ctrl+v";
+  const mac = Boolean(host && "accessibility" in host.permissions);
+  const paste = mac ? "cmd+v" : "ctrl+v";
+  const invalidShortcut = shortcutError(value, mac);
   return (
     <section className="settings">
       <div className="group">
@@ -41,6 +44,45 @@ export function Settings({
             ))}
           </select>
         </label>
+        <ShortcutFields settings={value} mac={mac} onChange={update} />
+        <DesktopStatus host={host} />
+        <div className="setting-row"><span>Model</span><strong>{value.engine}</strong></div>
+      </div>
+      <div className="group">
+        <h2>Vocabulary</h2>
+        <label className="setting-row">
+          <span>
+            Bias recognition toward these terms
+            <small>Engine support varies.</small>
+          </span>
+          <input
+            className="switch"
+            type="checkbox"
+            role="switch"
+            checked={value.vocabulary}
+            onChange={(event) => update({ vocabulary: event.target.checked })}
+          />
+        </label>
+        <textarea
+          className="terms"
+          aria-label="Vocabulary terms, one per line"
+          placeholder="One term per line"
+          value={vocabulary}
+          onChange={(event) => setVocabulary(event.target.value)}
+          spellCheck={false}
+        />
+        <div className="actions">
+          <button
+            disabled={!host}
+            onClick={() =>
+              void send({ type: "vocabulary_save", text: vocabulary }).catch(
+                () => {},
+              )
+            }
+          >
+            Save vocabulary
+          </button>
+||||||| acc771f
         <label className="setting-row">
           <span>
             Shortcut
@@ -51,9 +93,52 @@ export function Settings({
             onChange={(event) => update({ hotkey: event.target.value })}
           />
         </label>
-        <div className="setting-row">
+        <label className="setting-row">
           <span>Engine</span>
-          <span>{value.engine}</span>
+          <select
+            value={value.engine}
+            onChange={(event) => update({ engine: event.target.value })}
+          >
+            {(host?.models ?? [{ id: value.engine }]).map((model) => (
+              <option key={model.id}>{model.id}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="group">
+        <h2>Vocabulary</h2>
+        <label className="setting-row">
+          <span>
+            Bias recognition toward these terms
+            <small>Engine support varies.</small>
+          </span>
+          <input
+            className="switch"
+            type="checkbox"
+            role="switch"
+            checked={value.vocabulary}
+            onChange={(event) => update({ vocabulary: event.target.checked })}
+          />
+        </label>
+        <textarea
+          className="terms"
+          aria-label="Vocabulary terms, one per line"
+          placeholder="One term per line"
+          value={vocabulary}
+          onChange={(event) => setVocabulary(event.target.value)}
+          spellCheck={false}
+        />
+        <div className="actions">
+          <button
+            disabled={!host}
+            onClick={() =>
+              void send({ type: "vocabulary_save", text: vocabulary }).catch(
+                () => {},
+              )
+            }
+          >
+            Save vocabulary
+          </button>
         </div>
       </div>
       <div className="group">
@@ -157,7 +242,7 @@ export function Settings({
           </button>
           <button
             className="primary"
-            disabled={!host || !draft}
+            disabled={!host || !draft || Boolean(invalidShortcut)}
             onClick={() =>
               void send({ type: "settings_save", settings: value })
                 .then(() => setDraft(null))

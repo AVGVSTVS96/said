@@ -113,6 +113,15 @@ impl Decoder {
             return result;
         }
         let flags = event.flags & MODIFIERS;
+        if self.held.is_some()
+            && [self.shortcuts.dictation, self.shortcuts.interactive]
+                .iter()
+                .any(|shortcut| shortcut.keycode == event.keycode && shortcut.modifiers == flags)
+        {
+            result.suppress = true;
+            self.swallowed[key] = true;
+            return result;
+        }
         result.hotkey = if event.keycode == 53 && recording {
             Some(Hotkey::Cancel)
         } else if event.keycode == self.shortcuts.dictation.keycode
@@ -143,6 +152,33 @@ impl Decoder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn independently_configured_actions_replace_the_fixed_insert_chord() {
+        let mut decoder = Decoder::new(Shortcuts::default());
+        assert_eq!(
+            decoder.decode(event(10, 7, OPTION), false).hotkey,
+            Some(Hotkey::Interactive)
+        );
+        assert_eq!(
+            decoder.decode(event(11, 7, 0), false).hotkey,
+            Some(Hotkey::Up)
+        );
+        assert_eq!(
+            decoder.decode(event(10, 0, OPTION), false).hotkey,
+            Some(Hotkey::InsertLast)
+        );
+        assert_eq!(
+            decoder.decode(event(11, 0, 0), false),
+            Decoded {
+                hotkey: None,
+                suppress: true
+            }
+        );
+        assert_eq!(
+            decoder.decode(event(10, 9, CONTROL | OPTION), false),
+            Decoded::default()
+        );
+    }
     fn shortcuts() -> Shortcuts {
         Shortcuts {
             dictation: Shortcut {
