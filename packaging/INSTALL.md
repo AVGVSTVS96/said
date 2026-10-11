@@ -19,8 +19,8 @@ For autostart, add said to **General → Login Items → Open at Login**.
 
 ## Linux
 
-Install the Arch package and enable the graphical-session user service described
-in [builds](README.md). Back up Niri's bind file before adding the provided include.
+Install the Arch package and add the Niri startup include described in
+[builds](README.md). Back up the compositor files before adding the provided includes.
 Super+Ctrl+Alt+Space toggles recording; configure that chord in said Settings for
 genuine hold after joining `input` and logging out/in. Model download is automatic
 and hash-checked. `said status` passively inspects the running host.
