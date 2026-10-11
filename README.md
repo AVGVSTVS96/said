@@ -23,3 +23,13 @@ CARGO_BUILD_JOBS=2 bun run build
 `product.toml` owns the display name, bundle identifier and storage key. Bundle identifier and storage key remain stable across renames. Cargo package names are internal module identifiers. Generated TypeScript and Tauri configuration are rebuilt locally and ignored by git.
 
 MIT for this code. Models and third-party runtimes will have their own licenses, recorded in their manifests before integration.
+
+## Build from source
+
+Install Rust 1.90+ and Bun, then clone the repository. Arch/CachyOS dependencies
+and the package build are in [packaging](packaging/README.md): run
+`CARGO_BUILD_JOBS=2 makepkg` from `packaging/linux`. On Apple Silicon, install
+Xcode command-line tools, jq and OpenSSL, then run
+`nice -n 10 packaging/macos.sh` while the Mac is idle. Both builds embed the UI
+and include the pinned native runtime; models download and pass SHA-256 checks
+on first launch. See [first launch](packaging/INSTALL.md).

@@ -11,7 +11,7 @@
       {
         "label": "overlay",
         "url": "index.html?screen=overlay",
-        "title": "said — Dictation",
+        "title": "said \u2014 Dictation",
         "width": 544,
         "height": 216,
         "visible": false,
@@ -25,7 +25,7 @@
       {
         "label": "interactive",
         "url": "index.html?screen=interactive",
-        "title": "said — Review",
+        "title": "said \u2014 Review",
         "width": 624,
         "height": 269,
         "visible": false,
@@ -41,7 +41,7 @@
       {
         "label": "history",
         "url": "index.html?screen=history",
-        "title": "said — History",
+        "title": "said \u2014 History",
         "width": 800,
         "height": 640,
         "visible": false
@@ -49,7 +49,7 @@
       {
         "label": "settings",
         "url": "index.html?screen=settings",
-        "title": "said — Settings",
+        "title": "said \u2014 Settings",
         "width": 640,
         "height": 680,
         "visible": false
@@ -57,9 +57,10 @@
       {
         "label": "setup",
         "url": "index.html?screen=setup",
-        "title": "said — Setup",
+        "title": "said \u2014 Setup",
         "width": 640,
-        "height": 680
+        "height": 680,
+        "visible": false
       }
     ],
     "security": {
@@ -69,10 +70,18 @@
     "enableGTKAppId": true
   },
   "bundle": {
-    "active": false,
+    "active": true,
     "macOS": {
-      "minimumSystemVersion": "15.0",
-      "infoPlist": "Info.plist"
-    }
+      "minimumSystemVersion": "14.0",
+      "infoPlist": "Info.plist",
+      "signingIdentity": "-"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   }
 }

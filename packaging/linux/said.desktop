@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=said
+Comment=Local dictation
+Exec=said
+Icon=said
+Terminal=false
+Categories=Utility;Audio;
