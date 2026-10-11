@@ -304,14 +304,14 @@ impl HostPlatform for Desktop {
         let mut steps = vec![];
         #[cfg(target_os = "linux")]
         {
-            if let Some(settings) = &self.settings {
-                if let Ok(shortcuts) = linux::input::Shortcuts::parse(
+            if let Some(settings) = &self.settings
+                && let Ok(shortcuts) = linux::input::Shortcuts::parse(
                     &settings.hotkey,
                     &settings.interactive_hotkey,
                     &settings.insert_last_hotkey,
-                ) {
-                    steps.push(shortcuts.niri_binds());
-                }
+                )
+            {
+                steps.push(shortcuts.niri_binds());
             }
             steps.push("For hold-to-talk: sudo usermod -aG input \"$USER\"; then sign out and back in. These are the same keys as the Niri toggle binds.".into());
             if let Some(native) = &self.native {

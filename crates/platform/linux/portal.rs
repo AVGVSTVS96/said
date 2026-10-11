@@ -78,7 +78,14 @@ impl PortalHotkeys {
         }
     }
     pub fn set_enabled(&self, enabled: bool) {
-        let _ = self.enabled.send(enabled);
+        self.enabled.send_if_modified(|current| {
+            if *current == enabled {
+                false
+            } else {
+                *current = enabled;
+                true
+            }
+        });
     }
 
     fn shutdown(&mut self) {

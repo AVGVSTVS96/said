@@ -169,6 +169,22 @@ fn stage_runtime(source: &Path, destination: &Path, expected: &str) -> Result<()
     result
 }
 
+fn install_library(reader: &mut impl Read, path: &Path) -> Result<()> {
+    let temporary = path.with_extension(format!("{}.part", said_core::UtteranceId::random().0));
+    let result = (|| {
+        let mut file = private_file(&temporary)?;
+        std::io::copy(reader, &mut file)?;
+        file.sync_all()?;
+        fs::rename(&temporary, path)?;
+        File::open(path.parent().unwrap())?.sync_all()?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(temporary);
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,20 +205,4 @@ mod tests {
         assert!(!destination.with_extension("part").exists());
         fs::remove_dir_all(directory).unwrap();
     }
-}
-
-fn install_library(reader: &mut impl Read, path: &Path) -> Result<()> {
-    let temporary = path.with_extension(format!("{}.part", said_core::UtteranceId::random().0));
-    let result = (|| {
-        let mut file = private_file(&temporary)?;
-        std::io::copy(reader, &mut file)?;
-        file.sync_all()?;
-        fs::rename(&temporary, path)?;
-        File::open(path.parent().unwrap())?.sync_all()?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(temporary);
-    }
-    result
 }

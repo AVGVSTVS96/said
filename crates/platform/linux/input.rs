@@ -330,8 +330,9 @@ impl InputListener {
         self.available.load(Ordering::Acquire)
     }
     pub fn set_enabled(&mut self, enabled: bool) {
-        self.enabled.store(enabled, Ordering::Release);
-        let _ = self.stop.write_all(&[0]);
+        if self.enabled.swap(enabled, Ordering::AcqRel) != enabled {
+            let _ = self.stop.write_all(&[0]);
+        }
     }
 }
 
