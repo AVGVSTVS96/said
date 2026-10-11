@@ -1,5 +1,5 @@
 [package]
-name = "voice-platform"
+name = "said-platform"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ rust-version.workspace = true
 native = ["dep:serde_json", "dep:libc", "dep:evdev", "dep:gtk", "dep:gtk-layer-shell", "dep:tauri", "dep:ashpd", "dep:futures-util", "dep:tokio", "dep:wayland-client", "dep:wayland-protocols-misc", "dep:xkbcommon"]
 
 [dependencies]
-voice-core.workspace = true
+said-core.workspace = true
 crossbeam-channel.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]

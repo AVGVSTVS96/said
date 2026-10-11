@@ -1,9 +1,9 @@
-use std::{fs, process::Command};
-use voice_core::{EngineEvent, History, UtteranceId, history::SqliteHistory};
-use voice_engine::{
+use said_core::{EngineEvent, History, UtteranceId, history::SqliteHistory};
+use said_engine::{
     manifest::{Manifest, model_cache},
     wav::Wav,
 };
+use std::{fs, process::Command};
 
 #[test]
 #[ignore = "requires hash-verified Moonshine runtime/model and public synthetic engine-proof WAVs"]
@@ -41,7 +41,7 @@ fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
         assert_eq!(finals, 1);
         drop(recognizer);
         let data = root.join(clip);
-        let result = Command::new(env!("CARGO_BIN_EXE_voice"))
+        let result = Command::new(env!("CARGO_BIN_EXE_said"))
             .args([
                 "--replay",
                 input.to_str().unwrap(),
@@ -76,18 +76,18 @@ fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
         let (sender, requests) = crossbeam_channel::bounded(1);
         let audio_path = audio.clone();
         let service = std::thread::spawn(move || match requests.recv().unwrap() {
-            voice_app::ipc::Request::Audio(requested, reply) => {
+            said_app::ipc::Request::Audio(requested, reply) => {
                 assert_eq!(requested, id);
                 reply.send(Ok(audio_path)).unwrap();
             }
             _ => panic!("unexpected playback request"),
         });
         let request = tauri::http::Request::builder()
-            .uri(format!("voice-audio://localhost/{}", id.0))
+            .uri(format!("said-audio://localhost/{}", id.0))
             .header("Range", "bytes=0-79")
             .body(Vec::new())
             .unwrap();
-        let response = voice_app::ipc::audio(&voice_app::ipc::Connection(sender), request);
+        let response = said_app::ipc::audio(&said_app::ipc::Connection(sender), request);
         assert_eq!(response.status(), 206);
         assert_eq!(response.headers()["Content-Type"], "audio/wav");
         assert_eq!(response.body(), &fs::read(audio).unwrap()[..80]);
@@ -117,12 +117,12 @@ fn moonshine_worker_host_history_and_paste_preserve_exact_bytes() {
 #[test]
 fn stop_drains_final_frames_before_the_next_recording_starts() {
     use crossbeam_channel::{Receiver, Sender, bounded};
+    use said_app::{runtime::Host, storage::Paths};
+    use said_audio::{Recorder, wav::WavWriter};
+    use said_core::{AudioEvent, AudioFrame, InputDevice, Mode, Result, Target};
+    use said_engine::host::{WorkerClient, WorkerConfig};
+    use said_platform::fake::{FakePlatform, PlatformCall};
     use std::time::{Duration, Instant};
-    use voice_app::{runtime::Host, storage::Paths};
-    use voice_audio::{Recorder, wav::WavWriter};
-    use voice_core::{AudioEvent, AudioFrame, InputDevice, Mode, Result, Target};
-    use voice_engine::host::{WorkerClient, WorkerConfig};
-    use voice_platform::fake::{FakePlatform, PlatformCall};
 
     struct TailRecorder {
         directory: std::path::PathBuf,
@@ -166,7 +166,7 @@ fn stop_drains_final_frames_before_the_next_recording_starts() {
     let trace = root.join("trace.json");
     fs::write(&trace,serde_json::json!({"start":[],"feeds":[],"finish":[{"type":"committed","text":text},{"type":"final"}]}).to_string()).unwrap();
     let client = WorkerClient::warm(WorkerConfig {
-        executable: env!("CARGO_BIN_EXE_voice").into(),
+        executable: env!("CARGO_BIN_EXE_said").into(),
         args: vec![
             "--worker".into(),
             "fake".into(),
@@ -224,7 +224,7 @@ fn stop_drains_final_frames_before_the_next_recording_starts() {
     for row in host.history.search("").unwrap() {
         assert_eq!(row.raw_text.as_deref(), Some(text));
         let mut wav =
-            voice_audio::wav::WavReader::open(&host.history.audio_path(row.audio_id)).unwrap();
+            said_audio::wav::WavReader::open(&host.history.audio_path(row.audio_id)).unwrap();
         let mut samples = [0; 4];
         assert_eq!(wav.read(&mut samples).unwrap(), 4);
         assert_eq!(samples, [11, 22, 33, 44]);

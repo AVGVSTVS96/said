@@ -1,5 +1,5 @@
 use rusqlite::Connection;
-use voice_core::SCHEMA;
+use said_core::SCHEMA;
 
 #[test]
 fn originals_are_immutable_and_search_tracks_edits_and_deletion() {

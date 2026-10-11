@@ -1,7 +1,7 @@
 use std::io::{self, Read};
 
-use voice_core::{EngineEvent, UtteranceId, WorkerRequest, WorkerResponse};
-use voice_engine::protocol::{read_request, read_response, write_request, write_response};
+use said_core::{EngineEvent, UtteranceId, WorkerRequest, WorkerResponse};
+use said_engine::protocol::{read_request, read_response, write_request, write_response};
 
 struct Fragments<'a>(&'a [u8]);
 impl Read for Fragments<'_> {

@@ -2,7 +2,7 @@ use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::sync::OnceLock;
 
-use voice_core::Result;
+use said_core::Result;
 
 use super::{ffi, objc};
 
@@ -39,7 +39,7 @@ pub unsafe fn configure(window: NonNull<c_void>) -> Result<()> {
             static PANEL: OnceLock<usize> = OnceLock::new();
             let class = *PANEL.get_or_init(|| {
                 let class =
-                    ffi::objc_allocateClassPair(panel, c"VoiceNonactivatingPanel".as_ptr(), 0);
+                    ffi::objc_allocateClassPair(panel, c"saidNonactivatingPanel".as_ptr(), 0);
                 assert!(!class.is_null(), "cannot register overlay panel class");
                 for selector in [c"canBecomeKeyWindow", c"canBecomeMainWindow"] {
                     assert!(ffi::class_addMethod(

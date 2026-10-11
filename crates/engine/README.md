@@ -2,7 +2,7 @@
 
 The default on Linux CPU and Apple Silicon is **Parakeet TDT v3, FP32,
 sherpa-onnx 1.13.8**, with 30-second windows and 5-second overlap. The app and
-`voice bench` run this adapter through the same worker protocol. No Python,
+`said bench` run this adapter through the same worker protocol. No Python,
 server daemon, VAD gate, vocabulary bias, text cleanup or automatic fallback
 runs in the recognition path. Vocabulary is ignored and setup reports that
 biasing is unavailable.
@@ -16,8 +16,8 @@ is MIT. Attribution is retained in `licenses/`.
 
 ```sh
 crates/engine/scripts/fetch-model.sh
-CARGO_BUILD_JOBS=2 cargo build -p voice-engine --bin voice-engine --examples
-cargo run -p voice-engine --bin voice-engine -- /path/to/16k-mono-i16.wav
+CARGO_BUILD_JOBS=2 cargo build -p said-engine --bin said-engine --examples
+cargo run -p said-engine --bin said-engine -- /path/to/16k-mono-i16.wav
 ```
 
 Provisioning needs curl, jq, OpenSSL, tar and bzip2 support. It downloads and
@@ -122,11 +122,11 @@ not an automatic acceleration path.
 ## Verification
 
 ```sh
-CARGO_BUILD_JOBS=2 cargo test -p voice-engine
-CARGO_BUILD_JOBS=2 cargo clippy -p voice-engine --all-targets -- -D warnings
-cargo fmt -p voice-engine --check
+CARGO_BUILD_JOBS=2 cargo test -p said-engine
+CARGO_BUILD_JOBS=2 cargo clippy -p said-engine --all-targets -- -D warnings
+cargo fmt -p said-engine --check
 bench/scripts/ci.sh
-CARGO_BUILD_JOBS=2 cargo test -p voice-app --test end_to_end
+CARGO_BUILD_JOBS=2 cargo test -p said-app --test end_to_end
 ```
 
 The public synthetic fixtures can be regenerated on macOS without a microphone
@@ -136,8 +136,8 @@ only these synthetic WAVs to Linux before running the ignored native checks.
 
 ```sh
 crates/engine/scripts/generate-clips.sh
-CARGO_BUILD_JOBS=2 cargo test -p voice-engine --test golden -- --ignored --nocapture
-CARGO_BUILD_JOBS=2 cargo test -p voice-engine --test public_regressions -- --ignored --nocapture
+CARGO_BUILD_JOBS=2 cargo test -p said-engine --test golden -- --ignored --nocapture
+CARGO_BUILD_JOBS=2 cargo test -p said-engine --test public_regressions -- --ignored --nocapture
 ```
 
 On Linux, run each native check separately under
@@ -156,7 +156,7 @@ use the ordinary allocator environment; these settings are not model defaults.
 ```sh
 MALLOC_ARENA_MAX=1 MALLOC_TRIM_THRESHOLD_=131072 CARGO_BUILD_JOBS=2 \
   systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
-  nice -n 10 cargo test -p voice-app --test end_to_end -- --ignored --nocapture
+  nice -n 10 cargo test -p said-app --test end_to_end -- --ignored --nocapture
 ```
 
 Protocol fuzzing, truncated/oversized frames, lifecycle identity, literal fake

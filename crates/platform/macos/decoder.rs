@@ -1,4 +1,4 @@
-use voice_core::Hotkey;
+use said_core::Hotkey;
 
 pub const SHIFT: u64 = 1 << 17;
 pub const CONTROL: u64 = 1 << 18;

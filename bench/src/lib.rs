@@ -3,12 +3,12 @@ mod resources;
 pub mod runner;
 pub mod score;
 
-use std::path::PathBuf;
-use voice_core::Result;
-use voice_engine::{
+use said_core::Result;
+use said_engine::{
     fake::{FakeEngine, Trace},
     manifest::{Manifest, model_cache, worker_main},
 };
+use std::path::PathBuf;
 
 pub fn cli(args: &[String]) -> Result<()> {
     if args.first().map(String::as_str) == Some("--worker") {
@@ -20,7 +20,7 @@ pub fn cli(args: &[String]) -> Result<()> {
         };
         if let Some(path) = flag("--trace") {
             let trace: Trace = serde_json::from_reader(std::fs::File::open(path)?)?;
-            return voice_engine::worker::run(
+            return said_engine::worker::run(
                 std::io::stdin().lock(),
                 std::io::stdout().lock(),
                 |id| {
@@ -40,7 +40,7 @@ pub fn cli(args: &[String]) -> Result<()> {
         return worker_main(Some(model), &manifest, &cache);
     }
     if args.first().map(String::as_str) != Some("bench") {
-        return Err("usage: voice bench <manifest.jsonl> [--engine NAME|--all] [--ci] [--unpaced] [--audio-root DIR] [--output DIR] [--trace FILE] [--model-manifest FILE] [--model-cache DIR]".into());
+        return Err("usage: said bench <manifest.jsonl> [--engine NAME|--all] [--ci] [--unpaced] [--audio-root DIR] [--output DIR] [--trace FILE] [--model-manifest FILE] [--model-cache DIR]".into());
     }
     runner::run(runner::Options::parse(&args[1..])?)
 }

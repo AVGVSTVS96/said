@@ -9,7 +9,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded, select};
-use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId, WorkerRequest, WorkerResponse};
+use said_core::{EngineEvent, EngineOutput, Result, UtteranceId, WorkerRequest, WorkerResponse};
 
 use crate::{Engine, protocol, spool::Spool, watchdog::Watchdog, wav::Wav};
 
@@ -200,7 +200,7 @@ impl WorkerEngine {
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancel_flag = cancelled.clone();
         thread::Builder::new()
-            .name("voice-engine".into())
+            .name("said-engine".into())
             .spawn(move || {
                 supervise(
                     id,

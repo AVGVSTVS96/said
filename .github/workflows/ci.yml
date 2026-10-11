@@ -20,8 +20,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - run: cargo fmt --all --check
-      - run: cargo clippy --locked -p voice-core -p voice-audio -p voice-engine -p voice-platform -p voice-bench --all-targets -- -D warnings
-      - run: cargo test --locked -p voice-core -p voice-audio -p voice-engine -p voice-platform -p voice-bench
+      - run: cargo clippy --locked -p said-core -p said-audio -p said-engine -p said-platform -p said-bench --all-targets -- -D warnings
+      - run: cargo test --locked -p said-core -p said-audio -p said-engine -p said-platform -p said-bench
   app:
     runs-on: ubuntu-latest
     steps:
@@ -37,5 +37,5 @@ jobs:
         working-directory: app
       - run: bun run build
         working-directory: app
-      - run: cargo check --locked -p voice-app --features custom-protocol
-      - run: cargo test --locked -p voice-app --test end_to_end
+      - run: cargo check --locked -p said-app --features custom-protocol
+      - run: cargo test --locked -p said-app --test end_to_end

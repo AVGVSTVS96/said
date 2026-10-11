@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
-use voice_core::{EngineEvent, UtteranceId, WorkerRequest, WorkerResponse};
-use voice_engine::{
+use said_core::{EngineEvent, UtteranceId, WorkerRequest, WorkerResponse};
+use said_engine::{
     fake::{FakeEngine, Trace},
     protocol, worker,
 };
@@ -134,7 +134,7 @@ fn worker_rejects_wrong_identity_order_and_events_after_final() {
 
 #[test]
 fn fake_records_exact_inputs_and_cancel_suppresses_late_text() {
-    use voice_engine::{Engine, fake::EngineCall};
+    use said_engine::{Engine, fake::EngineCall};
     let (mut fake, events) = FakeEngine::new(
         UtteranceId::random(),
         Trace {

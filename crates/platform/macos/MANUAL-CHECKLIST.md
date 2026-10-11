@@ -7,8 +7,8 @@ and the same signing identity/build location throughout these checks. Re-signing
 an ad-hoc build can invalidate grants; test one unchanged bundle.
 
 1. Build the host's app bundle. Ad-hoc sign that bundle once with
-   `codesign --force --deep --sign - target/release/bundle/macos/voice.app`, then
-   verify `codesign --verify --deep --strict target/release/bundle/macos/voice.app`.
+   `codesign --force --deep --sign - target/release/bundle/macos/said.app`, then
+   verify `codesign --verify --deep --strict target/release/bundle/macos/said.app`.
    Launch the bundle from Finder. Its Info.plist must contain
    `NSMicrophoneUsageDescription` before using Grant Microphone.
 2. In System Settings > Privacy & Security > Accessibility, add that exact app

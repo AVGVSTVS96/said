@@ -1,4 +1,4 @@
-use voice_bench::score::{self, Term};
+use said_bench::score::{self, Term};
 
 #[test]
 fn deletion_of_a_negative_cannot_be_offset_by_punctuation() {

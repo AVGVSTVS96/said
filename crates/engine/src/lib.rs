@@ -10,7 +10,7 @@ mod watchdog;
 pub mod wav;
 pub mod worker;
 
-use voice_core::Result;
+use said_core::Result;
 
 pub trait Engine {
     fn start(&mut self, vocabulary: &[String]) -> Result<()>;

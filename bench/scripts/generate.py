@@ -58,14 +58,14 @@ def resample(source, target):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output', type=Path, default=Path.home() / '.cache/voice-models/bench-public')
+    parser.add_argument('--output', type=Path, default=Path.home() / '.cache/said-models/bench-public')
     parser.add_argument('--ci', action='store_true')
     parser.add_argument('--receipts', type=Path)
     args = parser.parse_args()
     rows = [json.loads(line) for line in (ROOT / 'recipes.jsonl').read_text().splitlines()]
     expected = {row['id']: row for row in map(json.loads, (ROOT / 'clips.jsonl').read_text().splitlines())} if (ROOT / 'clips.jsonl').exists() else {}
     assets = json.loads((ROOT / 'sources.json').read_text())
-    cache = Path.home() / '.cache/voice-models/bench-source'
+    cache = Path.home() / '.cache/said-models/bench-source'
     cache.mkdir(parents=True, exist_ok=True)
     (args.output / 'clips').mkdir(parents=True, exist_ok=True)
     receipts = []

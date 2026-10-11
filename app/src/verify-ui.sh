@@ -7,7 +7,7 @@ mkdir -p "$evidence/tmp"
 evidence=$(cd "$evidence" && pwd)
 export TMPDIR="$evidence/tmp"
 export AGENT_BROWSER_SESSION
-AGENT_BROWSER_SESSION=$(bunx agent-browser session id --scope worktree --prefix voice-ui-check)
+AGENT_BROWSER_SESSION=$(bunx agent-browser session id --scope worktree --prefix said-ui-check)
 export AGENT_BROWSER_HEADED=false
 printf '{}\n' > "$evidence/browser-config.json"
 

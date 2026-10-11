@@ -130,7 +130,7 @@ unsafe extern "C" {
 
 pub struct Owned(pub Ref);
 impl Owned {
-    pub fn new(value: Ref) -> voice_core::Result<Self> {
+    pub fn new(value: Ref) -> said_core::Result<Self> {
         if value.is_null() {
             Err("macOS returned a null native object".into())
         } else {

@@ -1,15 +1,15 @@
+use said_bench::corpus;
 use serde_json::json;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use voice_bench::corpus;
 
 struct Fixture(PathBuf);
 impl Fixture {
     fn new() -> Self {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("target/fixtures")
-            .join(voice_core::UtteranceId::random().0.to_string());
+            .join(said_core::UtteranceId::random().0.to_string());
         fs::create_dir_all(&path).unwrap();
         let mut wav = Vec::new();
         wav.extend(b"RIFF");
@@ -36,7 +36,7 @@ impl Fixture {
             "license":"CC0-1.0","source":"synthetic fixture", "reference_status":"synthetic"}).to_string()).unwrap();
     }
     fn run(&self) -> std::process::Output {
-        Command::new(env!("CARGO_BIN_EXE_voice-bench"))
+        Command::new(env!("CARGO_BIN_EXE_said-bench"))
             .arg("bench")
             .arg(self.0.join("manifest.jsonl"))
             .args(["--engine", "fake", "--trace"])

@@ -1,12 +1,12 @@
 use crate::storage::{private_dir, private_file};
+use said_core::{DownloadState, Result};
+use said_engine::manifest::Manifest;
 use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
     io::{Read, Write},
     path::Path,
 };
-use voice_core::{DownloadState, Result};
-use voice_engine::manifest::Manifest;
 
 fn hash(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
@@ -135,7 +135,7 @@ pub fn install(
 }
 
 fn install_library(reader: &mut impl Read, path: &Path) -> Result<()> {
-    let temporary = path.with_extension(format!("{}.part", voice_core::UtteranceId::random().0));
+    let temporary = path.with_extension(format!("{}.part", said_core::UtteranceId::random().0));
     let result = (|| {
         let mut file = private_file(&temporary)?;
         std::io::copy(reader, &mut file)?;

@@ -132,7 +132,7 @@ fn validate(file: &mut File) -> io::Result<u64> {
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            "not a voice capture WAV",
+            "not a said capture WAV",
         ));
     }
     if &bytes[..4] == b"RF64" {

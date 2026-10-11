@@ -6,7 +6,7 @@ use std::{
 
 use crossbeam_channel::{Receiver, bounded};
 use rtrb::RingBuffer;
-use voice_core::{AudioEvent, InputDevice, Result, UtteranceId};
+use said_core::{AudioEvent, InputDevice, Result, UtteranceId};
 
 use crate::{
     Recorder, Resampler, SAMPLE_RATE,

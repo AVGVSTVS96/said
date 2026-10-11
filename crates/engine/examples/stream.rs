@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use voice_core::{EngineEvent, Result, UtteranceId};
-use voice_engine::{
+use said_core::{EngineEvent, Result, UtteranceId};
+use said_engine::{
     Engine,
     host::{WorkerClient, WorkerConfig},
     wav::Wav,

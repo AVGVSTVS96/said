@@ -1,7 +1,7 @@
 use std::io::{self, Cursor};
 
-use voice_core::{EngineEvent, UtteranceId, WorkerRequest, WorkerResponse};
-use voice_engine::protocol::*;
+use said_core::{EngineEvent, UtteranceId, WorkerRequest, WorkerResponse};
+use said_engine::protocol::*;
 
 #[test]
 fn wire_matches_an_independent_little_endian_fixture() {

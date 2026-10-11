@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 
 use crossbeam_channel::Receiver;
-use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId, WorkerRequest, WorkerResponse};
+use said_core::{EngineEvent, EngineOutput, Result, UtteranceId, WorkerRequest, WorkerResponse};
 
 use crate::{Engine, protocol};
 

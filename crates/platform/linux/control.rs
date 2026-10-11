@@ -8,7 +8,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender, bounded};
-use voice_core::Result;
+use said_core::Result;
 
 const MAX_REPLY: usize = 16 * 1024 * 1024;
 
@@ -100,7 +100,7 @@ impl ControlSocket {
             return Err("control lock belongs to a different user".into());
         }
         if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-            return Err("voice control socket is already running".into());
+            return Err("said control socket is already running".into());
         }
         match fs::symlink_metadata(&path) {
             Ok(metadata)
@@ -243,7 +243,7 @@ mod tests {
 
     #[test]
     fn control_permissions_exclusivity_reply_and_cleanup() {
-        let runtime = std::env::temp_dir().join(format!("voice-control-{}", std::process::id()));
+        let runtime = std::env::temp_dir().join(format!("said-control-{}", std::process::id()));
         fs::create_dir(&runtime).unwrap();
         fs::set_permissions(&runtime, fs::Permissions::from_mode(0o700)).unwrap();
         let server = ControlSocket::bind(&runtime, "test").unwrap();

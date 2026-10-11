@@ -6,7 +6,7 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::Instant;
 
-use voice_core::Result;
+use said_core::Result;
 use wayland_client::{
     Connection, Dispatch, EventQueue, QueueHandle, delegate_noop,
     globals::{GlobalListContents, registry_queue_init},
@@ -63,7 +63,7 @@ impl VirtualKeyboard {
         )
         .ok_or("could not compile paste keymap")?;
         let contents = CString::new(keymap.get_as_string(xkb::KEYMAP_FORMAT_TEXT_V1))?;
-        let descriptor = unsafe { libc::memfd_create(c"voice-keymap".as_ptr(), libc::MFD_CLOEXEC) };
+        let descriptor = unsafe { libc::memfd_create(c"said-keymap".as_ptr(), libc::MFD_CLOEXEC) };
         if descriptor < 0 {
             return Err(std::io::Error::last_os_error().into());
         }

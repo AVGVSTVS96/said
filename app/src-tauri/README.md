@@ -1,7 +1,7 @@
 # Host
 
 `custom-protocol` embeds the built frontend for a standalone app; build `app/dist` first.
-The `voice` binary dispatches `--worker` before initializing Tauri. The host opens owner-only
+The `said` binary dispatches `--worker` before initializing Tauri. The host opens owner-only
 storage and a single-process data lock, verifies/downloads the selected model and pinned native
 runtime into `data/models`, warms the worker, and recovers pending recordings without pasting.
 The model manifest remains the source of platform defaults, hashes, source and license.
@@ -28,7 +28,7 @@ actions. Microphone usage text is in `Info.plist`.
 - `ui_action({ action: UiAction })` and `host_action({ action: HostAction })` run on one host actor.
   Their promises resolve with the applied snapshot after publication; failures reject. Stored
   history IDs route through SQLite when they are no longer active core sessions.
-- `voice-audio://localhost/<utterance-id>` resolves only an existing history row's audio reference.
+- `said-audio://localhost/<utterance-id>` resolves only an existing history row's audio reference.
   Bounded range responses support native audio controls without loading an entire recording.
   Filesystem paths are not accepted from the renderer. Moonshine supplies no word timestamps;
   playback is the whole clip.
@@ -45,18 +45,18 @@ Notifications and local/vocabulary/auto-send indicators come from host state.
 The running Linux app owns `$XDG_RUNTIME_DIR/<storage_key>.sock` (0600, same-UID peers).
 
 ```sh
-voice hotkey
-voice toggle
-voice start
-voice stop
-voice interactive
-voice insert-last
-voice cancel
-voice status
-voice history search 'no AND file'
-voice bench bench/clips.jsonl --model-cache "$HOME/.cache/voice-models"
-voice import-vocabulary codex [dictionary.json]
-voice import-vocabulary wispr /path/to/flow.sqlite
+said hotkey
+said toggle
+said start
+said stop
+said interactive
+said insert-last
+said cancel
+said status
+said history search 'no AND file'
+said bench bench/clips.jsonl --model-cache "$HOME/.cache/said-models"
+said import-vocabulary codex [dictionary.json]
+said import-vocabulary wispr /path/to/flow.sqlite
 ```
 
 macOS Wispr import defaults to its Application Support database. It reads active `Dictionary.phrase`
@@ -71,10 +71,10 @@ Build with `CARGO_BUILD_JOBS=2`. No headless checks acquire a microphone or a ph
 Synthetic clips and large model/runtime files stay outside git.
 
 ```sh
-CARGO_BUILD_JOBS=2 cargo build -p voice-app --features custom-protocol --bin voice
-CARGO_BUILD_JOBS=2 cargo clippy -p voice-app --all-targets -- -D warnings
-CARGO_BUILD_JOBS=2 cargo test -p voice-app --test end_to_end
-CARGO_BUILD_JOBS=2 cargo test -p voice-app --test end_to_end -- --ignored --nocapture
+CARGO_BUILD_JOBS=2 cargo build -p said-app --features custom-protocol --bin said
+CARGO_BUILD_JOBS=2 cargo clippy -p said-app --all-targets -- -D warnings
+CARGO_BUILD_JOBS=2 cargo test -p said-app --test end_to_end
+CARGO_BUILD_JOBS=2 cargo test -p said-app --test end_to_end -- --ignored --nocapture
 ```
 
 The default proof uses a scripted same-binary worker and a disk-backed synthetic recorder. It
@@ -91,9 +91,9 @@ preservation, not acoustic correctness or an engine ranking.
 Use the platform's headless Cage/nested Niri runner for the native terminal flow:
 
 ```sh
-VOICE_APP_BINARY="$PWD/target/debug/voice" \
-VOICE_APP_E2E="[\"$PWD/target/debug/voice\",\"--nested-proof\",\"$HOME/.cache/voice-models/engine-proof/negation.wav\",\"--models\",\"$HOME/.cache/voice-models\"]" \
-VOICE_LINUX_TEST_DIR="$HOME/.cache/voice-niri-app" \
+SAID_APP_BINARY="$PWD/target/debug/said" \
+SAID_APP_E2E="[\"$PWD/target/debug/said\",\"--nested-proof\",\"$HOME/.cache/said-models/engine-proof/negation.wav\",\"--models\",\"$HOME/.cache/said-models\"]" \
+SAID_LINUX_TEST_DIR="$HOME/.cache/said-niri-app" \
 python3 crates/platform/linux/tests/run.py
 ```
 

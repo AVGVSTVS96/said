@@ -1,5 +1,5 @@
 [package]
-name = "voice-bench"
+name = "said-bench"
 version = "0.0.0"
 edition = "2024"
 license = "MIT"
@@ -7,8 +7,8 @@ rust-version = "1.90"
 
 
 [dependencies]
-voice-core.workspace = true
-voice-engine.workspace = true
+said-core.workspace = true
+said-engine.workspace = true
 crossbeam-channel.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -16,5 +16,5 @@ sha2 = "0.10"
 unicode-normalization = "0.1"
 
 [[bin]]
-name = "voice-bench"
+name = "said-bench"
 path = "src/main.rs"

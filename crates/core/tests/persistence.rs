@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use voice_core::{history::SqliteHistory, *};
+use said_core::{history::SqliteHistory, *};
 
 struct Directory(PathBuf);
 impl Directory {
@@ -234,15 +234,15 @@ fn personal_files_are_owner_only() {
 
 #[test]
 fn restart_recovery_and_insert_last_run_against_sqlite_and_fake_adapters() {
-    use std::collections::VecDeque;
-    use voice_engine::{
+    use said_engine::{
         Engine,
         fake::{FakeEngine, Trace},
     };
-    use voice_platform::{
+    use said_platform::{
         Platform,
         fake::{FakePlatform, PlatformCall},
     };
+    use std::collections::VecDeque;
     fn run(
         session: &mut Session,
         event: SessionEvent,

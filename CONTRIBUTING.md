@@ -6,18 +6,18 @@ Use idiomatic Rust 2024 and React/TypeScript, small modules and direct calls. Co
 
 | Module | Paths and ownership | Local check |
 | --- | --- | --- |
-| core | `crates/core/src/session.rs`, `history.rs`, `fake.rs`; add persistence, settings, recovery and remaining state transitions | `cargo test -p voice-core` |
-| audio | `crates/audio`; capture, bounded buffers, resampling, durable WAV, devices and disconnect handling | `cargo test -p voice-audio` |
-| engine | `crates/engine`; adapters, host client, worker dispatch; reuse `protocol` unchanged in app and bench | `cargo test -p voice-engine` |
-| platform-macos | `crates/platform/macos`; CGEventTap, focus, clipboard and NSPanel; dependency changes go through integrator | `cargo check -p voice-platform --features native` on macOS |
-| platform-linux | `crates/platform/linux`; Niri IPC, control socket, evdev, clipboard, virtual keyboard, layer-shell | `cargo check -p voice-platform --features native` on Linux |
+| core | `crates/core/src/session.rs`, `history.rs`, `fake.rs`; add persistence, settings, recovery and remaining state transitions | `cargo test -p said-core` |
+| audio | `crates/audio`; capture, bounded buffers, resampling, durable WAV, devices and disconnect handling | `cargo test -p said-audio` |
+| engine | `crates/engine`; adapters, host client, worker dispatch; reuse `protocol` unchanged in app and bench | `cargo test -p said-engine` |
+| platform-macos | `crates/platform/macos`; CGEventTap, focus, clipboard and NSPanel; dependency changes go through integrator | `cargo check -p said-platform --features native` on macOS |
+| platform-linux | `crates/platform/linux`; Niri IPC, control socket, evdev, clipboard, virtual keyboard, layer-shell | `cargo check -p said-platform --features native` on Linux |
 | ui | `app/src` excluding generated `bindings/` and `product.ts`; five screens, core state subscription and actions | `cd app && bun run typecheck && bun run build` |
 | bench | `bench`; public corpus, runner, scorer and results; same engine crate as the app | add a pure scorer check before corpus integration |
-| app/packaging | `app/src-tauri`, `packaging`; effect executor, worker CLI, IPC, permissions and install artifacts | `cargo check -p voice-app` |
+| app/packaging | `app/src-tauri`, `packaging`; effect executor, worker CLI, IPC, permissions and install artifacts | `cargo check -p said-app` |
 | integrator | `crates/core/src/types.rs`, `bindings.rs`, core build/export scripts, schema, crate manifests, `crates/platform/src`, `product.toml`, app build configuration, CI | checks below |
 
 ```sh
-git worktree add ../voice-wt/core -b m/core master
+git worktree add ../said-wt/core -b m/core master
 ```
 
 Use your module name in place of `core`. Both platform agents share one crate manifest: request target-specific dependencies from the integrator rather than editing it concurrently. Common fakes stay available on every OS; native modules are gated by OS and the `native` feature, enabled by the host. Future desktop dependencies must be optional and activated by that feature so pure tests stay headless.
@@ -26,8 +26,8 @@ Set `CARGO_BUILD_JOBS=2`. Default workspace members are the four pure crates; th
 
 ```sh
 cargo fmt --all --check
-CARGO_BUILD_JOBS=2 cargo clippy -p voice-core -p voice-audio -p voice-engine -p voice-platform --all-targets -- -D warnings
-CARGO_BUILD_JOBS=2 cargo test -p voice-core -p voice-audio -p voice-engine -p voice-platform
+CARGO_BUILD_JOBS=2 cargo clippy -p said-core -p said-audio -p said-engine -p said-platform --all-targets -- -D warnings
+CARGO_BUILD_JOBS=2 cargo test -p said-core -p said-audio -p said-engine -p said-platform
 cd app
 bun install --frozen-lockfile
 CARGO_BUILD_JOBS=2 bun run typecheck

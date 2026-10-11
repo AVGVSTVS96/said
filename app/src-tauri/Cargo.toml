@@ -1,5 +1,5 @@
 [package]
-name = "voice-app"
+name = "said-app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,11 +9,11 @@ rust-version.workspace = true
 custom-protocol = ["tauri/custom-protocol"]
 
 [dependencies]
-voice-core.workspace = true
-voice-audio = { workspace = true, features = ["native"] }
-voice-engine.workspace = true
-voice-bench.workspace = true
-voice-platform = { workspace = true, features = ["native"] }
+said-core.workspace = true
+said-audio = { workspace = true, features = ["native"] }
+said-engine.workspace = true
+said-bench.workspace = true
+said-platform = { workspace = true, features = ["native"] }
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -26,7 +26,7 @@ tar = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
 
 [[bin]]
-name = "voice"
+name = "said"
 path = "src/main.rs"
 
 [build-dependencies]

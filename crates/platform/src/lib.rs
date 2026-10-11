@@ -9,7 +9,7 @@ pub mod linux;
 pub mod macos;
 
 use crossbeam_channel::Receiver;
-use voice_core::{Hotkey, Result, Target};
+use said_core::{Hotkey, Result, Target};
 
 pub trait Platform {
     type Window;

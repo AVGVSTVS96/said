@@ -13,7 +13,7 @@ caller cannot mistake copying for a successfully posted chord.
 ## Integrator wiring
 
 The shared platform manifest and app binary are integrator-owned. This branch changes neither.
-The executable CLI fixture in `tests/voice.rs` demonstrates routing `voice hotkey`, `toggle`,
+The executable CLI fixture in `tests/said.rs` demonstrates routing `said hotkey`, `toggle`,
 `interactive`, `insert-last`, `cancel` and `status` through `control::run_cli`. Use the stable storage
 key from `product.toml`; the host and CLI must agree on it.
 
@@ -49,13 +49,13 @@ The same niri binds work in toggle, evdev and portal modes:
 ```kdl
 binds {
     Ctrl+Alt+Space repeat=false allow-inhibiting=false {
-        spawn "/absolute/path/to/voice" "hotkey";
+        spawn "/absolute/path/to/said" "hotkey";
     }
     Ctrl+Alt+Shift+Space repeat=false allow-inhibiting=false {
-        spawn "/absolute/path/to/voice" "hotkey" "interactive";
+        spawn "/absolute/path/to/said" "hotkey" "interactive";
     }
     Ctrl+Alt+V repeat=false allow-inhibiting=false {
-        spawn "/absolute/path/to/voice" "hotkey" "insert-last";
+        spawn "/absolute/path/to/said" "hotkey" "insert-last";
     }
 }
 ```
@@ -96,7 +96,7 @@ CARGO_BUILD_JOBS=2 crates/platform/linux/tests/build.sh
 python3 crates/platform/linux/tests/run.py
 ```
 
-Set `VOICE_LINUX_TEST_DIR` to reuse a build directory on disk. The runner creates a fresh 0700
+Set `SAID_LINUX_TEST_DIR` to reuse a build directory on disk. The runner creates a fresh 0700
 runtime directory and private D-Bus, headless Cage, and Niri nested inside Cage. GTK3, Ghostty with a
 raw bracketed-paste scratch editor, and Electron's textarea run exclusively inside that Niri.
 The parent compositor receives physical-key-shaped Wayland events to exercise the real Niri bind;

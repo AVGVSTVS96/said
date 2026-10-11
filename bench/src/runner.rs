@@ -9,15 +9,15 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use serde::Serialize;
-use serde_json::{Value, json};
-use voice_core::{EngineEvent, Result, UtteranceId};
-use voice_engine::{
+use said_core::{EngineEvent, Result, UtteranceId};
+use said_engine::{
     Engine,
     host::{WorkerClient, WorkerConfig},
     manifest::{Manifest, model_cache},
     wav::Wav,
 };
+use serde::Serialize;
+use serde_json::{Value, json};
 
 use crate::{
     corpus,
@@ -139,7 +139,7 @@ fn recognize(client: &WorkerClient, path: &Path, unpaced: bool) -> Result<Recogn
     thread::scope(|scope| -> Result<()> {
         let release_signal = release.clone();
         let stop_signal = stopped.clone();
-        let feeder = scope.spawn(move || -> Result<(voice_engine::host::WorkerEngine, u64)> {
+        let feeder = scope.spawn(move || -> Result<(said_engine::host::WorkerEngine, u64)> {
             engine.start(&[])?;
             let mut samples = 0_u64;
             while let Some(block) = wav.read()? {

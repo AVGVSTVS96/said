@@ -11,7 +11,7 @@ use cpal::{
 };
 use crossbeam_channel::{Receiver, Sender, bounded};
 use rtrb::{Producer, RingBuffer};
-use voice_core::{AudioEvent, InputDevice, Result, UtteranceId};
+use said_core::{AudioEvent, InputDevice, Result, UtteranceId};
 
 use crate::{
     Recorder, Resampler,

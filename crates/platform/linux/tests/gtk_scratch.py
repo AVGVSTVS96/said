@@ -2,10 +2,10 @@ import pathlib, sys
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GLib
-GLib.set_prgname('voice-gtk-scratch')
+GLib.set_prgname('said-gtk-scratch')
 output = pathlib.Path(sys.argv[1])
 output.write_bytes(b"")
-window = Gtk.Window(title='voice GTK scratch')
+window = Gtk.Window(title='said GTK scratch')
 window.set_default_size(640, 400)
 view = Gtk.TextView()
 window.add(view)

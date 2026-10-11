@@ -2,7 +2,7 @@ use std::ptr::null_mut;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use voice_core::{Result, Target};
+use said_core::{Result, Target};
 
 use super::decoder::COMMAND;
 use super::ffi::{self, Owned, Ref};

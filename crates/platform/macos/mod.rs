@@ -7,7 +7,7 @@ pub mod overlay;
 pub mod permissions;
 
 use crossbeam_channel::Receiver;
-use voice_core::{Hotkey, Result, Target};
+use said_core::{Hotkey, Result, Target};
 
 pub use decoder::{COMMAND, CONTROL, OPTION, SHIFT, Shortcut};
 pub use input::InputStatus;

@@ -5,7 +5,7 @@ use std::{
 
 use crossbeam_channel::{Sender, TrySendError};
 use rtrb::Consumer;
-use voice_core::{AudioEvent, AudioFrame, Result, UtteranceId};
+use said_core::{AudioEvent, AudioFrame, Result, UtteranceId};
 
 use crate::{
     FLUSH_INTERVAL_MS, Resampler, SAMPLE_RATE,

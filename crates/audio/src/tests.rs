@@ -10,7 +10,7 @@ use std::{
 
 use crossbeam_channel::bounded;
 use rtrb::RingBuffer;
-use voice_core::{AudioEvent, UtteranceId};
+use said_core::{AudioEvent, UtteranceId};
 
 use crate::{
     Recorder, ReplayRecorder, Resampler,
@@ -349,7 +349,7 @@ fn kill_nine_leaves_checkpoint_readable_and_recovery_retains_written_tail() {
             "--ignored",
             "--nocapture",
         ])
-        .env("VOICE_CRASH_DIR", &scratch.0)
+        .env("SAID_CRASH_DIR", &scratch.0)
         .spawn()
         .unwrap();
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
@@ -382,7 +382,7 @@ fn kill_nine_leaves_checkpoint_readable_and_recovery_retains_written_tail() {
 #[test]
 #[ignore = "subprocess fixture for kill_nine test"]
 fn crash_writer_child() {
-    let Some(path) = std::env::var_os("VOICE_CRASH_DIR") else {
+    let Some(path) = std::env::var_os("SAID_CRASH_DIR") else {
         return;
     };
     let path = PathBuf::from(path);

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cache="$HOME/.cache/voice-models/engine-proof"
+cache="$HOME/.cache/said-models/engine-proof"
 mkdir -p "$cache"
 case "$(uname -s)" in Darwin) ;; *) printf 'Generate on macOS with its built-in say command.\n' >&2; exit 1 ;; esac
 for entry in \

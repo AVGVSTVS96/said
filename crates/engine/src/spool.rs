@@ -2,7 +2,7 @@ use std::fs::{self, File, OpenOptions};
 use std::os::unix::fs::{FileExt, OpenOptionsExt, PermissionsExt};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use voice_core::{Result, UtteranceId};
+use said_core::{Result, UtteranceId};
 
 pub(crate) struct Spool {
     file: File,

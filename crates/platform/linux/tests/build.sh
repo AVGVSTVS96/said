@@ -2,21 +2,21 @@
 set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 project=$(cd -- "$script_dir/../../../.." && pwd)
-scratch=${VOICE_LINUX_TEST_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/voice-linux-tests}
+scratch=${SAID_LINUX_TEST_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/said-linux-tests}
 mkdir -p "$scratch/harness"
 cat > "$scratch/harness/Cargo.toml" <<MANIFEST
 [package]
-name = "voice-linux-check"
+name = "said-linux-check"
 version = "0.0.0"
 edition = "2024"
 [lib]
-name = "voice_platform"
+name = "said_platform"
 path = "$project/crates/platform/src/lib.rs"
 [features]
 default = ["native"]
 native = []
 [dependencies]
-voice-core = { path = "$project/crates/core" }
+said-core = { path = "$project/crates/core" }
 crossbeam-channel = "0.5"
 serde_json = "1"
 libc = "0.2"
@@ -31,8 +31,8 @@ wayland-client = "0.31"
 wayland-protocols-misc = { version = "0.3", features = ["client"] }
 xkbcommon = { version = "0.9", default-features = false }
 [[bin]]
-name = "voice"
-path = "$script_dir/voice.rs"
+name = "said"
+path = "$script_dir/said.rs"
 [[bin]]
 name = "e2e"
 path = "$script_dir/e2e.rs"

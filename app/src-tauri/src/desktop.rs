@@ -1,13 +1,13 @@
 use crate::runtime::HostPlatform;
 use crossbeam_channel::{Receiver, never};
+use said_core::{Hotkey, Result, SessionEvent, Settings, Target};
+use said_platform::Platform;
 use std::collections::BTreeMap;
-use voice_core::{Hotkey, Result, SessionEvent, Settings, Target};
-use voice_platform::Platform;
 
 #[cfg(target_os = "linux")]
-use voice_platform::linux::{self, LinuxPlatform};
+use said_platform::linux::{self, LinuxPlatform};
 #[cfg(target_os = "macos")]
-use voice_platform::macos::{self, MacosPlatform};
+use said_platform::macos::{self, MacosPlatform};
 
 #[derive(Default)]
 pub struct Desktop {
@@ -290,7 +290,7 @@ impl HostPlatform for Desktop {
         #[cfg(target_os = "linux")]
         {
             steps.push(format!(
-                "Niri bind: {} {{ spawn \"voice\" \"hotkey\"; }}",
+                "Niri bind: {} {{ spawn \"said\" \"hotkey\"; }}",
                 self.hotkey
                     .replace("ctrl", "Ctrl")
                     .replace("alt", "Alt")

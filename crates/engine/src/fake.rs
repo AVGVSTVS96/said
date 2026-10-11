@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId};
+use said_core::{EngineEvent, EngineOutput, Result, UtteranceId};
 
 use crate::Engine;
 

@@ -1,7 +1,7 @@
 use std::io::{self, Read, Write};
 
+use said_core::{WorkerRequest, WorkerResponse};
 use serde::de::DeserializeOwned;
-use voice_core::{WorkerRequest, WorkerResponse};
 
 pub const MAX_JSON_BYTES: usize = 1_048_576;
 pub const MAX_PCM_BYTES: usize = 1_048_576;

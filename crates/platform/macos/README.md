@@ -1,13 +1,13 @@
 # macOS adapter
 
-Enable `voice-platform/native`. No additional crate dependencies are needed.
+Enable `said-platform/native`. No additional crate dependencies are needed.
 `MacosPlatform::<tauri::Window>::start(Shortcut::default(), configure_overlay)`
 implements the shared `Platform` trait. Start only after the user grants
 Accessibility and Input Monitoring: every permission check is passive, and
 failure provides the precise Settings path. Microphone checks belong to setup;
 the adapter does not request any permission or capture audio.
 
-The host supplies `configure_overlay: fn(&tauri::Window) -> voice_core::Result<()>`.
+The host supplies `configure_overlay: fn(&tauri::Window) -> said_core::Result<()>`.
 The adapter calls it on Tauri's main thread. Obtain `window.ns_window()`, convert it to `NonNull<c_void>`,
 and call `unsafe { macos::overlay::configure(pointer) }` **before the first show**.
 Create the window hidden, undecorated, transparent and unfocusable. Keep Tauri's
@@ -67,10 +67,10 @@ by the user are never released by this adapter. Copy-only delivery uses `copy`.
 Run on an idle Apple Silicon Mac, with `CARGO_BUILD_JOBS=2` and `nice -n 10`:
 
 ```sh
-cargo check -p voice-platform --features native --target aarch64-apple-darwin
-cargo test -p voice-platform --features native
-cargo clippy -p voice-platform --features native --all-targets -- -D warnings
-cargo test -p voice-platform --features native permission_report -- --ignored --nocapture
+cargo check -p said-platform --features native --target aarch64-apple-darwin
+cargo test -p said-platform --features native
+cargo clippy -p said-platform --features native --all-targets -- -D warnings
+cargo test -p said-platform --features native permission_report -- --ignored --nocapture
 ```
 
 Tests create unposted Quartz events and run the exact production decoder. They

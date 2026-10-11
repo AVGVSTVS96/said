@@ -9,10 +9,10 @@ branch into an isolated linked worktree of the Mac clone, leaving its other
 module's checkout untouched.
 
 ```sh
-cargo check -p voice-platform --features native --target aarch64-apple-darwin
-cargo test -p voice-platform --features native --target aarch64-apple-darwin
-cargo clippy -p voice-platform --features native --target aarch64-apple-darwin --all-targets -- -D warnings
-cargo test -p voice-platform --features native --target aarch64-apple-darwin permission_report -- --ignored --nocapture
+cargo check -p said-platform --features native --target aarch64-apple-darwin
+cargo test -p said-platform --features native --target aarch64-apple-darwin
+cargo clippy -p said-platform --features native --target aarch64-apple-darwin --all-targets -- -D warnings
+cargo test -p said-platform --features native --target aarch64-apple-darwin permission_report -- --ignored --nocapture
 cargo fmt --all --check
 ```
 

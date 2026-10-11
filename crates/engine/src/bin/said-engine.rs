@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use voice_core::{Result, UtteranceId};
-use voice_engine::{
+use said_core::{Result, UtteranceId};
+use said_engine::{
     fake::{FakeEngine, Trace},
     host::{WorkerConfig, recognize_file},
     manifest::{Manifest, model_cache, worker_main},
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     }
     let path = args
         .first()
-        .ok_or("usage: voice-engine <16k-mono-i16.wav> [model], or --worker [model]")?;
+        .ok_or("usage: said-engine <16k-mono-i16.wav> [model], or --worker [model]")?;
     let model = args
         .get(1)
         .cloned()

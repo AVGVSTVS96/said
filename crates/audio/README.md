@@ -37,11 +37,11 @@ ALSA backend failures are checked for device removal on the worker thread. Real
 hot unplug and macOS permission/device tests remain platform integration checks.
 
 ```sh
-CARGO_BUILD_JOBS=2 cargo test -p voice-audio
-CARGO_BUILD_JOBS=2 cargo test -p voice-audio --features native
-CARGO_BUILD_JOBS=2 cargo clippy -p voice-audio --all-targets --features native -- -D warnings
-CARGO_BUILD_JOBS=2 cargo test -p voice-audio one_hour_synthetic_capture_has_flat_ram -- --ignored --nocapture --test-threads=1
-CARGO_BUILD_JOBS=2 cargo test -p voice-audio --features native native_two_second_smoke -- --ignored --nocapture --test-threads=1
+CARGO_BUILD_JOBS=2 cargo test -p said-audio
+CARGO_BUILD_JOBS=2 cargo test -p said-audio --features native
+CARGO_BUILD_JOBS=2 cargo clippy -p said-audio --all-targets --features native -- -D warnings
+CARGO_BUILD_JOBS=2 cargo test -p said-audio one_hour_synthetic_capture_has_flat_ram -- --ignored --nocapture --test-threads=1
+CARGO_BUILD_JOBS=2 cargo test -p said-audio --features native native_two_second_smoke -- --ignored --nocapture --test-threads=1
 ```
 
 Default tests use synthetic signals, replay, a killed child writer, and a sparse

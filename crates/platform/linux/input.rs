@@ -13,7 +13,7 @@ use std::thread::{self, JoinHandle};
 
 use crossbeam_channel::Sender;
 use evdev::{BusType, Device, EventType, InputEvent, KeyCode};
-use voice_core::{Hotkey, Result};
+use said_core::{Hotkey, Result};
 
 #[derive(Clone, Debug)]
 pub struct Chord {

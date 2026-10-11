@@ -1,22 +1,22 @@
 use gtk::prelude::*;
 use gtk_layer_shell::LayerShell;
 use std::{fs, path::PathBuf, process::Command, time::Duration};
-use voice_core::{Hotkey, Target};
-use voice_platform::{
+use said_core::{Hotkey, Target};
+use said_platform::{
     Platform,
     linux::{Config, LinuxPlatform, Mode, control::ControlCommand, overlay},
 };
 
-fn main() -> voice_core::Result<()> {
-    let root = PathBuf::from(std::env::var("VOICE_TEST_ROOT")?);
-    let mut config = Config::from_environment("voice")?;
+fn main() -> said_core::Result<()> {
+    let root = PathBuf::from(std::env::var("SAID_TEST_ROOT")?);
+    let mut config = Config::from_environment("said")?;
     config.read_input = false;
     config.portal_trigger = None;
     let platform = LinuxPlatform::new(config)?;
     assert_eq!(platform.mode(), Mode::NiriToggle);
     let runtime = std::env::var_os("XDG_RUNTIME_DIR").unwrap();
-    let parent_display = std::env::var_os("VOICE_TEST_PARENT_DISPLAY").unwrap();
-    let mut bind_keyboard = voice_platform::linux::keyboard::VirtualKeyboard::connect(
+    let parent_display = std::env::var_os("SAID_TEST_PARENT_DISPLAY").unwrap();
+    let mut bind_keyboard = said_platform::linux::keyboard::VirtualKeyboard::connect(
         std::path::Path::new(&runtime),
         &parent_display,
     )?;
@@ -41,7 +41,7 @@ fn main() -> voice_core::Result<()> {
         .collect();
     let text = "  no no, uh actually don't change foo_bar --dry-run /tmp/example.rs. café 🦀\nsecond line\n  ";
     for (name, app_id) in [
-        ("gtk", "voice-gtk-scratch"),
+        ("gtk", "said-gtk-scratch"),
         ("terminal", "com.mitchellh.ghostty"),
         ("electron", "electron"),
     ] {
@@ -66,7 +66,7 @@ fn main() -> voice_core::Result<()> {
     }
     let target = targets
         .iter()
-        .find(|target| target.app_id == "voice-gtk-scratch")
+        .find(|target| target.app_id == "said-gtk-scratch")
         .unwrap();
     platform.focus(target)?;
     gtk::init()?;
@@ -113,8 +113,8 @@ fn main() -> voice_core::Result<()> {
         Some((Hotkey::Down, false))
     );
     request.reply.send(Ok("toggle".into()))?;
-    println!("PASS Niri bind launches voice hotkey over owner-only control socket");
-    let mut config = Config::from_environment("voice-clipboard-test")?;
+    println!("PASS Niri bind launches said hotkey over owner-only control socket");
+    let mut config = Config::from_environment("said-clipboard-test")?;
     config.niri_socket = None;
     config.read_input = false;
     config.wayland_display = parent_display.clone();

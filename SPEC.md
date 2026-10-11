@@ -1,6 +1,6 @@
 # Spec
 
-Status: design to build, 2026-10-10. The name "voice" is a placeholder and lives in one file, `product.toml`. Branding comes after the product works.
+Status: design to build, 2026-10-10. The app is named "said"; product identity lives in `product.toml`.
 
 ## What this is
 
@@ -195,19 +195,19 @@ We do not verify that the app accepted the paste. There is no universal way to. 
 
 | Need | How |
 |---|---|
-| Hotkey | One Niri bind runs `voice hotkey` over the control socket. Without input access that is a toggle. With the user in the `input` group the app reads key down and up for the chord from evdev and real hold works; the bind then only keeps the chord from reaching the focused app. |
+| Hotkey | One Niri bind runs `said hotkey` over the control socket. Without input access that is a toggle. With the user in the `input` group the app reads key down and up for the chord from evdev and real hold works; the bind then only keeps the chord from reaching the focused app. |
 | Focus | Niri IPC: `focused-window` and the event stream. Gives window id and app_id. `focus-window --id` to refocus. |
 | Paste | Wayland data-control for the clipboard, `zwp_virtual_keyboard_v1` for the chord (wtype is the reference). No uinput, no root. |
 | Overlay | GTK layer-shell, exclusive zone 0, keyboard interactivity none. |
-| Control | Unix socket in `$XDG_RUNTIME_DIR`, mode 0600. The `voice` CLI talks to it: `hotkey`, `toggle`, `interactive`, `insert-last`, `cancel`, `status`. |
+| Control | Unix socket in `$XDG_RUNTIME_DIR`, mode 0600. The `said` CLI talks to it: `hotkey`, `toggle`, `interactive`, `insert-last`, `cancel`, `status`. |
 
 The evdev listener reads only keyboard devices, tracks only the chord keys, and ignores its own virtual keyboard. It never logs or injects. Niri's config parser has no key-release action, so there is no way to get hold without this. Setup explains the trade-off in one sentence and shows the command. The GlobalShortcuts portal is checked at startup; if it ever delivers Activated and Deactivated on Niri, the app uses it instead and needs nothing else.
 
-GNOME, KDE and X11 are not v1 targets. On an unsupported desktop the app runs in clipboard mode: the hotkey is whatever the user binds to `voice toggle`, the overlay is a normal window, and the text is copied for the user to paste. The settings screen says so.
+GNOME, KDE and X11 are not v1 targets. On an unsupported desktop the app runs in clipboard mode: the hotkey is whatever the user binds to `said toggle`, the overlay is a normal window, and the text is copied for the user to paste. The settings screen says so.
 
 ### Data on disk
 
-macOS: `~/Library/Application Support/<name>/`. Linux: XDG data, config and cache dirs. Owner-only.
+macOS: `~/Library/Application Support/<storage_key>/`. Linux: XDG data, config and cache dirs. Owner-only.
 
 ```
 settings.toml
@@ -235,11 +235,11 @@ send = false
 
 That is the whole surface. Microphone is the system default unless chosen in setup. History is kept forever until deleted; the settings screen shows disk use and a "delete older than" button.
 
-`voice import-vocabulary wispr|codex` reads the terms from a Wispr Flow database or Codex `dictationDictionary` into `vocabulary.txt` for the user to look over. It imports terms only, never history or settings.
+`said import-vocabulary wispr|codex` reads the terms from a Wispr Flow database or Codex `dictationDictionary` into `vocabulary.txt` for the user to look over. It imports terms only, never history or settings.
 
 ## Benchmark
 
-A CLI, `voice bench <manifest>`, runs clips through any engine adapter and scores the raw output against a literal reference. It is the gate for choosing and changing the default engine, and a small subset runs in CI.
+A CLI, `said bench <manifest>`, runs clips through any engine adapter and scores the raw output against a literal reference. It is the gate for choosing and changing the default engine, and a small subset runs in CI.
 
 Corpus: `bench/clips.jsonl` with audio hash, exact reference, tags, and license. Public clips are synthetic (TTS scripts, listened to before acceptance) or consented recordings. Private clips live outside the repo and run with the same command. Scripts cover: negatives and their affirmative twins, negatives at the start and end of a clip, "no" as a backchannel, self-repairs, repeats, fillers, identifiers, paths, flags, versions and numbers, profanity, one-word clips, silence and noise, long monologues.
 
@@ -273,7 +273,7 @@ Target budgets, to measure not market: hotkey to "Listening" under 50 ms; first 
 
 - **macOS**: signed and notarized arm64 `.app` in a `.dmg`. Stable bundle id from `product.toml`. Models download on first run, hash-checked, outside the bundle. Minimum macOS 14.
 - **Linux**: x86_64 AppImage and a PKGBUILD for Arch. The AppImage is tested on a clean distro. Models download on first run.
-- A per-user autostart entry, a `voice` CLI on PATH, and on Niri a one-line include snippet for the bind. The install never edits the user's compositor config without showing the line.
+- A per-user autostart entry, a `said` CLI on PATH, and on Niri a one-line include snippet for the bind. The install never edits the user's compositor config without showing the line.
 - No auto-updater in v1. Versioned, checksummed releases; settings and history survive upgrades; schema migrations are transactional.
 - MIT for our code. Each model's license is in its manifest and shown in setup.
 
@@ -293,7 +293,7 @@ Freeze the shared types first: `Utterance`, `Target`, `EngineEvent`, `Hotkey`, t
 | platform-macos | `crates/platform/macos` | `Platform` trait | Signed test-account checklist passes: hold vs tap, Escape cancel, Secure Input detected, paste into the five scratch targets, no Enter unless `send`, NSPanel never focused. |
 | platform-linux | `crates/platform/linux` | `Platform` trait; control socket; evdev listener | Nested Niri e2e passes: bind toggle, evdev hold with a fake device, exact paste into GTK, terminal and Electron scratch targets, overlay never focused, clipboard mode on a plain Wayland session. |
 | ui | `app/src` | reads core state, sends core actions | Overlay, interactive, history, settings, setup screens. Provisional vs final styling. Edits are never overwritten by late recognition. Enter is a newline. Keyboard-navigable. The UI never pastes directly. |
-| bench | `bench/` | `voice bench <manifest>`; scorer; corpus manifest | Reproducible scores on the public corpus. Same command runs a private corpus. CI subset under five minutes. `RESULTS.md` names the default engine per platform with numbers. |
+| bench | `bench/` | `said bench <manifest>`; scorer; corpus manifest | Reproducible scores on the public corpus. Same command runs a private corpus. CI subset under five minutes. `RESULTS.md` names the default engine per platform with numbers. |
 | app and packaging | `app/src-tauri`, `packaging/` | composition, CLI, dmg, AppImage, PKGBUILD, autostart, Niri snippet | Fresh install on a clean Mac account and a clean Arch VM: setup, dictate into a terminal and an Electron app, interactive mode, insert-last, restart recovery. |
 
 ### Order

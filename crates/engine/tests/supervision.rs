@@ -3,8 +3,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use voice_core::{EngineEvent, UtteranceId};
-use voice_engine::{
+use said_core::{EngineEvent, UtteranceId};
+use said_engine::{
     Engine,
     fake::Trace,
     host::{WorkerConfig, WorkerEngine, recognize_file},
@@ -18,7 +18,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = PathBuf::from(std::env::var_os("HOME").unwrap())
-            .join(".cache/voice-models/engine-tests")
+            .join(".cache/said-models/engine-tests")
             .join(UtteranceId::random().0.to_string());
         fs::create_dir_all(&directory).unwrap();
         let wav = directory.join("synthetic.wav");
@@ -57,7 +57,7 @@ impl Fixture {
     }
     fn config(&self) -> WorkerConfig {
         WorkerConfig {
-            executable: PathBuf::from(env!("CARGO_BIN_EXE_voice-engine")),
+            executable: PathBuf::from(env!("CARGO_BIN_EXE_said-engine")),
             args: vec![
                 "--worker".into(),
                 "--trace".into(),
@@ -71,7 +71,7 @@ impl Fixture {
     }
     fn failing_once(&self, first: &str) -> WorkerConfig {
         let script = self.directory.join("worker.sh");
-        fs::write(&script, format!("#!/bin/sh\nif mkdir '{}' 2>/dev/null; then\n{first}\nfi\nexec '{}' --worker --trace '{}'\n", self.directory.join("once").display(), env!("CARGO_BIN_EXE_voice-engine"), self.trace.display())).unwrap();
+        fs::write(&script, format!("#!/bin/sh\nif mkdir '{}' 2>/dev/null; then\n{first}\nfi\nexec '{}' --worker --trace '{}'\n", self.directory.join("once").display(), env!("CARGO_BIN_EXE_said-engine"), self.trace.display())).unwrap();
         fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
         WorkerConfig {
             executable: PathBuf::from("/bin/sh"),
@@ -138,7 +138,7 @@ fn hung_final_is_recovered_even_after_finish_was_sent() {
     .unwrap();
     let config = fixture.failing_once(&format!(
         "exec '{}' --worker --trace '{}'",
-        env!("CARGO_BIN_EXE_voice-engine"),
+        env!("CARGO_BIN_EXE_said-engine"),
         fixture.trace.display()
     ));
     let script = fs::read_to_string(fixture.directory.join("worker.sh"))
@@ -146,12 +146,12 @@ fn hung_final_is_recovered_even_after_finish_was_sent() {
         .replace(
             &format!(
                 "fi\nexec '{}' --worker --trace '{}'",
-                env!("CARGO_BIN_EXE_voice-engine"),
+                env!("CARGO_BIN_EXE_said-engine"),
                 fixture.trace.display()
             ),
             &format!(
                 "fi\nexec '{}' --worker --trace '{}'",
-                env!("CARGO_BIN_EXE_voice-engine"),
+                env!("CARGO_BIN_EXE_said-engine"),
                 recovered.display()
             ),
         );
@@ -205,7 +205,7 @@ fn replay_uses_new_identity_and_never_revises_failed_live_text() {
     .unwrap();
     let config = fixture.failing_once(&format!(
         "exec '{}' --worker --trace '{}'",
-        env!("CARGO_BIN_EXE_voice-engine"),
+        env!("CARGO_BIN_EXE_said-engine"),
         initial.display()
     ));
     let old = UtteranceId::random();
@@ -254,13 +254,13 @@ fn warm_client_reuses_the_same_worker_between_distinct_utterance_ids() {
         format!(
             "#!/bin/sh\nprintf x >> '{}'\nexec '{}' --worker --trace '{}'\n",
             starts.display(),
-            env!("CARGO_BIN_EXE_voice-engine"),
+            env!("CARGO_BIN_EXE_said-engine"),
             fixture.trace.display()
         ),
     )
     .unwrap();
     fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
-    let client = voice_engine::host::WorkerClient::warm(WorkerConfig {
+    let client = said_engine::host::WorkerClient::warm(WorkerConfig {
         executable: script,
         args: vec![],
         ..fixture.config()

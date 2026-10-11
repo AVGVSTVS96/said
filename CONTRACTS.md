@@ -33,7 +33,7 @@ FakePlatform allows explicit target replacement, records focus/paste/overlay cal
 
 ## Worker stream, version 1
 
-stdin is requests, stdout is responses. stderr is diagnostics; no logs on stdout. Each JSON block is UTF-8 preceded by **u32 little-endian byte length**. An Audio request is followed immediately by another u32 little-endian length and raw little-endian i16 PCM. No other message has a PCM block. Request and response codecs live in `voice_engine::protocol`; use them unchanged in the worker, host and bench.
+stdin is requests, stdout is responses. stderr is diagnostics; no logs on stdout. Each JSON block is UTF-8 preceded by **u32 little-endian byte length**. An Audio request is followed immediately by another u32 little-endian length and raw little-endian i16 PCM. No other message has a PCM block. Request and response codecs live in `said_engine::protocol`; use them unchanged in the worker, host and bench.
 
 ```json
 {"type":"start","id":"00000000-0000-4000-8000-000000000001","vocabulary":[]}
@@ -57,7 +57,7 @@ History::insert creates a pending or completed row. History::finish fills a pend
 
 FakeHistory is in memory. Its search is a literal substring convenience, not an FTS emulator. `SqliteHistory` implements the production connection, transactional migrations, FTS and audio deletion lifecycle; persistence tests exercise reopen and crash cleanup.
 
-`product.toml` is the source of display name, stable bundle ID and stable storage key. Rename **name** only; preserve the other two. This deliberately uses the storage key instead of the spec's display-name directory so a later rename cannot strand data:
+`product.toml` is the source of display name, stable bundle ID and stable storage key. The initial identity is `said`, `io.github.avgvstvs96.said`, and `said`. After installation, preserve the bundle ID and storage key so a later display-name change cannot strand data:
 
 - macOS: `~/Library/Application Support/<storage_key>/` for settings, vocabulary, history, audio and models.
 - Linux: `$XDG_CONFIG_HOME/<storage_key>/` for settings/vocabulary, `$XDG_DATA_HOME/<storage_key>/` for history/audio, `$XDG_DATA_HOME/<storage_key>/models/` for downloaded models. Standard XDG fallback directories apply.

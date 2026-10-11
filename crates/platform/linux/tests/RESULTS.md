@@ -21,7 +21,7 @@ directory, separate Wayland sockets and private D-Bus:
 | GTK layer-shell overlay | Target remains focused; keyboard mode none; exclusive zone zero |
 | Focus mismatch | Injection rejected |
 | Niri focus event stream | Target change observed |
-| Actual compositor bind → `voice hotkey` → owner-only socket | Pass |
+| Actual compositor bind → `said hotkey` → owner-only socket | Pass |
 | Clipboard-only mode on headless Cage, without Niri IPC | Exact bytes; input refused |
 | Fake evdev stream | Down/Up, repeat rejection, unrelated-key rejection and disabled dispatch pass |
 | Fake keyboard removal/modifier release | Up emitted |

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use voice_core::{Hotkey, Result, Target};
+use said_core::{Hotkey, Result, Target};
 
 use crate::Platform;
 

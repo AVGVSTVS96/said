@@ -1,10 +1,10 @@
 {
-  "name": "voice-ui",
+  "name": "said-ui",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "bun scripts/product.ts && cargo run --quiet -p voice-core --bin export-types",
+    "generate": "bun scripts/product.ts && cargo run --quiet -p said-core --bin export-types",
     "dev": "bun run generate && vite",
     "build": "bun run generate && tsc --noEmit && vite build",
     "typecheck": "bun run generate && tsc --noEmit",

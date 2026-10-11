@@ -1,3 +1,13 @@
+use said_app::{
+    ipc,
+    runtime::{Host, worker_config},
+    storage::Paths,
+};
+use said_core::{Mode, Result, Target};
+use said_engine::{
+    host::WorkerClient,
+    manifest::{Manifest, worker_main},
+};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -6,16 +16,6 @@ use tauri::{
     Manager,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-};
-use voice_app::{
-    ipc,
-    runtime::{Host, worker_config},
-    storage::Paths,
-};
-use voice_core::{Mode, Result, Target};
-use voice_engine::{
-    host::WorkerClient,
-    manifest::{Manifest, worker_main},
 };
 
 fn option(args: &[String], key: &str) -> Option<PathBuf> {
@@ -40,7 +40,7 @@ fn run() -> Result<()> {
             )
         })
     {
-        return voice_bench::cli(&args);
+        return said_bench::cli(&args);
     }
     let paths = Paths::discover()?;
     if args.first().map(String::as_str) == Some("bench") {
@@ -51,7 +51,7 @@ fn run() -> Result<()> {
                 paths.models.to_string_lossy().into(),
             ]);
         }
-        return voice_bench::cli(&args);
+        return said_bench::cli(&args);
     }
 
     if args.first().map(String::as_str) == Some("--worker") {
@@ -64,7 +64,7 @@ fn run() -> Result<()> {
     }
     #[cfg(target_os = "linux")]
     if args.first().map(String::as_str) == Some("--nested-proof") {
-        return voice_app::proof::nested(
+        return said_app::proof::nested(
             args.get(1).ok_or("supply a synthetic WAV")?,
             &option(&args, "--models").ok_or("supply --models")?,
         );
@@ -72,7 +72,7 @@ fn run() -> Result<()> {
     if args.first().map(String::as_str) == Some("--install-model") {
         let models = option(&args, "--models").ok_or("supply --models destination")?;
         let manifest = Manifest::bundled()?;
-        return voice_app::download::install(
+        return said_app::download::install(
             &manifest,
             manifest.default_model()?,
             &models,
@@ -86,13 +86,13 @@ fn run() -> Result<()> {
         let data = option(&args, "--data").ok_or("--replay needs an isolated --data directory")?;
         let mut paths = Paths::new(data.clone(), data.join("config"));
         paths.models = option(&args, "--models").ok_or("--replay needs --models")?;
-        let recorder = voice_app::proof::replay_recorder(std::path::Path::new(wav), &paths.data)?;
-        let platform = voice_platform::fake::FakePlatform::new(Some(Target {
+        let recorder = said_app::proof::replay_recorder(std::path::Path::new(wav), &paths.data)?;
+        let platform = said_platform::fake::FakePlatform::new(Some(Target {
             app_id: "scratch".into(),
             window_id: "synthetic".into(),
             name: "Scratch target".into(),
         }));
-        let platform = voice_app::proof::SavedPlatform {
+        let platform = said_app::proof::SavedPlatform {
             fake: platform,
             database: paths.data.join("history.sqlite"),
         };
@@ -112,7 +112,7 @@ fn run() -> Result<()> {
                         .borrow()
                         .iter()
                         .filter_map(|call| match call {
-                            voice_platform::fake::PlatformCall::Paste { text, send, .. } => {
+                            said_platform::fake::PlatformCall::Paste { text, send, .. } => {
                                 Some(serde_json::json!({"text":text,"send":send}))
                             }
                             _ => None,
@@ -121,13 +121,13 @@ fn run() -> Result<()> {
                     println!("{}", serde_json::json!({"utterance":row,"paste":pasted}));
                     return Ok(());
                 }
-                if row.status == Some(voice_core::UtteranceStatus::Failed)
+                if row.status == Some(said_core::UtteranceStatus::Failed)
                     && !host.session.views().any(|view| {
                         matches!(
                             view.phase,
-                            voice_core::Phase::Recording
-                                | voice_core::Phase::Finishing
-                                | voice_core::Phase::Saving
+                            said_core::Phase::Recording
+                                | said_core::Phase::Finishing
+                                | said_core::Phase::Saving
                         )
                     })
                 {
@@ -135,7 +135,7 @@ fn run() -> Result<()> {
                         format!("host replay failed: {:?}", host.state.notifications).into(),
                     );
                 }
-                if row.status == Some(voice_core::UtteranceStatus::Empty) {
+                if row.status == Some(said_core::UtteranceStatus::Empty) {
                     println!("{}", serde_json::json!({"utterance":row,"paste":[]}));
                     return Ok(());
                 }
@@ -151,9 +151,9 @@ fn run() -> Result<()> {
             let source = args.get(1).ok_or("specify wispr or codex")?;
             let path = match args.get(2) {
                 Some(path) => PathBuf::from(path),
-                None => voice_app::cli::vocabulary_source(source)?,
+                None => said_app::cli::vocabulary_source(source)?,
             };
-            return voice_app::cli::import_vocabulary(&paths, source, &path);
+            return said_app::cli::import_vocabulary(&paths, source, &path);
         }
         #[cfg(target_os = "linux")]
         {
@@ -170,7 +170,7 @@ fn run() -> Result<()> {
             };
             println!(
                 "{}",
-                voice_platform::linux::control::run_cli(
+                said_platform::linux::control::run_cli(
                     &PathBuf::from(runtime),
                     env!("PRODUCT_STORAGE_KEY"),
                     &command
@@ -189,7 +189,7 @@ fn run() -> Result<()> {
             ipc::ui_action,
             ipc::host_action
         ])
-        .register_asynchronous_uri_scheme_protocol("voice-audio", |context, request, responder| {
+        .register_asynchronous_uri_scheme_protocol("said-audio", |context, request, responder| {
             let connection = context
                 .app_handle()
                 .try_state::<ipc::Connection>()
@@ -241,7 +241,7 @@ fn run() -> Result<()> {
                     } else if id == "interactive" {
                         let (reply, _) = crossbeam_channel::bounded(1);
                         let _ = app.state::<ipc::Connection>().0.send(ipc::Request::Action(
-                            voice_core::HostAction::Start {
+                            said_core::HostAction::Start {
                                 mode: Mode::Interactive,
                                 scratch: false,
                             },

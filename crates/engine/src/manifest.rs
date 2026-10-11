@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use said_core::{Result, UtteranceId};
 use serde::Deserialize;
-use voice_core::{Result, UtteranceId};
 
 use crate::{
     fake::{FakeEngine, Trace},
@@ -95,7 +95,7 @@ impl Manifest {
                 let (engine, output) = FakeEngine::new(
                     id,
                     Trace {
-                        finish: vec![voice_core::EngineEvent::Final],
+                        finish: vec![said_core::EngineEvent::Final],
                         ..Trace::default()
                     },
                 );
@@ -109,7 +109,7 @@ impl Manifest {
 pub fn model_cache() -> Result<PathBuf> {
     Ok(
         PathBuf::from(std::env::var_os("HOME").ok_or("HOME is not set")?)
-            .join(".cache/voice-models"),
+            .join(".cache/said-models"),
     )
 }
 

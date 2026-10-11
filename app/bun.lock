@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "voice-ui",
+      "name": "said-ui",
       "dependencies": {
         "@tauri-apps/api": "^2.12.3",
         "react": "^19.3.0",

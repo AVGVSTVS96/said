@@ -4,6 +4,10 @@ use crate::{
     storage::Paths,
 };
 use crossbeam_channel::{Sender, bounded};
+use said_audio::CpalRecorder;
+use said_core::History;
+use said_core::{Result, *};
+use said_platform::Platform;
 use std::{
     fs::File,
     io::{Read, Seek, SeekFrom},
@@ -11,10 +15,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{Emitter, Manager, ipc::Channel};
-use voice_audio::CpalRecorder;
-use voice_core::History;
-use voice_core::{Result, *};
-use voice_platform::Platform;
 
 pub enum Request {
     Subscribe(
@@ -110,7 +110,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                 }
                 #[cfg(target_os = "linux")]
                 for request in host.platform.control_requests().try_iter() {
-                    use voice_platform::linux::control::ControlCommand as C;
+                    use said_platform::linux::control::ControlCommand as C;
                     let result = if matches!(
                         request.command,
                         C::Hotkey | C::HotkeyInteractive | C::HotkeyInsertLast

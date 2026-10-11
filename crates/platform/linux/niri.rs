@@ -3,8 +3,8 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use said_core::{Result, Target};
 use serde_json::{Value, json};
-use voice_core::{Result, Target};
 
 #[derive(Clone)]
 pub struct Niri {

@@ -13,7 +13,7 @@ pub use replay::ReplayRecorder;
 pub use resample::Resampler;
 
 use crossbeam_channel::Receiver;
-use voice_core::{AudioEvent, InputDevice, Result, UtteranceId};
+use said_core::{AudioEvent, InputDevice, Result, UtteranceId};
 
 pub const SAMPLE_RATE: u32 = 16_000;
 pub const CHANNELS: u16 = 1;

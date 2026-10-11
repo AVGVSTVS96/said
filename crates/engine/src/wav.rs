@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
-use voice_core::Result;
+use said_core::Result;
 
 pub struct Wav {
     file: File,

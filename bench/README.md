@@ -1,18 +1,18 @@
 # Benchmark
 
-`voice bench <manifest>` replays 16 kHz mono PCM i16 WAVs through the unchanged
-`voice-engine` worker and scores its committed text. It concatenates committed
+`said bench <manifest>` replays 16 kHz mono PCM i16 WAVs through the unchanged
+`said-engine` worker and scores its committed text. It concatenates committed
 chunks with no separator. Partial text is timed and recorded, never promoted to
 final text. Recognition has no vocabulary bias or postprocessing.
 
-The app provides `voice bench` through this library and uses its own `--worker` dispatch.
-The `voice-bench` development probe is a workspace target for isolated tests; it is not shipped.
+The app provides `said bench` through this library and uses its own `--worker` dispatch.
+The `said-bench` development probe is a workspace target for isolated tests; it is not shipped.
 The application defaults to its installed data/models directory; use `--model-cache` explicitly
-for the shared development cache. The probe defaults to `~/.cache/voice-models`.
+for the shared development cache. The probe defaults to `~/.cache/said-models`.
 
 ```sh
 CARGO_BUILD_JOBS=2 cargo build --locked --manifest-path bench/Cargo.toml
-target/debug/voice-bench bench bench/clips.jsonl --ci
+target/debug/said-bench bench bench/clips.jsonl --ci
 ```
 
 That command selects the bundled platform default. The native Parakeet default runs with no engine flag, or select
@@ -26,8 +26,8 @@ synthetic monologue kept outside git. Provision it, then run all engines:
 ```sh
 crates/engine/scripts/fetch-model.sh
 bench/scripts/fetch.sh
-target/debug/voice-bench bench bench/clips.jsonl --all \
-  --audio-root "$HOME/.cache/voice-models/bench-public"
+target/debug/said-bench bench bench/clips.jsonl --all \
+  --audio-root "$HOME/.cache/said-models/bench-public"
 ```
 
 Model provisioning needs curl, jq, OpenSSL, tar and bzip2 support; the long clip also
@@ -93,7 +93,7 @@ small subset. Tag silence and noise explicitly with an empty reference.
 The identical command runs private audio outside the repository:
 
 ```sh
-target/debug/voice-bench bench /private/corpus/clips.jsonl \
+target/debug/said-bench bench /private/corpus/clips.jsonl \
   --engine parakeet-v3-fp32 --unpaced --output /private/results/new-run
 ```
 
@@ -103,7 +103,7 @@ that an arbitrary reference is ground truth. Existing private bake-off manifests
 need their fields mapped to this documented schema outside the repository.
 The benchmark never changes an input manifest or WAV.
 
-Results default to a new directory under `~/.cache/voice-models/bench-runs/`,
+Results default to a new directory under `~/.cache/said-models/bench-runs/`,
 not the repo. Each directory is 0700 and each output file 0600. Explicit output
 paths must be new. `clips.jsonl` records the reference, raw text, every received
 event/timestamp, scores and failures. `summary.json` records aggregates, strata,
@@ -190,7 +190,7 @@ not far-field microphones; spontaneous disfluencies and background leakage make
 it a separate stress subset. Thresholds were set before the patched run. This gate detects regressions; it does not certify the
 verbatim promise or select a release engine. Model provisioning is a separate CI/cache step.
 
-The host owns the production `voice` CLI and routes benchmark worker flags through this same
+The host owns the production `said` CLI and routes benchmark worker flags through this same
 entrypoint before Tauri initialization. The root workspace/lockfile owns dependencies; pure scorer
 and fake-worker checks run in CI. The real quality gate remains separate and currently fails as
 reported in RESULTS.md. Model defaults remain provisional; no shared engine event, worker wire

@@ -11,7 +11,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crossbeam_channel::{Receiver, unbounded};
-use voice_core::{Hotkey, Result, Target};
+use said_core::{Hotkey, Result, Target};
 
 use crate::Platform;
 use control::{ControlCommand, ControlRequest, ControlSocket};
@@ -233,10 +233,10 @@ impl Platform for LinuxPlatform {
                 overlay::configure(&window, niri.is_some(), monitor.as_ref())
             })();
             if let Err(error) = result {
-                eprintln!("voice overlay: {error}");
+                eprintln!("said overlay: {error}");
             }
         }) {
-            eprintln!("voice overlay: {error}");
+            eprintln!("said overlay: {error}");
         }
     }
 }

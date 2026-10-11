@@ -1,12 +1,12 @@
 [package]
-name = "voice-engine"
+name = "said-engine"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-voice-core.workspace = true
+said-core.workspace = true
 crossbeam-channel.workspace = true
 serde.workspace = true
 serde_json.workspace = true

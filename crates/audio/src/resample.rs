@@ -1,6 +1,6 @@
 use audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler as _};
-use voice_core::Result;
+use said_core::Result;
 
 use crate::SAMPLE_RATE;
 

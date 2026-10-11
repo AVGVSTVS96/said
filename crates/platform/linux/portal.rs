@@ -9,8 +9,8 @@ use std::time::Duration;
 use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
 use crossbeam_channel::{Sender, bounded};
 use futures_util::StreamExt;
+use said_core::{Hotkey, Result};
 use tokio::sync::{oneshot, watch};
-use voice_core::{Hotkey, Result};
 
 pub struct PortalHotkeys {
     stop: Option<oneshot::Sender<()>>,

@@ -1,5 +1,5 @@
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use voice_core::{AudioEvent, AudioFrame, InputDevice, Result, UtteranceId};
+use said_core::{AudioEvent, AudioFrame, InputDevice, Result, UtteranceId};
 
 use crate::Recorder;
 

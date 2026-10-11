@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 manifest="$(cd "$(dirname "$0")/.." && pwd)/models.json"
-cache="$HOME/.cache/voice-models"
+cache="$HOME/.cache/said-models"
 case "$(uname -s)" in Linux) platform=linux ;; Darwin) platform=macos ;; *) exit 1 ;; esac
 case "$(uname -m)" in x86_64) arch=x86_64 ;; arm64|aarch64) arch=aarch64 ;; *) exit 1 ;; esac
 model="${1:-$(jq -r --arg platform "$platform" '.defaults[$platform]' "$manifest")}"

@@ -388,7 +388,7 @@
     "moonshine-small-en"
   ],
   "rss_method": "20ms sampled parent plus direct engine child resident set; shared pages may be counted twice",
-  "runtime_version": "0.1.5+voice.2",
+  "runtime_version": "0.1.5 (local build 2)",
   "schema": 1,
   "started_unix_ms": 1791674739692,
   "vocabulary": [],

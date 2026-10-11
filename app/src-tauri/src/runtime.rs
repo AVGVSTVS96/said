@@ -1,19 +1,19 @@
 use crate::storage::{Paths, atomic_write, disk_bytes};
 use crossbeam_channel::{Receiver, Sender, bounded};
+use said_audio::Recorder;
+use said_core::{history::SqliteHistory, *};
+use said_engine::{
+    Engine,
+    host::{WorkerClient, WorkerConfig, WorkerEngine, recognize_file_with_cancel},
+    manifest::Manifest,
+};
+use said_platform::Platform;
 use std::{
     collections::{BTreeMap, VecDeque},
     fs,
     path::Path,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use voice_audio::Recorder;
-use voice_core::{history::SqliteHistory, *};
-use voice_engine::{
-    Engine,
-    host::{WorkerClient, WorkerConfig, WorkerEngine, recognize_file_with_cancel},
-    manifest::Manifest,
-};
-use voice_platform::Platform;
 
 pub trait HostPlatform: Platform {
     fn copy(&self, text: &str) -> Result<()>;
@@ -36,7 +36,7 @@ pub trait HostPlatform: Platform {
         vec![]
     }
 }
-impl HostPlatform for voice_platform::fake::FakePlatform {
+impl HostPlatform for said_platform::fake::FakePlatform {
     fn copy(&self, _: &str) -> Result<()> {
         Ok(())
     }
@@ -794,14 +794,24 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     self.replaying.insert(id, cancel);
                     let sender = self.sender.clone();
                     let path = self.history.audio_path(audio_id);
-                    let client = (engine == self.settings.engine).then(|| self.client.clone()).flatten();
+                    let client = (engine == self.settings.engine)
+                        .then(|| self.client.clone())
+                        .flatten();
                     let config = worker_config(&self.paths.models, &engine)?;
                     std::thread::spawn(move || {
                         let result = (|| {
-                            let samples = voice_audio::wav::recover_wav(&path)?;
+                            let samples = said_audio::wav::recover_wav(&path)?;
                             let text = match client {
-                                Some(client) => client.recognize_file(id, &path, &vocabulary, &cancellation)?,
-                                None => recognize_file_with_cancel(id, &config, &path, &vocabulary, &cancellation)?,
+                                Some(client) => {
+                                    client.recognize_file(id, &path, &vocabulary, &cancellation)?
+                                }
+                                None => recognize_file_with_cancel(
+                                    id,
+                                    &config,
+                                    &path,
+                                    &vocabulary,
+                                    &cancellation,
+                                )?,
                             };
                             Ok((samples * 1000 / 16000, text))
                         })();

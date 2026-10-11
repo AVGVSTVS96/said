@@ -6,7 +6,7 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender, bounded, unbounded};
-use voice_core::{Hotkey, Result};
+use said_core::{Hotkey, Result};
 
 use super::decoder::{Decoder, KeyEvent, Shortcut};
 use super::ffi::{self, Owned, Ref};

@@ -9,7 +9,7 @@ import tempfile
 import time
 
 HERE = Path(__file__).resolve().parent
-BASE = Path(os.environ.get('VOICE_LINUX_TEST_DIR', Path.home() / '.cache/voice-linux-tests')).resolve()
+BASE = Path(os.environ.get('SAID_LINUX_TEST_DIR', Path.home() / '.cache/said-linux-tests')).resolve()
 
 
 def wait_for(predicate, processes, timeout=20):
@@ -35,7 +35,7 @@ def stop(process):
 def inside():
     processes = []
     try:
-        binary = Path(os.environ.get('VOICE_APP_BINARY', BASE / 'harness/target/debug/voice'))
+        binary = Path(os.environ.get('SAID_APP_BINARY', BASE / 'harness/target/debug/said'))
         (STATE / 'niri.kdl').write_text(f'''input {{ keyboard {{ xkb {{ layout "us"; }}; }}; }};
 prefer-no-csd
 animations {{ off; }}
@@ -52,9 +52,9 @@ binds {{
         session = json.loads((STATE / 'environment.json').read_text())
         assert Path(session['XDG_RUNTIME_DIR']).resolve() == STATE / 'runtime'
         assert Path(session['NIRI_SOCKET']).parent == STATE / 'runtime'
-        assert session['WAYLAND_DISPLAY'] != session['VOICE_TEST_PARENT_DISPLAY']
+        assert session['WAYLAND_DISPLAY'] != session['SAID_TEST_PARENT_DISPLAY']
         env = dict(os.environ, **session, GDK_BACKEND='wayland',
-                   VOICE_TEST_ROOT=str(STATE), VOICE_SCRATCH_OUTPUT=str(STATE / 'electron.txt'))
+                   SAID_TEST_ROOT=str(STATE), SAID_SCRATCH_OUTPUT=str(STATE / 'electron.txt'))
         for key in ['DISPLAY', 'WAYLAND_SOCKET', 'ELECTRON_RUN_AS_NODE']:
             env.pop(key, None)
         commands = [
@@ -68,7 +68,7 @@ binds {{
             processes.append(subprocess.Popen(command, env=env, start_new_session=True,
                                                stdout=(STATE / f'target-{index}.log').open('w'), stderr=subprocess.STDOUT))
         wait_for(lambda: all((STATE / f'{name}.ready').exists() for name in ['gtk', 'terminal', 'electron']), processes)
-        command = json.loads(os.environ['VOICE_APP_E2E']) if 'VOICE_APP_E2E' in os.environ else [str(BASE / 'harness/target/debug/e2e')]
+        command = json.loads(os.environ['SAID_APP_E2E']) if 'SAID_APP_E2E' in os.environ else [str(BASE / 'harness/target/debug/e2e')]
         result = subprocess.run(command, env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=180)
         (STATE / 'results.log').write_text(result.stdout)
@@ -82,27 +82,27 @@ binds {{
 
 
 if '--record-environment' in sys.argv:
-    STATE = Path(os.environ['VOICE_LINUX_STATE'])
-    keys = ['XDG_RUNTIME_DIR', 'WAYLAND_DISPLAY', 'NIRI_SOCKET', 'DBUS_SESSION_BUS_ADDRESS', 'VOICE_TEST_PARENT_DISPLAY']
+    STATE = Path(os.environ['SAID_LINUX_STATE'])
+    keys = ['XDG_RUNTIME_DIR', 'WAYLAND_DISPLAY', 'NIRI_SOCKET', 'DBUS_SESSION_BUS_ADDRESS', 'SAID_TEST_PARENT_DISPLAY']
     (STATE / 'environment.json').write_text(json.dumps({key: os.environ[key] for key in keys}))
 elif '--niri-child' in sys.argv:
-    STATE = Path(os.environ['VOICE_LINUX_STATE'])
-    os.environ['VOICE_TEST_PARENT_DISPLAY'] = os.environ['WAYLAND_DISPLAY']
+    STATE = Path(os.environ['SAID_LINUX_STATE'])
+    os.environ['SAID_TEST_PARENT_DISPLAY'] = os.environ['WAYLAND_DISPLAY']
     raise SystemExit(subprocess.call(['niri', '--config', str(STATE / 'niri.kdl'), '--',
                                      sys.executable, __file__, '--record-environment'],
                                     stdout=(STATE / 'niri.log').open('w'), stderr=subprocess.STDOUT))
 elif '--inside' in sys.argv:
-    STATE = Path(os.environ['VOICE_LINUX_STATE'])
+    STATE = Path(os.environ['SAID_LINUX_STATE'])
     inside()
 else:
     BASE.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, VOICE_LINUX_TEST_DIR=str(BASE), CARGO_BUILD_JOBS='2')
-    if 'VOICE_APP_E2E' not in env:
+    env = dict(os.environ, SAID_LINUX_TEST_DIR=str(BASE), CARGO_BUILD_JOBS='2')
+    if 'SAID_APP_E2E' not in env:
         subprocess.run([str(HERE / 'build.sh')], env=env, check=True)
     STATE = Path(tempfile.mkdtemp(prefix='session-', dir=BASE))
     runtime = STATE / 'runtime'
     runtime.mkdir(mode=0o700)
-    env.update(VOICE_LINUX_STATE=str(STATE), XDG_RUNTIME_DIR=str(runtime),
+    env.update(SAID_LINUX_STATE=str(STATE), XDG_RUNTIME_DIR=str(runtime),
                WLR_BACKENDS='headless', WLR_RENDERER='pixman', NIRI_DISABLE_SYSTEM_MANAGER_NOTIFY='1')
     for key in ['DISPLAY', 'WAYLAND_DISPLAY', 'WAYLAND_SOCKET', 'NIRI_SOCKET', 'DBUS_SESSION_BUS_ADDRESS',
                 'XDG_SESSION_ID', 'ELECTRON_RUN_AS_NODE']:

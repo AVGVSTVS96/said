@@ -1,6 +1,6 @@
 use crossbeam_channel::{Receiver, bounded};
+use said_core::{Result, SessionEvent};
 use std::collections::BTreeMap;
-use voice_core::{Result, SessionEvent};
 use zbus::{
     blocking::{Connection, Proxy},
     zvariant::{OwnedObjectPath, OwnedValue},

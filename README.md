@@ -1,4 +1,4 @@
-# voice
+# said
 
 A local dictation app being built for macOS and Linux, with Niri as the first Linux target. The name is a placeholder. The intended behavior is to preserve the recognizer's words byte for byte, including fillers, repeats and false starts. No LLM cleanup.
 
@@ -18,7 +18,7 @@ CARGO_BUILD_JOBS=2 bun run typecheck
 CARGO_BUILD_JOBS=2 bun run build
 ```
 
-`bun run dev` previews the UI shell. `bun run tauri dev` launches the native shell on your desktop; the hidden overlay is not yet a native panel or layer-shell surface. From the repository root, `CARGO_BUILD_JOBS=2 cargo check -p voice-app` checks the host without launching it.
+`bun run dev` previews the UI shell. `bun run tauri dev` launches the native shell on your desktop; the hidden overlay is not yet a native panel or layer-shell surface. From the repository root, `CARGO_BUILD_JOBS=2 cargo check -p said-app` checks the host without launching it.
 
 `product.toml` owns the display name, bundle identifier and storage key. Bundle identifier and storage key remain stable across renames. Cargo package names are internal module identifiers. Generated TypeScript and Tauri configuration are rebuilt locally and ignored by git.
 

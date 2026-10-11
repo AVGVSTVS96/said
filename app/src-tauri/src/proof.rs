@@ -1,7 +1,7 @@
 use crate::runtime::HostPlatform;
 use crossbeam_channel::Receiver;
-use voice_core::{Hotkey, Result, Settings, Target};
-use voice_platform::{Platform, fake::FakePlatform};
+use said_core::{Hotkey, Result, Settings, Target};
+use said_platform::{Platform, fake::FakePlatform};
 
 pub struct SavedPlatform {
     pub fake: FakePlatform,
@@ -59,10 +59,10 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
         time::{Duration, Instant},
     };
 
-    use voice_platform::linux::{Config, LinuxPlatform, control::ControlCommand};
+    use said_platform::linux::{Config, LinuxPlatform, control::ControlCommand};
     struct NestedPlatform {
         native: LinuxPlatform,
-        changes: voice_platform::linux::niri::FocusChanges,
+        changes: said_platform::linux::niri::FocusChanges,
     }
     impl Platform for NestedPlatform {
         type Window = tauri::Window;
@@ -89,26 +89,26 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
         fn configure(&mut self, _: &Settings) -> Result<()> {
             Ok(())
         }
-        fn poll(&mut self) -> Vec<voice_core::SessionEvent> {
+        fn poll(&mut self) -> Vec<said_core::SessionEvent> {
             self.changes
                 .events()
                 .try_iter()
-                .map(|target| voice_core::SessionEvent::FocusChanged { target })
+                .map(|target| said_core::SessionEvent::FocusChanged { target })
                 .collect()
         }
     }
-    let root = PathBuf::from(std::env::var("VOICE_TEST_ROOT")?).canonicalize()?;
+    let root = PathBuf::from(std::env::var("SAID_TEST_ROOT")?).canonicalize()?;
     let runtime = PathBuf::from(std::env::var("XDG_RUNTIME_DIR")?).canonicalize()?;
     let niri = PathBuf::from(std::env::var("NIRI_SOCKET")?);
     if runtime != root.join("runtime")
         || niri.parent() != Some(runtime.as_path())
-        || std::env::var("WAYLAND_DISPLAY")? == std::env::var("VOICE_TEST_PARENT_DISPLAY")?
+        || std::env::var("WAYLAND_DISPLAY")? == std::env::var("SAID_TEST_PARENT_DISPLAY")?
     {
         return Err("proof requires the isolated nested Niri harness".into());
     }
-    let mut keyboard = voice_platform::linux::keyboard::VirtualKeyboard::connect(
+    let mut keyboard = said_platform::linux::keyboard::VirtualKeyboard::connect(
         &runtime,
-        &std::env::var_os("VOICE_TEST_PARENT_DISPLAY").ok_or("parent display missing")?,
+        &std::env::var_os("SAID_TEST_PARENT_DISPLAY").ok_or("parent display missing")?,
     )?;
     let mut config = Config::from_environment(env!("PRODUCT_STORAGE_KEY"))?;
     config.read_input = false;
@@ -145,7 +145,7 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
     paths.models = models.into();
     let recorder = replay_recorder(std::path::Path::new(wav), &paths.data)?;
     let mut host = Host::open(NestedPlatform { native, changes }, recorder, paths)?;
-    host.set_client(voice_engine::host::WorkerClient::warm(worker_config(
+    host.set_client(said_engine::host::WorkerClient::warm(worker_config(
         models,
         &host.settings.engine,
     )?)?);
@@ -207,7 +207,7 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
         return Err("history search CLI did not return the persisted row".into());
     }
     println!(
-        "PASS Niri bind → voice CLI → real host → same-binary Moonshine worker → durable history → scratch terminal: {} exact UTF-8 bytes, no Enter",
+        "PASS Niri bind → said CLI → real host → same-binary Moonshine worker → durable history → scratch terminal: {} exact UTF-8 bytes, no Enter",
         raw.len()
     );
     println!("PASS persistent history search over the owner-only control socket");
@@ -217,14 +217,14 @@ pub fn nested(wav: &str, models: &std::path::Path) -> Result<()> {
 pub fn replay_recorder(
     input: &std::path::Path,
     data: &std::path::Path,
-) -> Result<voice_audio::ReplayRecorder> {
+) -> Result<said_audio::ReplayRecorder> {
     crate::storage::private_dir(data)?;
     let source = data.join("replay-source.wav");
-    let mut input = voice_engine::wav::Wav::open(input)?;
-    let mut writer = voice_audio::wav::WavWriter::create(&source)?;
+    let mut input = said_engine::wav::Wav::open(input)?;
+    let mut writer = said_audio::wav::WavWriter::create(&source)?;
     while let Some(samples) = input.read()? {
         writer.append(&samples)?;
     }
     writer.finish()?;
-    Ok(voice_audio::ReplayRecorder::new(source, data.join("audio")))
+    Ok(said_audio::ReplayRecorder::new(source, data.join("audio")))
 }

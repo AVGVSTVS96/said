@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use voice_core::{EngineEvent, UtteranceId};
-use voice_engine::{
+use said_core::{EngineEvent, UtteranceId};
+use said_engine::{
     Engine,
     host::{WorkerClient, WorkerConfig},
     manifest::model_cache,
@@ -94,7 +94,7 @@ fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() 
     let bench = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bench/clips");
     for model in ["parakeet-v3-fp32"] {
         let client = WorkerClient::warm(WorkerConfig {
-            executable: env!("CARGO_BIN_EXE_voice-engine").into(),
+            executable: env!("CARGO_BIN_EXE_said-engine").into(),
             args: vec!["--worker".into(), model.into()],
             startup_timeout: Duration::from_secs(60),
             audio_timeout: Duration::from_secs(10),

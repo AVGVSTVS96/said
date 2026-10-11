@@ -1,6 +1,6 @@
 use gtk::prelude::*;
 use gtk_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
-use voice_core::Result;
+use said_core::Result;
 
 pub fn configure(
     window: &impl IsA<gtk::Window>,
@@ -38,7 +38,7 @@ pub fn configure(
             return Err("Niri layer-shell is unavailable".into());
         }
         window.init_layer_shell();
-        window.set_namespace("voice-overlay");
+        window.set_namespace("said-overlay");
         window.set_layer(Layer::Overlay);
         window.set_keyboard_mode(KeyboardMode::None);
         window.set_exclusive_zone(0);

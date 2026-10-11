@@ -119,8 +119,8 @@ CARGO_BUILD_JOBS=2 cargo build --locked --manifest-path bench/Cargo.toml
 crates/engine/scripts/fetch-model.sh moonshine-small-en
 crates/engine/scripts/fetch-model.sh moonshine-medium-en
 bench/scripts/fetch.sh
-target/debug/voice-bench bench bench/clips.jsonl --all \
-  --audio-root "$HOME/.cache/voice-models/bench-public"
+target/debug/said-bench bench bench/clips.jsonl --all \
+  --audio-root "$HOME/.cache/said-models/bench-public"
 ```
 
 A failed clip produces a nonzero exit and an incomplete coverage count. Do not
@@ -130,7 +130,7 @@ are real measurements, not promised exact transcripts on every host.
 ## Engine fix: causes and verification
 
 The corrected engine uses the same pinned Small/Medium weights and a patched
-native runtime, `0.1.5+voice.2`. Defaults are unchanged. The source archive,
+native runtime, `0.1.5 (local build 2)`. Defaults are unchanged. The source archive,
 patch, executable and native-library hashes are recorded in each new summary.
 
 The empty `ami-project` result was reproducible without decoding: native VAD
@@ -255,7 +255,7 @@ repetition opportunities. Pipeline sample conservation does not fix model omissi
 
 ### Final checks and receipts
 
-- `cargo test -p voice-engine`: pass, including protocol mutation fuzzing,
+- `cargo test -p said-engine`: pass, including protocol mutation fuzzing,
   cold/slow/hung workers, producer drop after Finish, cancel before Start and
   private unlinked spooling. Native golden and public regressions were also
   explicitly run with `--ignored --nocapture`, not counted as skipped evidence.
@@ -431,22 +431,22 @@ Receipts: [Linux full metrics](results/linux-parakeet.summary.json),
 ```sh
 crates/engine/scripts/fetch-model.sh
 bench/scripts/fetch.sh
-CARGO_BUILD_JOBS=2 cargo build --locked -p voice-bench
+CARGO_BUILD_JOBS=2 cargo build --locked -p said-bench
 systemd-run --user --scope -q -p MemoryMax=4G -p MemorySwapMax=0 -- \
-  nice -n 10 target/debug/voice-bench bench bench/clips.jsonl --all \
-  --audio-root "$HOME/.cache/voice-models/bench-public"
+  nice -n 10 target/debug/said-bench bench bench/clips.jsonl --all \
+  --audio-root "$HOME/.cache/said-models/bench-public"
 ```
 
-Private fidelity used the app's `voice bench` command with external manifests
+Private fidelity used the app's `said bench` command with external manifests
 and `--unpaced`; paced subset runs measured latency separately. All manifests,
 references, private audio and transcripts remain outside the public worktree.
 
 ### Current checks and capped native proofs
 
-- `cargo test -p voice-engine`: pass. Engine/bench pure tests, including the
+- `cargo test -p said-engine`: pass. Engine/bench pure tests, including the
   shared-slot concurrency/file-replay regression, pass; the bench has 13 tests.
 - `bench/scripts/ci.sh`: pass on Linux and macOS, 12/12 recognitions each.
-- `cargo test -p voice-app --test end_to_end`: pass. Its native proof was also
+- `cargo test -p said-app --test end_to_end`: pass. Its native proof was also
   explicitly run with `--ignored --nocapture` on both platforms.
 - Engine/bench clippy with `-D warnings`, formatting, shell syntax and diff
   checks pass. The host installer produces the exact pinned measured libraries.

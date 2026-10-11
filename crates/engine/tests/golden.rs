@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use voice_core::{EngineEvent, UtteranceId};
-use voice_engine::{
+use said_core::{EngineEvent, UtteranceId};
+use said_engine::{
     host::{WorkerConfig, recognize_file},
     manifest::{Manifest, model_cache},
     wav::Wav,
@@ -13,11 +13,11 @@ fn native_adapter_and_worker_preserve_identical_raw_transcripts() {
     let manifest = Manifest::bundled().unwrap();
     let cache = model_cache().unwrap();
     let model = manifest.default_model().unwrap();
-    let timeout = std::env::var("VOICE_PROOF_TIMEOUT_SECS")
+    let timeout = std::env::var("SAID_PROOF_TIMEOUT_SECS")
         .ok()
         .map(|value| value.parse::<u64>().expect("proof timeout must be seconds"));
     let config = WorkerConfig {
-        executable: env!("CARGO_BIN_EXE_voice-engine").into(),
+        executable: env!("CARGO_BIN_EXE_said-engine").into(),
         args: vec!["--worker".into(), model.into()],
         startup_timeout: Duration::from_secs(timeout.unwrap_or(60)),
         audio_timeout: Duration::from_secs(timeout.unwrap_or(10)),

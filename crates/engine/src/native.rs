@@ -1,7 +1,7 @@
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
 
-use voice_core::Result;
+use said_core::Result;
 
 #[cfg_attr(target_os = "linux", link(name = "dl"))]
 unsafe extern "C" {

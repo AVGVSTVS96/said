@@ -3,9 +3,9 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
+use said_core::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use voice_core::Result;
 
 use crate::score::{Term, normalized_tokens};
 
@@ -155,7 +155,7 @@ pub fn verify(clips: &[Clip], manifest: &Path, audio_root: Option<&Path>) -> Res
         if hash(&path)? != clip.sha256.to_lowercase() {
             return Err(format!("{}: audio hash mismatch", clip.id).into());
         }
-        let _ = voice_engine::wav::Wav::open(&path)?;
+        let _ = said_engine::wav::Wav::open(&path)?;
     }
     Ok(())
 }

@@ -6,8 +6,8 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{Receiver, Sender, bounded};
+use said_core::{EngineEvent, EngineOutput, Result, UtteranceId};
 use serde::Deserialize;
-use voice_core::{EngineEvent, EngineOutput, Result, UtteranceId};
 
 use crate::{Engine, native::Library, sherpa_abi::OfflineRecognizerConfig};
 

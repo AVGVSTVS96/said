@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 use std::thread;
 use std::time::Duration;
 
-use voice_core::{Result, Target};
+use said_core::{Result, Target};
 
 use super::{Config, keyboard::VirtualKeyboard, niri::Niri};
 

@@ -12,7 +12,7 @@ export function Playback({ id }: { id?: string }) {
       audio.current?.pause();
       return;
     }
-    audio.current ??= Object.assign(new Audio(convertFileSrc(id!, "voice-audio")), {
+    audio.current ??= Object.assign(new Audio(convertFileSrc(id!, "said-audio")), {
       onplay: () => setPlaying(true),
       onpause: () => setPlaying(false),
     });

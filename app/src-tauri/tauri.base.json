@@ -11,7 +11,7 @@
       {
         "label": "overlay",
         "url": "index.html?screen=overlay",
-        "title": "Dictation",
+        "title": "said — Dictation",
         "width": 544,
         "height": 216,
         "visible": false,
@@ -25,7 +25,7 @@
       {
         "label": "interactive",
         "url": "index.html?screen=interactive",
-        "title": "Review",
+        "title": "said — Review",
         "width": 624,
         "height": 269,
         "visible": false,
@@ -41,7 +41,7 @@
       {
         "label": "history",
         "url": "index.html?screen=history",
-        "title": "History",
+        "title": "said — History",
         "width": 800,
         "height": 640,
         "visible": false
@@ -49,7 +49,7 @@
       {
         "label": "settings",
         "url": "index.html?screen=settings",
-        "title": "Settings",
+        "title": "said — Settings",
         "width": 640,
         "height": 680,
         "visible": false
@@ -57,13 +57,13 @@
       {
         "label": "setup",
         "url": "index.html?screen=setup",
-        "title": "Setup",
+        "title": "said — Setup",
         "width": 640,
         "height": 680
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; media-src 'self' voice-audio: http://voice-audio.localhost blob:"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; media-src 'self' said-audio: http://said-audio.localhost blob:"
     },
     "macOSPrivateApi": true,
     "enableGTKAppId": true

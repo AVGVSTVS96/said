@@ -1,10 +1,10 @@
 use fs2::FileExt;
+use said_core::Result;
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
 };
-use voice_core::Result;
 
 #[derive(Clone)]
 pub struct Paths {
@@ -46,7 +46,7 @@ impl Paths {
         private_dir(&self.config)?;
         let file = private_file(&self.data.join("app.lock"))?;
         file.try_lock_exclusive()
-            .map_err(|_| "another voice process owns this data directory")?;
+            .map_err(|_| "another said process owns this data directory")?;
         Ok(file)
     }
 }
@@ -69,7 +69,7 @@ pub fn private_file(path: &Path) -> Result<File> {
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
     let parent = path.parent().ok_or("file needs a parent directory")?;
     private_dir(parent)?;
-    let temporary = parent.join(format!(".{}.tmp", voice_core::UtteranceId::random().0));
+    let temporary = parent.join(format!(".{}.tmp", said_core::UtteranceId::random().0));
     let result = (|| {
         let mut file = private_file(&temporary)?;
         file.write_all(bytes)?;
