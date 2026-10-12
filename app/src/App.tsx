@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { product } from "./product";
 import {
@@ -107,6 +108,12 @@ export function App({
     document.documentElement.dataset.screen = screen;
     document.documentElement.dataset.demo = demo ? "true" : "false";
   }, [screen, demo]);
+
+  useEffect(() => {
+    if (!isTauri() || screen !== "setup") return;
+    const stop = listen<string>("notice", (event) => setError(event.payload));
+    return () => void stop.then((unlisten) => unlisten());
+  }, [screen]);
 
   async function send(action: AppAction) {
     setError("");

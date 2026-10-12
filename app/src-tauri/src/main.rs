@@ -163,6 +163,8 @@ fn run() -> Result<()> {
             "desktop control CLI is available on Linux; launch the macOS app for dictation".into(),
         );
     }
+    #[cfg(target_os = "macos")]
+    let setup_marker = paths.config.join("setup-complete");
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             ipc::connect,
@@ -216,7 +218,7 @@ fn run() -> Result<()> {
                             .0
                             .send(ipc::Request::Shutdown);
                     } else if id == "interactive" {
-                        let (reply, _) = crossbeam_channel::bounded(1);
+                        let (reply, response) = crossbeam_channel::bounded(1);
                         let _ = app.state::<ipc::Connection>().0.send(ipc::Request::Action(
                             said_core::HostAction::Start {
                                 mode: Mode::Interactive,
@@ -224,6 +226,12 @@ fn run() -> Result<()> {
                             },
                             reply,
                         ));
+                        let app = app.clone();
+                        std::thread::spawn(move || {
+                            if let Ok(Err(error)) = response.recv() {
+                                ipc::notice(&app, &error);
+                            }
+                        });
                     } else if let Some(window) = app.get_webview_window(id) {
                         let _ = window.show();
                         let _ = window.set_focus();
@@ -253,6 +261,24 @@ fn run() -> Result<()> {
                 let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())?;
+        .build(tauri::generate_context!())?
+        .run(move |app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen {
+                has_visible_windows: false,
+                ..
+            } = event
+                && let Some(window) = app.get_webview_window(if setup_marker.is_file() {
+                    "history"
+                } else {
+                    "setup"
+                })
+            {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+            #[cfg(not(target_os = "macos"))]
+            let _ = (app, event);
+        });
     Ok(())
 }
