@@ -136,13 +136,14 @@ impl History for SqliteHistory {
     }
 
     fn search(&self, query: &str) -> Result<Vec<Utterance>> {
-        if query.is_empty() {
+        let terms = match_terms(query);
+        if terms.is_empty() {
             self.rows(
                 "SELECT * FROM utterances ORDER BY started_at DESC, rowid DESC",
                 None,
             )
         } else {
-            self.rows("SELECT u.* FROM utterances u JOIN utterances_fts f ON f.rowid=u.rowid WHERE utterances_fts MATCH ?1 ORDER BY u.started_at DESC, u.rowid DESC", Some(query))
+            self.rows("SELECT u.* FROM utterances u JOIN utterances_fts f ON f.rowid=u.rowid WHERE utterances_fts MATCH ?1 ORDER BY u.started_at DESC, u.rowid DESC", Some(&terms))
         }
     }
 
@@ -192,6 +193,15 @@ impl History for SqliteHistory {
         }
         Ok(Some(row.audio_id))
     }
+}
+
+fn match_terms(query: &str) -> String {
+    query
+        .split_whitespace()
+        .filter(|word| word.chars().any(char::is_alphanumeric))
+        .map(|word| format!("\"{}\"*", word.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn require_one(count: usize) -> Result<()> {

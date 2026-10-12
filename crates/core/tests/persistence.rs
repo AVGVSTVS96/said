@@ -58,16 +58,39 @@ fn sqlite_reopen_recovers_pending_rows_once_and_keeps_literal_bytes_and_fts_edit
     let recovered = finished(row.clone(), raw, UtteranceStatus::Recovered);
     history.finish(&recovered).unwrap();
     assert!(history.finish(&recovered).is_err());
-    history.edit(row.id, "edited identifier --flag\n").unwrap();
-    assert_eq!(history.search("\"no no\"").unwrap().len(), 1);
-    assert_eq!(history.search("identifier").unwrap().len(), 1);
-    assert!(history.search("identifier AND missing").unwrap().is_empty());
-    assert!(history.search("\"").is_err());
+    history
+        .edit(row.id, "edited identifier --flag don't\n")
+        .unwrap();
+    for query in [
+        "\"no no\"",
+        "identifier",
+        "ident",
+        "Edit ID",
+        "don't",
+        "--fla",
+        "caf",
+        "\"",
+        "-",
+    ] {
+        assert_eq!(history.search(query).unwrap().len(), 1, "{query}");
+    }
+    for query in [
+        "identifier AND missing",
+        "NOT",
+        "identifiers",
+        "dont",
+        "lag",
+    ] {
+        assert!(history.search(query).unwrap().is_empty(), "{query}");
+    }
     drop(history);
     let history = SqliteHistory::open(&directory.0).unwrap();
     let saved = history.last().unwrap().unwrap();
     assert_eq!(saved.raw_text.unwrap().as_bytes(), raw.as_bytes());
-    assert_eq!(saved.text.as_deref(), Some("edited identifier --flag\n"));
+    assert_eq!(
+        saved.text.as_deref(),
+        Some("edited identifier --flag don't\n")
+    );
     assert!(history.recover().unwrap().is_empty());
     assert!(history.audio_path(row.audio_id).exists());
 }
