@@ -33,6 +33,10 @@ export type CoreSnapshot = Readonly<{
   connectionError?: string;
 }>;
 
+type Incoming = Omit<CoreSnapshot, "history"> & {
+  history: readonly Utterance[] | null;
+};
+
 export interface CoreSource {
   getSnapshot(): CoreSnapshot;
   subscribe(listener: () => void): () => void;
@@ -66,10 +70,10 @@ export function createCoreSource(send: (action: AppAction) => Promise<void>) {
       });
       return pending;
     },
-    receive(next: CoreSnapshot) {
+    receive(next: Incoming) {
       if (!connected) return;
       if (next.sequence !== undefined && snapshot.sequence !== undefined && next.sequence <= snapshot.sequence) return;
-      snapshot = next;
+      snapshot = { ...next, history: next.history ?? snapshot.history };
       listeners.forEach((listener) => listener());
     },
     disconnect(error: string) {

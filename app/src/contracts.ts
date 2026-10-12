@@ -18,4 +18,6 @@ export type { Mode } from "./bindings/Mode";
 
 export type { HostAction } from "./bindings/HostAction";
 export type { HostState } from "./bindings/HostState";
+export type { DownloadState } from "./bindings/DownloadState";
+export type { InputMode } from "./bindings/InputMode";
 export type { HostSnapshot } from "./bindings/HostSnapshot";

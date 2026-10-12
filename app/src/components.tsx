@@ -33,11 +33,25 @@ export function Icon({ name }: { name: keyof typeof paths }) {
   );
 }
 
-export function LevelMeter({ level }: { level: number | null }) {
+export function LevelMeter({
+  level,
+  bars = 16,
+  className = "",
+}: {
+  level: number | null;
+  bars?: number;
+  className?: string;
+}) {
   const value = Math.max(0, Math.min(1, level ?? 0));
+  const shown = useRef({ input: level, value });
+  if (shown.current.input !== level)
+    shown.current = {
+      input: level,
+      value: level === null ? 0 : Math.max(value, shown.current.value - 0.08),
+    };
   return (
     <span
-      className="meter"
+      className={`meter ${className}`.trim()}
       role="meter"
       aria-label="Microphone level"
       aria-valuemin={0}
@@ -49,8 +63,8 @@ export function LevelMeter({ level }: { level: number | null }) {
           : `${Math.round(value * 100)} percent`
       }
     >
-      {Array.from({ length: 16 }, (_, index) => (
-        <span key={index} data-lit={value > index / 16} />
+      {Array.from({ length: bars }, (_, index) => (
+        <span key={index} data-lit={shown.current.value > index / bars} />
       ))}
     </span>
   );

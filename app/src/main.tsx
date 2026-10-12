@@ -16,7 +16,11 @@ if (
   new URLSearchParams(window.location.search).get("demo") === "1"
 ) {
   const { createFakeSource } = await import("./fake");
-  const demo = createFakeSource();
+  const params = new URLSearchParams(window.location.search);
+  const demo = createFakeSource({
+    mac: params.get("os") === "mac",
+    model: params.get("model") === "downloading" ? "downloading" : "ready",
+  });
   root.render(
     <StrictMode>
       <App source={demo} demo={demo} />

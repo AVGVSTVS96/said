@@ -218,11 +218,11 @@ export function App({
             />
           ) : (
             <Setup
-              key={snapshot.settings?.hotkey ?? "loading"}
+              key={snapshot.settings ? "ready" : "loading"}
               settings={snapshot.settings}
               devices={snapshot.devices}
-              session={session}
               host={snapshot.host}
+              source={source}
               send={send}
             />
           )}
