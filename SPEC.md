@@ -18,7 +18,7 @@ Quick dictation remembers the external target, shows live text in a nonfocusing 
 
 Interactive recording opens a normal editor. Edited regions remain user-owned while untouched text streams. After recording, play the whole clip, inspect Original, edit, copy or insert. Insert refocuses the remembered external window and checks it before pasting. Enter adds a newline; Ctrl+Enter or Cmd+Enter requests insertion after recognition finishes. Discard keeps a discarded history entry.
 
-History provides full-text search, playback, editing, copy, insertion, recognition retry and deletion. Insert last uses the latest stored transcript, including explicit edits. Deletion removes the row and search entry; the WAV is removed after its last referencing row is gone. File-deletion failure can leave an orphan for startup cleanup.
+History provides word-prefix full-text search, playback, editing, copy, insertion, recognition retry and deletion. Insert last uses the latest stored transcript, including explicit edits. Deletion removes the row and search entry; the WAV is removed after its last referencing row is gone. File-deletion failure can leave an orphan for startup cleanup.
 
 Setup selects a microphone, verifies/downloads the model, configures the shortcut, reports input mode and permissions, and records into a local scratch field without pasting into another application. macOS grants are requested explicitly. Linux hold needs readable physical keyboards or a working GlobalShortcuts portal. Joining `input` requires a fresh login and grants keyboard-device access.
 

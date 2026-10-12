@@ -126,7 +126,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
         move |requests| {
             let recorder = CpalRecorder::new(paths.data.join("audio"));
             let mut host = Host::open(Desktop::default(), recorder, paths)?;
-            host.install()?;
+            host.install(false)?;
             if let Some(overlay) = app
                 .get_webview_window("overlay")
                 .map(|view| view.as_ref().window().clone())
