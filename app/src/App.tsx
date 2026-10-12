@@ -213,6 +213,7 @@ export function App({
               key={JSON.stringify(snapshot.settings)}
               settings={snapshot.settings}
               devices={snapshot.devices}
+              history={snapshot.history}
               host={snapshot.host}
               send={send}
             />

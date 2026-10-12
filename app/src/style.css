@@ -526,7 +526,8 @@ html[data-demo="true"] .panel-stage {
 }
 .app-rule {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px auto;
+  grid-auto-flow: column;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   padding: 6px 0;
@@ -535,8 +536,33 @@ html[data-demo="true"] .panel-stage {
 .app-id {
   overflow-wrap: anywhere;
 }
-.app-rule input {
+.app-rule select {
+  width: 150px;
+}
+.app-rule > select:first-child {
   width: 100%;
+}
+.app-rule input:not(.switch) {
+  width: 100%;
+}
+button.shortcut {
+  min-width: 132px;
+  font-variant-numeric: tabular-nums;
+}
+button.shortcut[aria-pressed="true"] {
+  border-color: var(--focus);
+  color: var(--muted);
+}
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-small);
+  font-size: 13px;
 }
 .auto-send {
   display: inline-flex;
@@ -682,8 +708,15 @@ html[data-demo="true"] .panel-stage {
     width: 100%;
   }
   .app-rule {
-    grid-template-columns: 1fr;
-    gap: 6px;
+    grid-auto-flow: row;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px 12px;
+  }
+  .app-id {
+    grid-column: 1 / -1;
+  }
+  .app-rule select {
+    width: 100%;
   }
   .interactive .row {
     gap: 10px;
