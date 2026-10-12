@@ -67,8 +67,30 @@ nice -n 10 packaging/macos.sh
 The arm64 `.app` is under `target/aarch64-apple-darwin/release/bundle/macos/`;
 the compressed `.dmg` and SHA256SUMS are under `target/packaging/`. Deployment
 targets macOS 14. The host stays at `Contents/MacOS/said`, with `runtime.archive` in Resources.
-The complete bundle is ad-hoc signed and verified. This script does not perform Developer ID signing or notarization.
+The complete bundle and DMG are signed and verified. This script does not notarize.
 See [INSTALL](INSTALL.md). Builds do not pass the separate-account manual checklist.
+
+macOS keeps Microphone and Accessibility grants only while the app's signing
+identity stays the same, so the script picks the first of:
+
+1. `SAID_SIGN_IDENTITY`, any codesign identity name or hash (`-` forces ad-hoc);
+2. a valid `Developer ID Application` identity;
+3. `said local signing`, a self-signed identity in your login keychain;
+4. ad-hoc, with a warning: every rebuild then needs fresh grants.
+
+Without a Developer ID, create the local identity once:
+
+```sh
+packaging/macos-identity.sh
+```
+
+It generates a ten-year self-signed code-signing certificate, imports it into
+the login keychain and trusts it for code signing, which asks for your password
+once. Its certificate names nothing personal, unlike an `Apple Development`
+identity, which embeds your Apple ID email in every signed artifact. Run builds
+from a logged-in Terminal: over SSH the login keychain is usually locked. After
+switching from ad-hoc to a stable identity, reset the old grant once with
+`tccutil reset Accessibility io.github.avgvstvs96.said` and allow it again.
 
 First-launch behavior and permission steps are described in [INSTALL](INSTALL.md).
 Versioned artifacts should include SHA256SUMS. Verify Linux `ldd`, isolated-cache
@@ -100,7 +122,7 @@ model readiness and the configured bind instructions before scratch delivery.
 
 On macOS, copy the final app from its DMG to `/Applications` and open that bundle
 in Finder. Verify its complete signature and [permission/input/delivery checklist](../crates/platform/macos/MANUAL-CHECKLIST.md)
-against that same bundle. A rebuilt ad-hoc signature can invalidate previous
+against that same bundle. A rebuilt ad-hoc signature invalidates previous
 grants. Record the artifact hash, source revision, platform and observed results;
 compilation and model benchmark receipts do not certify installed desktop behavior.
 
