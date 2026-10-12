@@ -10,7 +10,7 @@ use said_core::{Hotkey, Result};
 
 use super::decoder::{Decoder, KeyEvent, Shortcuts};
 use super::ffi::{self, Owned, Ref};
-use super::permissions::{Permissions, secure_input_enabled, session_locked};
+use super::permissions::{secure_input_enabled, session_locked};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InputStatus {
@@ -81,9 +81,8 @@ unsafe extern "C" fn callback(_: Ref, kind: u32, event: Ref, context: Ref) -> Re
 impl Input {
     pub fn start(shortcuts: Shortcuts) -> Result<Self> {
         shortcuts.validate()?;
-        let permissions = Permissions::check();
-        if !permissions.accessibility || !permissions.input_monitoring {
-            return Err(permissions.recovery().join(" ").into());
+        if !unsafe { ffi::AXIsProcessTrusted() } {
+            return Err("Shortcuts start as soon as Accessibility is on.".into());
         }
         let (sender, hotkeys) = unbounded();
         let (status_sender, statuses) = unbounded();
@@ -155,9 +154,19 @@ fn run(
         recording,
         status: InputStatus::TapInterrupted,
     };
-    // A filtering session tap suppresses the shortcut without requiring a root HID tap.
-    let port = Owned::new(unsafe { ffi::CGEventTapCreate(1, 0, 0, (1 << 10) | (1 << 11) | (1 << 12), callback, (&mut tap as *mut Tap).cast()) })
-        .map_err(|_| "Cannot install the hotkey tap. Enable Accessibility and Input Monitoring for this signed app, then quit and reopen it.")?;
+    // A filtering (not listen-only) session tap needs Accessibility, not Input Monitoring, and
+    // suppresses the shortcut without a root HID tap. skhd and Hammerspoon rely on the same rule.
+    let port = Owned::new(unsafe {
+        ffi::CGEventTapCreate(
+            1,
+            0,
+            0,
+            (1 << 10) | (1 << 11) | (1 << 12),
+            callback,
+            (&mut tap as *mut Tap).cast(),
+        )
+    })
+    .map_err(|_| "macOS refused the shortcut listener.")?;
     let source = match Owned::new(unsafe {
         ffi::CFMachPortCreateRunLoopSource(std::ptr::null_mut(), port.0, 0)
     }) {
@@ -180,7 +189,7 @@ fn run(
             InputStatus::SecureInput
         } else if session_locked() {
             InputStatus::SessionLocked
-        } else if !unsafe { ffi::AXIsProcessTrusted() && ffi::CGPreflightListenEventAccess() } {
+        } else if !unsafe { ffi::AXIsProcessTrusted() } {
             InputStatus::PermissionRequired
         } else {
             InputStatus::Available

@@ -17,7 +17,7 @@ Any recognizer can mishear. Both platforms use Parakeet TDT v3 FP32 through sher
 
 This is a working implementation under development, not a certified release. Capture, local recognition, history, interactive editing, settings and setup are connected. Controlled Linux tests cover exact paste into scratch targets without Enter, including a nested-Niri run of the Parakeet app. They do not establish physical keyboard access, every microphone or every destination.
 
-The Apple Silicon app has build and [native unit-test receipts](crates/platform/macos/VERIFICATION.md). Live macOS capture, permissions, focus and paste acceptance remain pending in a separate test account. Packaging produces an Arch package, a portable Linux tar directory and an ad-hoc signed macOS app/DMG. The Mac build is not notarized. The Linux tar is not an AppImage and has not been certified across distributions.
+The Apple Silicon app has build and [native unit-test receipts](crates/platform/macos/VERIFICATION.md). Live macOS capture, permissions, focus and paste acceptance remain pending in a separate test account. Packaging produces an Arch package, a portable Linux tar directory and a macOS app/DMG signed with a stable local identity when one exists (ad-hoc otherwise). The Mac build is not notarized. The Linux tar is not an AppImage and has not been certified across distributions.
 
 ## Install
 
@@ -37,7 +37,7 @@ Default shortcuts, all three editable in Settings:
 
 On Niri, add the provided include after reviewing it: three bind lines, one per shortcut. Setup and `said status` explain the active input mode. Readable keyboards or a working shortcuts portal provide hold and release; a compositor bind alone toggles on each press. Input-group access requires a new login and permits reading physical keyboard events. See [Linux setup](packaging/INSTALL.md#linux).
 
-On macOS, copy `said.app` from the DMG into `/Applications`, open it in Finder, then grant Microphone, Accessibility and Input Monitoring in Setup/System Settings. An ad-hoc build needs macOS's explicit first-open approval. See [macOS setup](packaging/INSTALL.md#macos).
+On macOS, copy `said.app` from the DMG into `/Applications`, open it in Finder, then press Allow for Microphone and Accessibility in Setup; shortcuts and paste start without a relaunch. An unnotarized build needs macOS's explicit first-open approval. See [macOS setup](packaging/INSTALL.md#macos).
 
 ## Build from source
 

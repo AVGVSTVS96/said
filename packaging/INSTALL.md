@@ -4,8 +4,8 @@ Build the artifacts with [packaging instructions](README.md). Recognition runs l
 
 ## macOS
 
-1. Copy `said.app` from the DMG to `/Applications` and open that app in Finder. This build is ad-hoc signed and not notarized. For a blocked first open, use **System Settings → Privacy & Security → Open Anyway**, authenticate and choose **Open**.
-2. Use Setup's microphone permission action and allow access. In **Privacy & Security → Accessibility**, add `/Applications/said.app` with **+** and enable it. Do the same under **Input Monitoring**, then quit and reopen said.
+1. Copy `said.app` from the DMG to `/Applications` and open that app in Finder. This build is not notarized. For a blocked first open, use **System Settings → Privacy & Security → Open Anyway**, authenticate and choose **Open**.
+2. In Setup, press **Allow** next to Microphone and next to Accessibility and accept each macOS prompt. A second press opens the matching System Settings pane. Setup updates within a second of each change; shortcuts, focus tracking and paste start without reopening said. If Setup also lists Input Monitoring, allow it the same way.
 3. Let the model finish downloading/verifying. Try a scratch dictation in Setup before inserting into another app.
 
 | Action | Default shortcut |
@@ -16,7 +16,7 @@ Build the artifacts with [packaging instructions](README.md). Recognition runs l
 
 Hold the dictation or interactive shortcut to talk and release to finish. A quick tap starts toggle recording; the next press stops it. Escape cancels during recording. Insert last never presses Enter.
 
-All three shortcuts are editable in Settings. Interactive review has its own shortcut; Shift is not reserved. Rebuilding an ad-hoc bundle can invalidate permission grants, so re-enable the exact installed app after an upgrade. For autostart, add said to **General → Login Items → Open at Login**.
+All three shortcuts are editable in Settings. Interactive review has its own shortcut; Shift is not reserved. macOS ties grants to the app's signature. Builds signed with the same identity keep them; an ad-hoc build loses them on every rebuild. If Accessibility looks on in System Settings but Setup still says denied, run `tccutil reset Accessibility io.github.avgvstvs96.said`, then press **Allow** again. For autostart, add said to **General → Login Items → Open at Login**.
 
 Live microphone, permissions, focus and paste acceptance remains pending in a separate test account. See the [manual checklist](../crates/platform/macos/MANUAL-CHECKLIST.md).
 

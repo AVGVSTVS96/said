@@ -22,6 +22,8 @@ pub struct Desktop {
     settings: Option<Settings>,
     #[cfg(target_os = "linux")]
     input_status: Vec<String>,
+    #[cfg(target_os = "macos")]
+    checked: Option<(std::time::Instant, macos::permissions::Permissions)>,
 }
 impl Desktop {
     #[cfg(target_os = "linux")]
@@ -142,18 +144,38 @@ impl HostPlatform for Desktop {
                     native.set_shortcuts(shortcuts)?;
                 }
             } else {
-                match MacosPlatform::start(shortcuts, configure_overlay) {
-                    Ok(native) => {
-                        self.native = Some(native);
-                        self.error = None;
-                    }
-                    Err(error) => self.error = Some(error.to_string()),
-                }
+                self.native = Some(MacosPlatform::start(shortcuts, configure_overlay)?);
             }
+            self.checked = Some((
+                std::time::Instant::now(),
+                macos::permissions::Permissions::check(),
+            ));
         }
         self.hotkey = settings.hotkey.clone();
         self.settings = Some(settings.clone());
         Ok(())
+    }
+    fn refresh(&mut self) -> bool {
+        #[cfg(target_os = "macos")]
+        {
+            if self
+                .checked
+                .is_some_and(|(at, _)| at.elapsed() < std::time::Duration::from_secs(1))
+            {
+                return false;
+            }
+            let shown = (self.permissions(), self.instructions());
+            let permissions = macos::permissions::Permissions::check();
+            if let Some(native) = &mut self.native {
+                native.refresh(permissions);
+            }
+            self.checked = Some((std::time::Instant::now(), permissions));
+            shown != (self.permissions(), self.instructions())
+        }
+        #[cfg(target_os = "linux")]
+        {
+            false
+        }
     }
     fn release_observable(&self) -> bool {
         #[cfg(target_os = "linux")]
@@ -237,7 +259,7 @@ impl HostPlatform for Desktop {
                             macos::InputStatus::SecureInput => "Secure Input is enabled",
                             macos::InputStatus::SessionLocked => "Session is locked",
                             macos::InputStatus::PermissionRequired => {
-                                "Enable Accessibility and Input Monitoring in System Settings"
+                                "Turn on Accessibility for said in System Settings"
                             }
                             macos::InputStatus::TapInterrupted => "Hotkey listener was interrupted",
                             macos::InputStatus::Available => unreachable!(),
@@ -259,31 +281,29 @@ impl HostPlatform for Desktop {
         }
         #[cfg(target_os = "macos")]
         {
-            let permission = macos::permissions::Permissions::check();
-            BTreeMap::from([
+            let Some((_, permission)) = self.checked else {
+                return BTreeMap::new();
+            };
+            let status =
+                |granted: bool| String::from(if granted { "authorized" } else { "denied" });
+            let mut permissions = BTreeMap::from([
                 (
                     "microphone".into(),
                     format!("{:?}", permission.microphone).to_ascii_lowercase(),
                 ),
-                (
-                    "accessibility".into(),
-                    if permission.accessibility && permission.event_posting {
-                        "authorized"
-                    } else {
-                        "denied"
-                    }
-                    .into(),
-                ),
-                (
+                ("accessibility".into(), status(permission.accessibility)),
+            ]);
+            if self
+                .native
+                .as_ref()
+                .is_some_and(MacosPlatform::input_monitoring_required)
+            {
+                permissions.insert(
                     "input_monitoring".into(),
-                    if permission.input_monitoring {
-                        "authorized"
-                    } else {
-                        "denied"
-                    }
-                    .into(),
-                ),
-            ])
+                    status(permission.input_monitoring),
+                );
+            }
+            permissions
         }
     }
     fn instructions(&self) -> Vec<String> {
@@ -316,18 +336,26 @@ impl HostPlatform for Desktop {
             }
         }
         #[cfg(target_os = "macos")]
-        {
-            steps.push(if self.native.is_some() {
-                "Hold-to-talk available. Hold a shortcut to talk; tap to toggle."
-            } else {
-                "Shortcuts unavailable. Allow Accessibility and Input Monitoring, then reopen the app."
-            }.into());
-            steps.extend(
-                macos::permissions::Permissions::check()
-                    .recovery()
-                    .into_iter()
-                    .map(str::to_owned),
-            );
+        if let Some((_, permission)) = self.checked {
+            match &self.native {
+                Some(native) if native.shortcuts_running() => steps.push(
+                    "Hold-to-talk available. Hold a shortcut to talk; tap to toggle.".into(),
+                ),
+                Some(native) if native.input_monitoring_required() => steps.push(
+                    "macOS also wants Input Monitoring for shortcuts. Turn on this app in System Settings > Privacy & Security > Input Monitoring; shortcuts start right away.".into(),
+                ),
+                Some(native) if permission.accessibility => {
+                    steps.extend(native.shortcuts_error().map(str::to_owned));
+                }
+                _ => {}
+            }
+            steps.extend(permission.recovery().into_iter().map(str::to_owned));
+            if !permission.accessibility && macos::permissions::accessibility_prompted() {
+                steps.push(format!(
+                    "Already on in System Settings? macOS is remembering a copy of said that was signed differently. Run `tccutil reset Accessibility {}` in Terminal, then press Allow again.",
+                    env!("PRODUCT_BUNDLE_ID")
+                ));
+            }
         }
         if let Some(error) = &self.error {
             steps.push(error.clone());
@@ -423,14 +451,27 @@ pub fn request_permission(permission: &str) -> Result<()> {
     }
     #[cfg(target_os = "macos")]
     {
-        if permission == "microphone" {
-            crate::permissions::microphone();
+        use macos::permissions::{self, MicrophonePermission};
+        let prompted = match permission {
+            "microphone" => {
+                let first = permissions::Permissions::check().microphone
+                    == MicrophonePermission::NotDetermined;
+                if first {
+                    crate::permissions::microphone();
+                }
+                first
+            }
+            "accessibility" => permissions::prompt_accessibility(),
+            "input_monitoring" => permissions::prompt_input_monitoring(),
+            _ => return Err("unknown permission".into()),
+        };
+        if prompted {
             return Ok(());
         }
         let pane = match permission {
+            "microphone" => "Privacy_Microphone",
             "accessibility" => "Privacy_Accessibility",
-            "input_monitoring" => "Privacy_ListenEvent",
-            _ => return Err("unknown permission".into()),
+            _ => "Privacy_ListenEvent",
         };
         std::process::Command::new("open")
             .arg(format!(

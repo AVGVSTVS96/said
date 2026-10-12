@@ -26,6 +26,10 @@ pub trait HostPlatform: Platform {
     fn poll(&mut self) -> Vec<SessionEvent> {
         vec![]
     }
+    /// Rechecks grants and starts whatever they now allow; true when published status changed.
+    fn refresh(&mut self) -> bool {
+        false
+    }
     fn release_observable(&self) -> bool {
         false
     }
@@ -75,7 +79,6 @@ pub struct Host<P: HostPlatform, R: Recorder> {
     clock: Instant,
     sequence: u64,
     query: String,
-    focused: Option<Target>,
     external: Option<Target>,
     replaying: BTreeMap<UtteranceId, Sender<()>>,
     _lock: fs::File,
@@ -128,8 +131,9 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         platform.configure(&settings)?;
         let permissions = platform.permissions();
         let instructions = platform.instructions();
-        let focused = platform.focused();
-        let external = focused.clone().filter(|target| !platform.is_self(target));
+        let external = platform
+            .focused()
+            .filter(|target| !platform.is_self(target));
         let (sender, background) = bounded(64);
         let state = HostState {
             models: manifest
@@ -180,7 +184,6 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             clock: Instant::now(),
             sequence: 0,
             query: String::new(),
-            focused,
             external,
             replaying: Default::default(),
             _lock: lock,
@@ -570,20 +573,9 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         {
             client.unload_if_idle(self.model_idle_timeout);
         }
-        let mut events = vec![];
-        let focused = self.platform.focused();
-        if let Some(target) = focused
-            .as_ref()
-            .filter(|target| !self.platform.is_self(target))
-        {
-            self.external = Some(target.clone());
-        }
-        if focused != self.focused {
-            self.focused = focused.clone();
-            events.push(SessionEvent::FocusChanged { target: focused });
-        }
-        events.extend(self.platform.poll());
-        let mut changed = !events.is_empty();
+        let refreshed = self.platform.refresh();
+        let events = self.platform.poll();
+        let mut changed = refreshed || !events.is_empty();
         for event in events {
             let available = match &event {
                 SessionEvent::SessionAvailable => Some(true),

@@ -1,5 +1,34 @@
 # Verification
 
+## 2026-10-12: grants, focus notifications and HID paste
+
+macOS 26.6.1, aarch64-apple-darwin, Rust 1.96.1, scratch copy of the working
+tree, `CARGO_BUILD_JOBS=2`, `nice -n 10`.
+
+```sh
+cargo fmt --all --check
+cargo test --locked -p said-platform --features native
+cargo clippy --locked -p said-platform --features native --all-targets -- -D warnings
+cargo clippy --locked -p said-app --features custom-protocol --all-targets -- -D warnings
+cargo test --locked -p said-app --features custom-protocol
+cargo test --locked -p said-platform --features native permission_report -- --ignored --nocapture
+```
+
+- Format, both clippy runs: pass with warnings denied.
+- Platform tests: 16 passed, 1 ignored (the diagnostic). New: focus changes
+  queue only when the resolved window differs, and departure then return both
+  stay queued; recovery text never asks for a relaunch or Input Monitoring.
+- Host tests on macOS: unit 2 passed; end-to-end 1 passed, 1 ignored (model);
+  host regressions 9 passed.
+- Passive diagnostic ran in an SSH session, whose grants differ from the app's.
+
+Not established: that a filtering session tap starts with Accessibility alone on
+this macOS version, live focus notifications, HID paste delivery, the
+Accessibility/Input Monitoring prompts, or `packaging/macos-identity.sh` trust
+setup. Those need the [manual checklist](MANUAL-CHECKLIST.md) on a built bundle.
+
+## 2026-10-10
+
 2026-10-10, macOS 26.6.1, aarch64-apple-darwin, Rust 1.96.1.
 Implementation revision: `0678bb4`. Includes core/audio from master `ab57382`.
 

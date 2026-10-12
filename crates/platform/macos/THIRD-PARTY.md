@@ -2,6 +2,8 @@
 
 Command-modified layout scanning follows Handy's MIT macOS input implementation:
 https://github.com/cjpais/Handy/blob/48a3d8e9ee456c1c6a3b7223779271c457890b4d/src-tauri/src/input.rs.
+Posting the paste chord into the system event stream with Command held for about 100 ms,
+and asking only for Microphone and Accessibility, follow the same Handy approach.
 
 MIT License
 

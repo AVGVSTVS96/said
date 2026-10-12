@@ -40,6 +40,17 @@ unsafe extern "C" {
         external: bool,
     ) -> Ref;
     pub fn CFDataGetBytePtr(data: Ref) -> *const u8;
+    pub fn CFDictionaryCreate(
+        allocator: Ref,
+        keys: *const Ref,
+        values: *const Ref,
+        count: isize,
+        key_callbacks: *const c_void,
+        value_callbacks: *const c_void,
+    ) -> Ref;
+    pub static kCFTypeDictionaryKeyCallBacks: c_void;
+    pub static kCFTypeDictionaryValueCallBacks: c_void;
+    pub static kCFBooleanTrue: Ref;
     pub fn CFMachPortCreateRunLoopSource(allocator: Ref, port: Ref, order: isize) -> Ref;
     pub fn CFMachPortInvalidate(port: Ref);
     pub fn CFRunLoopGetCurrent() -> Ref;
@@ -54,6 +65,8 @@ unsafe extern "C" {
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
     pub fn AXIsProcessTrusted() -> bool;
+    pub fn AXIsProcessTrustedWithOptions(options: Ref) -> bool;
+    pub static kAXTrustedCheckOptionPrompt: Ref;
     pub fn CGSessionCopyCurrentDictionary() -> Ref;
     pub fn AXUIElementCreateApplication(pid: c_int) -> Ref;
     pub fn AXObserverCreate(pid: c_int, callback: ObserverCallback, observer: *mut Ref) -> i32;
@@ -69,7 +82,7 @@ unsafe extern "C" {
     pub fn AXUIElementPerformAction(element: Ref, action: Ref) -> i32;
     pub fn AXUIElementSetMessagingTimeout(element: Ref, seconds: f32) -> i32;
     pub fn CGPreflightListenEventAccess() -> bool;
-    pub fn CGPreflightPostEventAccess() -> bool;
+    pub fn CGRequestListenEventAccess() -> bool;
     pub fn CGEventTapCreate(
         location: u32,
         placement: u32,
@@ -86,7 +99,7 @@ unsafe extern "C" {
     #[cfg(test)]
     pub fn CGEventSetIntegerValueField(event: Ref, field: u32, value: i64);
     pub fn CGEventCreateKeyboardEvent(source: Ref, key: u16, down: bool) -> Ref;
-    pub fn CGEventPostToPid(pid: c_int, event: Ref);
+    pub fn CGEventPost(location: u32, event: Ref);
 }
 
 #[link(name = "Carbon", kind = "framework")]

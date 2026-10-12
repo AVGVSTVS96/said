@@ -1,131 +1,58 @@
 use std::ptr::null_mut;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use said_core::{Result, Target};
 
 use super::decoder::COMMAND;
 use super::ffi::{self, Owned, Ref};
-use super::focus::FocusChanges;
+use super::focus::Focus;
 use super::{objc, permissions};
 
-struct WindowIdentity {
-    pid: i32,
-    target: Target,
-    element: Owned,
-    application: objc::Retained,
-}
-// AX references may cross threads; all registry and AppKit work is serialized on the main queue.
-unsafe impl Send for WindowIdentity {}
-#[derive(Default)]
-struct Registry {
-    next: u64,
-    windows: Vec<WindowIdentity>,
-}
+const HID_EVENT_TAP: u32 = 0;
+const COMMAND_KEY: u16 = 55;
+const RETURN_KEY: u16 = 36;
+
 #[derive(Default)]
 pub struct Desktop {
-    registry: Mutex<Registry>,
-    changes: FocusChanges,
-}
-
-fn attribute(element: Ref, name: &str) -> Result<Owned> {
-    let name = Owned::string(name);
-    let mut value = null_mut();
-    let status = unsafe { ffi::AXUIElementCopyAttributeValue(element, name.0, &mut value) };
-    if status != 0 {
-        return Err(format!("Cannot read focused-window identity (Accessibility error {status}). Enable Accessibility or use Copy and paste manually.").into());
-    }
-    Owned::new(value)
+    focus: Focus,
 }
 
 impl Desktop {
-    pub fn focused(&self) -> Result<Target> {
-        objc::main_thread(|| objc::autorelease(|| self.focused_main()))
+    pub fn observing(&self) -> bool {
+        self.focus.observing()
     }
-    fn focused_main(&self) -> Result<Target> {
-        if !unsafe { ffi::AXIsProcessTrusted() } {
-            return Err("Enable this signed app in System Settings > Privacy & Security > Accessibility, then quit and reopen it.".into());
-        }
-        self.changes.observe()?;
-        unsafe {
-            let workspace = objc::send::<Ref>(objc::class(c"NSWorkspace"), c"sharedWorkspace");
-            let app = objc::send::<Ref>(workspace, c"frontmostApplication");
-            if app.is_null() {
-                return Err("No focused application".into());
-            }
-            let pid: i32 = objc::send(app, c"processIdentifier");
-            let app_id = objc::string(objc::send(app, c"bundleIdentifier"))
-                .unwrap_or_else(|| format!("pid:{pid}"));
-            let name = objc::string(objc::send(app, c"localizedName"))
-                .filter(|name| !name.is_empty())
-                .unwrap_or_else(|| app_id.clone());
-            let application = Owned::new(ffi::AXUIElementCreateApplication(pid))?;
-            ffi::AXUIElementSetMessagingTimeout(application.0, 0.2);
-            let window = attribute(application.0, "AXFocusedWindow")?;
-            let mut registry = self.registry.lock().unwrap();
-            if let Some(existing) = registry.windows.iter().find(|entry| {
-                entry.pid == pid
-                    && !objc::send::<bool>(entry.application.0, c"isTerminated")
-                    && entry.target.app_id == app_id
-                    && ffi::CFEqual(entry.element.0, window.0)
-            }) {
-                return Ok(Target {
-                    name,
-                    ..existing.target.clone()
-                });
-            }
-            registry.next += 1;
-            let target = Target {
-                app_id,
-                window_id: format!("{pid}:{}", registry.next),
-                name,
-            };
-            registry.windows.push(WindowIdentity {
-                pid,
-                target: target.clone(),
-                element: window,
-                application: objc::Retained::new(app),
-            });
-            Ok(target)
-        }
+    pub fn observe(&self) -> Result<()> {
+        objc::main_thread(|| objc::autorelease(|| self.focus.observe()))
+    }
+    pub fn focused(&self) -> Result<Target> {
+        objc::main_thread(|| objc::autorelease(|| self.focus.focused()))
     }
     pub fn focus_changes(&self) -> Vec<Option<Target>> {
-        self.changes.events()
-    }
-    fn pid(&self, target: &Target) -> Result<i32> {
-        self.registry
-            .lock()
-            .unwrap()
-            .windows
-            .iter()
-            .find(|entry| entry.target.same_window(target))
-            .map(|entry| entry.pid)
-            .ok_or_else(|| {
-                "Target window is no longer known; insert into the current app explicitly.".into()
-            })
+        self.focus.events()
     }
     fn check_focus(&self, target: &Target) -> Result<()> {
-        if self.focused_main()?.same_window(target) {
+        if self.focus.focused()?.same_window(target) {
             Ok(())
         } else {
             Err("Focus moved. Text is saved; use Insert last or paste manually.".into())
         }
     }
+    fn ready(&self, target: &Target) -> Result<()> {
+        if permissions::secure_input_enabled() || permissions::session_locked() {
+            return Err("Input unavailable while Secure Input or session lock is active. Text is saved; paste after unlocking.".into());
+        }
+        self.check_focus(target)
+    }
     pub fn focus(&self, target: &Target) -> Result<()> {
         objc::main_thread(|| {
             objc::autorelease(|| unsafe {
-                let (pid, window, running) = {
-                    let registry = self.registry.lock().unwrap();
-                    let entry = registry
-                        .windows
-                        .iter()
-                        .find(|entry| entry.target.same_window(target))
-                        .ok_or("Target window is no longer known")?;
-                    (entry.pid, entry.element.0, entry.application.0)
-                };
                 if !ffi::AXIsProcessTrusted() {
                     return Err("Accessibility is required to refocus the target window".into());
                 }
+                let (pid, window, running) = self
+                    .focus
+                    .window(target)
+                    .ok_or("Target window is no longer known")?;
                 if running.is_null() || objc::send::<bool>(running, c"isTerminated") {
                     return Err("Target app closed".into());
                 }
@@ -165,48 +92,44 @@ impl Desktop {
         if text.is_empty() {
             return Ok(());
         }
-        objc::main_thread(|| {
-            objc::autorelease(|| unsafe {
-                if permissions::secure_input_enabled() || permissions::session_locked() {
-                    return Err("Input unavailable while Secure Input or session lock is active. Text is saved; paste after unlocking.".into());
-                }
-                if !ffi::AXIsProcessTrusted() || !ffi::CGPreflightPostEventAccess() {
-                    return Err("Enable this signed app in System Settings > Privacy & Security > Accessibility, then quit and reopen it.".into());
-                }
-                self.check_focus(target)?;
-                let pid = self.pid(target)?;
+        let key = objc::main_thread(|| {
+            objc::autorelease(|| {
+                self.ready(target)?;
                 let key = command_v_keycode()?;
-                let down = keyboard_event(key, true, COMMAND)?;
-                let up = keyboard_event(key, false, COMMAND)?;
-                let enter = if send {
-                    Some((keyboard_event(36, true, 0)?, keyboard_event(36, false, 0)?))
-                } else {
-                    None
-                };
                 write_clipboard(text)?;
-                self.check_focus(target)?;
-                if permissions::secure_input_enabled() || permissions::session_locked() {
-                    return Err("Input became unavailable. Text remains on the clipboard.".into());
-                }
-                self.changes.post(target, automatic, || {
-                    ffi::CGEventPostToPid(pid, down.0);
-                    ffi::CGEventPostToPid(pid, up.0);
-                    Ok(())
-                })?;
-                if let Some((down, up)) = enter {
-                    std::thread::sleep(Duration::from_millis(50));
-                    self.check_focus(target)?;
-                    if permissions::secure_input_enabled() || permissions::session_locked() {
-                        return Err(
-                            "Paste posted; Enter withheld because input became unavailable.".into(),
-                        );
-                    }
-                    ffi::CGEventPostToPid(pid, down.0);
-                    ffi::CGEventPostToPid(pid, up.0);
-                }
-                Ok(())
+                Result::Ok(key)
             })
-        })
+        })?;
+        std::thread::sleep(Duration::from_millis(50));
+        objc::main_thread(|| objc::autorelease(|| self.ready(target)))
+            .map_err(|error| format!("{error} Text remains on the clipboard."))?;
+        self.focus.post(target, automatic, || {
+            post(&[
+                keyboard_event(COMMAND_KEY, true, COMMAND)?,
+                keyboard_event(key, true, COMMAND)?,
+                keyboard_event(key, false, COMMAND)?,
+            ]);
+            // Hold Command briefly like a person; some apps read the modifier state after V.
+            std::thread::sleep(Duration::from_millis(100));
+            post(&[keyboard_event(COMMAND_KEY, false, 0)?]);
+            Ok(())
+        })?;
+        if send {
+            std::thread::sleep(Duration::from_millis(50));
+            objc::main_thread(|| objc::autorelease(|| self.ready(target)))
+                .map_err(|error| format!("Paste posted; Enter withheld. {error}"))?;
+            post(&[
+                keyboard_event(RETURN_KEY, true, 0)?,
+                keyboard_event(RETURN_KEY, false, 0)?,
+            ]);
+        }
+        Ok(())
+    }
+}
+
+fn post(events: &[Owned]) {
+    for event in events {
+        unsafe { ffi::CGEventPost(HID_EVENT_TAP, event.0) };
     }
 }
 
