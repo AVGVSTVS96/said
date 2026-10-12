@@ -57,13 +57,15 @@ impl Pipeline {
     fn emit(&mut self) -> Result<()> {
         self.writer.append(&self.pcm)?;
         if !self.receiver_gone && self.sender.len() < FRAME_QUEUE {
-            let level = (self
-                .pcm
-                .iter()
-                .map(|&s| (s as f64 / 32768.0).powi(2))
-                .sum::<f64>()
-                / self.pcm.len() as f64)
-                .sqrt() as f32;
+            let level = crate::level(
+                (self
+                    .pcm
+                    .iter()
+                    .map(|&s| (s as f64 / 32768.0).powi(2))
+                    .sum::<f64>()
+                    / self.pcm.len() as f64)
+                    .sqrt(),
+            );
             let event = AudioEvent::Frame(AudioFrame {
                 id: self.id,
                 pcm: self.pcm.clone(),

@@ -1,7 +1,7 @@
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use said_core::{AudioEvent, AudioFrame, InputDevice, Result, UtteranceId};
 
-use crate::Recorder;
+use crate::{Preview, Recorder};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RecorderCall {
@@ -57,6 +57,17 @@ impl Recorder for FakeRecorder {
         }
         self.active = Some((id, sender));
         Ok(receiver)
+    }
+
+    fn preview(&self, device: Option<&str>) -> Result<Preview> {
+        if device.is_some_and(|device| device != "synthetic") {
+            return Err("selected input device is unavailable".into());
+        }
+        let (sender, levels) = unbounded();
+        for (_, level) in &self.frames {
+            sender.send(Ok(*level))?;
+        }
+        Ok(Preview::new(levels, None))
     }
 
     fn stop(&mut self) -> Result<()> {

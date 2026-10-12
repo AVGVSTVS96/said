@@ -378,10 +378,16 @@ pub enum HostAction {
     },
     Start {
         mode: Mode,
-        scratch: bool,
     },
     Stop,
     SetupComplete,
+    Trial {
+        armed: bool,
+    },
+    Preview {
+        active: bool,
+        microphone: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -413,8 +419,19 @@ pub struct HostState {
     pub disk_bytes: u64,
     pub disk_error: Option<String>,
     pub unavailable: Option<String>,
-    pub scratch: Option<UtteranceId>,
+    pub trial: Option<UtteranceId>,
+    pub input: InputMode,
+    pub preview: Option<f32>,
+    pub preview_error: Option<String>,
     pub setup_complete: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum InputMode {
+    Hold,
+    Toggle,
+    Clipboard,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -422,7 +439,7 @@ pub struct HostSnapshot {
     #[ts(type = "number")]
     pub sequence: u64,
     pub sessions: Vec<SessionView>,
-    pub history: Vec<Utterance>,
+    pub history: Option<Vec<Utterance>>,
     pub settings: Settings,
     pub devices: Vec<InputDevice>,
     pub host: HostState,

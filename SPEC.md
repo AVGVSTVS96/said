@@ -20,7 +20,7 @@ Interactive recording opens a normal editor. Edited regions remain user-owned wh
 
 History provides full-text search, playback, editing, copy, insertion, recognition retry and deletion. Insert last uses the latest stored transcript, including explicit edits. Deletion removes the row and search entry; the WAV is removed after its last referencing row is gone. File-deletion failure can leave an orphan for startup cleanup.
 
-Setup selects a microphone, verifies/downloads the model, configures the shortcut, reports input mode and permissions, and records into a local scratch field without pasting into another application. macOS grants are requested explicitly. Linux hold needs readable physical keyboards or a working GlobalShortcuts portal. Joining `input` requires a fresh login and grants keyboard-device access.
+Setup is a step flow: microphone, model, permissions (macOS), shortcut, try it. Any step can be opened from the step list. The microphone step saves the selected device immediately and shows a live level from a preview stream that writes nothing to disk. The preview runs only while that step is shown and its window has focus, follows the selected device and yields the device to capture while recording. Levels are RMS mapped to 0..1 over -60..0 dBFS. The try step arms a trial while it has focus: the next quick dictation whose target is said's own window (or that has no target in clipboard-only mode) runs the normal hotkey, overlay, recognition, save, focus-check and paste path into a practice field, with per-step checks. Its history row and audio are deleted once it is delivered, so trials never appear in history or Insert last; a crash mid-trial can leave a recovered row. A delivered trial completes setup. Finish setup always shows what still blocks it (model, required grants, an invalid shortcut). macOS grants are requested explicitly. Linux hold needs readable physical keyboards or a working GlobalShortcuts portal. Joining `input` requires a fresh login and grants keyboard-device access.
 
 ## Failure behavior
 
@@ -52,7 +52,7 @@ hotkeys / focus -> host -> pure session reducer -> ordered effects
                     +-> SQLite save -> focus check -> platform paste
 ```
 
-Tauri 2 hosts five React windows: overlay, interactive, history, settings and setup. The Rust host owns capture, persistence and platform input. The renderer sends typed actions and receives sequenced snapshots through Tauri commands/channels. Shared Rust types are exported to TypeScript.
+Tauri 2 hosts five React windows: overlay, interactive, history, settings and setup. The Rust host owns capture, persistence and platform input. The renderer sends typed actions and receives sequenced snapshots through Tauri commands/channels. Snapshots carry history only when it changed. Level-only changes are coalesced to about 30 per second and sent only to the overlay, interactive and setup windows. Input devices are enumerated at startup and while the microphone preview runs; permissions and input instructions are refreshed once per second. Shared Rust types are exported to TypeScript.
 
 Recognition runs in a child process of the same host binary (`--worker`). Native runtime failure is isolated from capture. The host stages the packaged compressed runtime archive before provisioning its model. The recognition path needs no Python and runs locally.
 

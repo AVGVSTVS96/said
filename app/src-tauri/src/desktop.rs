@@ -170,6 +170,18 @@ impl HostPlatform for Desktop {
             true
         }
     }
+    fn clipboard_only(&self) -> bool {
+        #[cfg(target_os = "linux")]
+        {
+            self.native
+                .as_ref()
+                .is_some_and(|native| native.mode() == linux::Mode::Clipboard)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            false
+        }
+    }
     fn availability(&mut self, available: bool) {
         #[cfg(target_os = "linux")]
         if let Some(native) = &mut self.native {

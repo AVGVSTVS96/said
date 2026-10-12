@@ -14,12 +14,12 @@ pub fn control<P: HostPlatform, R: Recorder>(
 ) -> Result<String> {
     use said_platform::linux::control::ControlCommand as C;
     match command {
-        C::Start => host.start(Mode::Quick, false)?,
+        C::Start => host.start(Mode::Quick)?,
         C::Stop => host.stop()?,
         C::HistorySearch { query } => {
             return Ok(serde_json::to_string(&host.history.search(&query)?)?);
         }
-        C::Status => return Ok(serde_json::to_string(&host.snapshot()?)?),
+        C::Status => return Ok(serde_json::to_string(&host.snapshot(true)?)?),
         command => {
             let (hotkey, observable) = match command {
                 C::Hotkey | C::Toggle => (said_core::Hotkey::Down, false),

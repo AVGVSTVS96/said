@@ -1,6 +1,6 @@
 use crate::storage::{Paths, atomic_write, disk_bytes};
 use crossbeam_channel::{Receiver, Sender, bounded};
-use said_audio::Recorder;
+use said_audio::{Preview, Recorder};
 use said_core::{history::SqliteHistory, *};
 use said_engine::{
     Engine,
@@ -9,7 +9,7 @@ use said_engine::{
 };
 use said_platform::Platform;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fs,
     path::Path,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -29,6 +29,9 @@ pub trait HostPlatform: Platform {
     fn release_observable(&self) -> bool {
         false
     }
+    fn clipboard_only(&self) -> bool {
+        false
+    }
     fn permissions(&self) -> BTreeMap<String, String> {
         BTreeMap::new()
     }
@@ -44,6 +47,17 @@ impl HostPlatform for said_platform::fake::FakePlatform {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Change {
+    None,
+    Level,
+    State,
+}
+
+const PREVIEW_RETRY: Duration = Duration::from_secs(2);
+const DEVICE_REFRESH: Duration = Duration::from_secs(5);
+const CAPABILITY_REFRESH: Duration = Duration::from_secs(1);
 
 pub enum Background {
     Download(DownloadState),
@@ -78,9 +92,27 @@ pub struct Host<P: HostPlatform, R: Recorder> {
     focused: Option<Target>,
     external: Option<Target>,
     replaying: BTreeMap<UtteranceId, Sender<()>>,
+    devices: Vec<InputDevice>,
+    devices_at: Instant,
+    capabilities_at: Instant,
+    preview_request: Option<Option<String>>,
+    preview: Option<(Option<String>, Preview)>,
+    preview_retry: Option<Instant>,
+    trial_armed: bool,
+    trials: BTreeSet<UtteranceId>,
+    history_revision: u64,
     _lock: fs::File,
 }
 
+fn input_mode(platform: &impl HostPlatform) -> InputMode {
+    if platform.clipboard_only() {
+        InputMode::Clipboard
+    } else if platform.release_observable() {
+        InputMode::Hold
+    } else {
+        InputMode::Toggle
+    }
+}
 pub fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -154,9 +186,13 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             disk_bytes: 0,
             disk_error: None,
             unavailable: None,
-            scratch: None,
+            trial: None,
+            input: input_mode(&platform),
+            preview: None,
+            preview_error: None,
             setup_complete: paths.config.join("setup-complete").is_file(),
         };
+        let devices = recorder.list_devices().unwrap_or_default();
         let history = SqliteHistory::open(&paths.data)?;
         Ok(Self {
             platform,
@@ -183,6 +219,15 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             focused,
             external,
             replaying: Default::default(),
+            devices,
+            devices_at: Instant::now(),
+            capabilities_at: Instant::now(),
+            preview_request: None,
+            preview: None,
+            preview_retry: None,
+            trial_armed: false,
+            trials: BTreeSet::new(),
+            history_revision: 0,
             _lock: lock,
             session: Session::default(),
         })
@@ -246,12 +291,8 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         }
         Ok(())
     }
-    fn context(&self, mode: Mode, scratch: bool) -> StartContext {
-        let target = if scratch {
-            None
-        } else {
-            self.platform.focused()
-        };
+    fn context(&self, mode: Mode) -> StartContext {
+        let target = self.platform.focused();
         let send = target
             .as_ref()
             .and_then(|t| self.settings.apps.get(&t.app_id))
@@ -265,7 +306,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             send,
         }
     }
-    pub fn start(&mut self, mode: Mode, scratch: bool) -> Result<()> {
+    pub fn start(&mut self, mode: Mode) -> Result<()> {
         if let Some(reason) = self.session.unavailable_reason() {
             return Err(reason.into());
         }
@@ -292,11 +333,26 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 self.session.dismiss(id);
             }
         }
-        let context = self.context(mode, scratch);
-        if scratch {
-            self.state.scratch = Some(context.id);
+        let context = self.context(mode);
+        let trial = self.trial(&context);
+        let id = context.id;
+        self.event(SessionEvent::HotkeyDown(context))?;
+        self.adopt_trial(id, trial);
+        Ok(())
+    }
+    fn trial(&self, context: &StartContext) -> bool {
+        self.trial_armed
+            && context.mode == Mode::Quick
+            && context
+                .target
+                .as_ref()
+                .is_none_or(|target| self.platform.is_self(target))
+    }
+    fn adopt_trial(&mut self, id: UtteranceId, trial: bool) {
+        if trial && self.session.views().any(|view| view.id == id) {
+            self.state.trial = Some(id);
+            self.trials.insert(id);
         }
-        self.event(SessionEvent::HotkeyDown(context))
     }
     pub fn stop(&mut self) -> Result<()> {
         if let Some((id, _)) = &self.capture {
@@ -308,23 +364,25 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         if self.client.is_none() && matches!(hotkey, Hotkey::Down | Hotkey::Interactive) {
             return Err("model is not ready".into());
         }
-        let context = self.context(
-            if hotkey == Hotkey::Interactive {
-                Mode::Interactive
-            } else {
-                Mode::Quick
-            },
-            false,
-        );
+        let context = self.context(if hotkey == Hotkey::Interactive {
+            Mode::Interactive
+        } else {
+            Mode::Quick
+        });
+        let trial = self.trial(&context);
+        let id = context.id;
         let effects = self.session.hotkey(
             hotkey,
             Some(context),
             self.clock.elapsed().as_millis() as u64,
             observable,
         );
-        self.execute(effects)
+        self.execute(effects)?;
+        self.adopt_trial(id, trial);
+        Ok(())
     }
     pub fn ui(&mut self, action: UiAction) -> Result<()> {
+        self.history_revision += 1;
         if let UiAction::Edit { id, text } = &action {
             let view = self.session.views().find(|view| view.id == *id);
             match view.map(|view| (view.mode, view.phase)) {
@@ -420,6 +478,15 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         Ok(())
     }
     pub fn action(&mut self, action: HostAction) -> Result<()> {
+        if matches!(
+            action,
+            HostAction::HistorySearch { .. }
+                | HostAction::HistoryDelete { .. }
+                | HostAction::HistoryRetention { .. }
+                | HostAction::HistoryRetry { .. }
+        ) {
+            self.history_revision += 1;
+        }
         match action {
             HostAction::SettingsSave { settings } => {
                 if self.capture.is_some() || !self.engines.is_empty() || !self.replaying.is_empty()
@@ -496,8 +563,21 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 self.history.insert(&row)?;
                 self.event(SessionEvent::Recover { utterance: row })?;
             }
-            HostAction::Start { mode, scratch } => self.start(mode, scratch)?,
+            HostAction::Start { mode } => self.start(mode)?,
             HostAction::Stop => self.stop()?,
+            HostAction::Trial { armed } => self.trial_armed = armed,
+            HostAction::Preview { active, microphone } => {
+                let request = active.then_some(microphone);
+                if request.is_some() && self.preview_request.is_none() {
+                    self.refresh_devices();
+                }
+                if request.is_none() {
+                    self.state.preview_error = None;
+                }
+                self.preview_request = request;
+                self.preview_retry = None;
+                self.poll_preview();
+            }
             HostAction::SetupComplete => {
                 if self.client.is_none() {
                     return Err("model is not ready".into());
@@ -537,18 +617,134 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
     pub fn recording(&self) -> bool {
         self.capture.is_some()
     }
-    pub fn snapshot(&mut self) -> Result<HostSnapshot> {
+    pub fn history_revision(&self) -> u64 {
+        self.history_revision
+    }
+    pub fn refresh_capabilities(&mut self) -> bool {
+        self.capabilities_at = Instant::now();
+        let permissions = self.platform.permissions();
+        let instructions = self.platform.instructions();
+        let input = input_mode(&self.platform);
+        let changed = permissions != self.state.permissions
+            || instructions != self.state.instructions
+            || input != self.state.input;
+        self.state.permissions = permissions;
+        self.state.instructions = instructions;
+        self.state.input = input;
+        changed
+    }
+    fn refresh_devices(&mut self) -> bool {
+        self.devices_at = Instant::now();
+        let devices = self.recorder.list_devices().unwrap_or_default();
+        let changed = devices != self.devices;
+        self.devices = devices;
+        changed
+    }
+    fn poll_preview(&mut self) -> Change {
+        let wanted = self
+            .preview_request
+            .clone()
+            .filter(|_| self.capture.is_none() && self.session.unavailable_reason().is_none());
+        let mut change = Change::None;
+        if self.preview.as_ref().map(|(device, _)| device) != wanted.as_ref() {
+            if self.preview.take().is_some() || self.state.preview.is_some() {
+                self.state.preview = None;
+                change = Change::State;
+            }
+            if let Some(device) = wanted
+                && self.preview_retry.is_none_or(|at| Instant::now() >= at)
+            {
+                match self.recorder.preview(device.as_deref()) {
+                    Ok(preview) => {
+                        self.preview = Some((device, preview));
+                        self.preview_retry = None;
+                        if self.state.preview_error.take().is_some() {
+                            change = Change::State;
+                        }
+                    }
+                    Err(error) => {
+                        self.preview_retry = Some(Instant::now() + PREVIEW_RETRY);
+                        let error = Some(error.to_string());
+                        if self.state.preview_error != error {
+                            self.state.preview_error = error;
+                            change = Change::State;
+                        }
+                    }
+                }
+            }
+        }
+        let Some((_, preview)) = &self.preview else {
+            return change;
+        };
+        let mut level = None;
+        let mut failure = None;
+        for event in preview.levels().try_iter() {
+            match event {
+                Ok(value) => level = Some(level.map_or(value, |peak: f32| peak.max(value))),
+                Err(error) => failure = Some(error),
+            }
+        }
+        if let Some(error) = failure {
+            self.preview = None;
+            self.preview_retry = Some(Instant::now() + PREVIEW_RETRY);
+            self.state.preview = None;
+            self.state.preview_error = Some(error);
+            return Change::State;
+        }
+        if let Some(level) = level {
+            self.state.preview = Some(level);
+            change = change.max(Change::Level);
+        }
+        if self.devices_at.elapsed() >= DEVICE_REFRESH && self.refresh_devices() {
+            change = Change::State;
+        }
+        change
+    }
+    fn forget_trials(&mut self) -> Result<()> {
+        let finished: Vec<_> = self
+            .trials
+            .iter()
+            .copied()
+            .filter(|id| {
+                !self.replaying.contains_key(id)
+                    && !self.session.views().any(|view| {
+                        view.id == *id
+                            && matches!(
+                                view.phase,
+                                Phase::Recording
+                                    | Phase::Finishing
+                                    | Phase::Saving
+                                    | Phase::Pasting
+                            )
+                    })
+            })
+            .collect();
+        for id in finished {
+            self.trials.remove(&id);
+            if self.history.get(id)?.is_some() {
+                self.history.delete(id)?;
+                self.history_revision += 1;
+            }
+        }
+        Ok(())
+    }
+    pub fn snapshot(&mut self, history: bool) -> Result<HostSnapshot> {
         self.sequence += 1;
         self.state.unavailable = self.session.unavailable_reason().map(str::to_owned);
-        self.state.permissions = self.platform.permissions();
-        self.state.instructions = self.platform.instructions();
-        match disk_bytes(&self.paths.data) {
-            Ok(bytes) => {
-                self.state.disk_bytes = bytes;
-                self.state.disk_error = None;
+        let history = if history {
+            match disk_bytes(&self.paths.data) {
+                Ok(bytes) => {
+                    self.state.disk_bytes = bytes;
+                    self.state.disk_error = None;
+                }
+                Err(error) => self.state.disk_error = Some(error.to_string()),
             }
-            Err(error) => self.state.disk_error = Some(error.to_string()),
-        }
+            let mut rows = self.history.search(&self.query)?;
+            rows.retain(|row| !self.trials.contains(&row.id));
+            Some(rows)
+        } else {
+            None
+        };
         let sessions: Vec<_> = self.session.views().cloned().collect();
         self.state
             .notifications
@@ -556,13 +752,13 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
         Ok(HostSnapshot {
             sequence: self.sequence,
             sessions,
-            history: self.history.search(&self.query)?,
+            history,
             settings: self.settings.clone(),
-            devices: self.recorder.list_devices().unwrap_or_default(),
+            devices: self.devices.clone(),
             host: self.state.clone(),
         })
     }
-    pub fn poll(&mut self) -> Result<bool> {
+    pub fn poll(&mut self) -> Result<Change> {
         if self.capture.is_none()
             && self.engines.is_empty()
             && self.replaying.is_empty()
@@ -583,7 +779,14 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             events.push(SessionEvent::FocusChanged { target: focused });
         }
         events.extend(self.platform.poll());
-        let mut changed = !events.is_empty();
+        let mut change = if events.is_empty() {
+            Change::None
+        } else {
+            Change::State
+        };
+        if self.capabilities_at.elapsed() >= CAPABILITY_REFRESH && self.refresh_capabilities() {
+            change = Change::State;
+        }
         for event in events {
             let available = match &event {
                 SessionEvent::SessionAvailable => Some(true),
@@ -604,7 +807,11 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             for _ in 0..128 {
                 match receiver.try_recv() {
                     Ok(event) => {
-                        changed = true;
+                        change = change.max(if matches!(event, AudioEvent::Frame(_)) {
+                            Change::Level
+                        } else {
+                            Change::State
+                        });
                         if let AudioEvent::Error { message, .. } = &event {
                             self.event(SessionEvent::Engine(EngineOutput {
                                 id,
@@ -630,7 +837,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                             .as_ref()
                             .is_some_and(|(current, _)| *current == id)
                         {
-                            changed = true;
+                            change = Change::State;
                             self.capture = None;
                             let _ = self.recorder.stop();
                             self.platform.recording(false);
@@ -650,7 +857,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             for _ in 0..64 {
                 match output.try_recv() {
                     Ok(output) => {
-                        changed = true;
+                        change = Change::State;
                         let terminal =
                             matches!(output.event, EngineEvent::Final | EngineEvent::Error(_));
                         self.event(SessionEvent::Engine(output))?;
@@ -662,7 +869,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     Err(crossbeam_channel::TryRecvError::Empty) => break,
                     Err(crossbeam_channel::TryRecvError::Disconnected) => {
                         if self.engines.contains_key(&id) {
-                            changed = true;
+                            change = Change::State;
                             self.event(SessionEvent::Engine(EngineOutput {
                                 id,
                                 event: EngineEvent::Error(
@@ -677,7 +884,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             }
         }
         for background in self.background.clone().try_iter() {
-            changed = true;
+            change = Change::State;
             match background {
                 Background::Download(progress) => self.state.download = progress,
                 Background::Ready(result) => match result {
@@ -717,7 +924,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 }
             }
         }
-        Ok(changed)
+        Ok(change.max(self.poll_preview()))
     }
     pub fn event(&mut self, event: SessionEvent) -> Result<()> {
         if let SessionEvent::FocusChanged {
@@ -736,6 +943,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             let mut response = None;
             match effect {
                 Effect::Save { utterance } => {
+                    self.history_revision += 1;
                     let result = if utterance.raw_text.is_none() {
                         self.history.insert(&utterance)
                     } else {
@@ -837,8 +1045,11 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 }
                 Effect::AllocateReplay { id } => {
                     let recognition_id = UtteranceId::random();
-                    if self.state.scratch == Some(id) {
-                        self.state.scratch = Some(recognition_id);
+                    if self.trials.contains(&id) {
+                        self.trials.insert(recognition_id);
+                    }
+                    if self.state.trial == Some(id) {
+                        self.state.trial = Some(recognition_id);
                     }
                     response = Some(SessionEvent::ReplayReady { id, recognition_id });
                 }
@@ -898,12 +1109,9 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                         },
                     })
                 }
-                Effect::Copy { id, text } => {
-                    if self.state.scratch != Some(id) {
-                        self.platform.copy(&text)?;
-                    }
-                }
+                Effect::Copy { text, .. } => self.platform.copy(&text)?,
                 Effect::EditHistory { id, text } => {
+                    self.history_revision += 1;
                     response = Some(match self.history.edit(id, &text) {
                         Ok(()) => SessionEvent::EditSaved { id },
                         Err(error) => SessionEvent::EditFailed {
@@ -912,13 +1120,17 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                         },
                     })
                 }
-                Effect::SetStatus { id, status } => self.history.set_status(id, status)?,
+                Effect::SetStatus { id, status } => {
+                    self.history_revision += 1;
+                    self.history.set_status(id, status)?
+                }
                 Effect::LoadLast => {
                     response = Some(SessionEvent::InsertLast {
                         utterance: self.history.last()?,
                     })
                 }
                 Effect::RecordDelivery { id, target, at } => {
+                    self.history_revision += 1;
                     self.history.record_delivery(id, &target, at)?
                 }
                 Effect::Show { .. } => {}
@@ -937,6 +1149,6 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 queue.extend(self.session.reduce(event));
             }
         }
-        Ok(())
+        self.forget_trials()
     }
 }
