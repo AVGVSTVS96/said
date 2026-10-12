@@ -299,8 +299,10 @@ impl HostPlatform for Desktop {
             {
                 steps.push(shortcuts.niri_binds());
             }
-            steps.push("For hold-to-talk: sudo usermod -aG input \"$USER\"; then sign out and back in. These are the same keys as the Niri toggle binds.".into());
             if let Some(native) = &self.native {
+                if native.mode() == linux::Mode::NiriToggle {
+                    steps.push("For hold-to-talk: sudo usermod -aG input \"$USER\"; then sign out and back in. These are the same keys as the Niri toggle binds.".into());
+                }
                 steps.insert(0, match native.mode() {
                     linux::Mode::NiriHold => "Hold-to-talk available. Hold a shortcut to talk; tap to toggle.",
                     linux::Mode::NiriPortal => "Hold-to-talk available through GlobalShortcuts. Hold a shortcut to talk; tap to toggle.",
