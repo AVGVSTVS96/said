@@ -190,10 +190,10 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             session: Session::default(),
         })
     }
-    pub fn install(&mut self) -> Result<()> {
+    pub fn install(&mut self, full: bool) -> Result<()> {
         if matches!(
             self.state.download.state.as_str(),
-            "downloading" | "loading"
+            "verifying" | "downloading" | "loading"
         ) {
             return Ok(());
         }
@@ -201,16 +201,22 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             return Err("finish recognition before verifying the model".into());
         }
         self.client = None;
-        self.state.download.state = "downloading".into();
+        self.state.download.state = "verifying".into();
         self.state.download.error = None;
         let sender = self.sender.clone();
         let models = self.paths.models.clone();
         let model = self.settings.engine.clone();
         std::thread::spawn(move || {
             let result = (|| {
-                crate::download::install(&Manifest::bundled()?, &model, &models, |progress| {
-                    let _ = sender.try_send(Background::Download(progress));
-                })?;
+                crate::download::install(
+                    &Manifest::bundled()?,
+                    &model,
+                    &models,
+                    full,
+                    |progress| {
+                        let _ = sender.try_send(Background::Download(progress));
+                    },
+                )?;
                 let _ = sender.send(Background::Download(DownloadState {
                     state: "loading".into(),
                     file: String::new(),
@@ -448,11 +454,11 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                 if changed {
                     self.client = None;
                     self.state.download.state = "missing".into();
-                    self.install()?;
+                    self.install(false)?;
                 }
                 self.state.instructions = self.platform.instructions();
             }
-            HostAction::DownloadModel => self.install()?,
+            HostAction::DownloadModel => self.install(true)?,
             HostAction::Permission { permission } => {
                 crate::desktop::request_permission(&permission)?
             }

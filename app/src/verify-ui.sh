@@ -96,6 +96,41 @@ browser eval --stdin <<'JS'
 JS
 browser set media light
 
+browser open "$origin/?demo=1&screen=settings&controls=0"
+browser wait --fn "document.title.startsWith('Settings')"
+browser find role button click --name 'Dictation shortcut: Super+Z'
+browser press Control+k
+browser eval --stdin <<'JS'
+(() => {
+  const button = document.querySelector('button.shortcut');
+  if (button.textContent !== 'Ctrl+K' || !document.body.textContent.includes('Unsaved changes')) throw Error('Recorder did not capture Ctrl+K');
+  return {pass: 'Shortcut recorder captures a pressed chord'};
+})()
+JS
+browser find role button click --name 'Dictation shortcut: Ctrl+K'
+browser press Escape
+browser eval --stdin <<'JS'
+(() => {
+  if (document.querySelector('button.shortcut').textContent !== 'Ctrl+K') throw Error('Escape changed the shortcut');
+  return {pass: 'Escape cancels recording'};
+})()
+JS
+browser find role button click --name 'Remove Text editor'
+browser eval --stdin <<'JS'
+(() => {
+  const option = document.querySelector('select[aria-label="App to add"] option');
+  if (option?.value !== 'example.editor' || document.querySelector('[aria-label="Paste shortcut for example.editor"]')) throw Error('Removed app is not offered from recent targets');
+  return {pass: 'Removed apps can be re-added from recent paste targets'};
+})()
+JS
+browser find role button click --name 'Add app'
+browser eval --stdin <<'JS'
+(() => {
+  if (!document.querySelector('[aria-label="Paste shortcut for example.editor"]')) throw Error('Recent app was not added');
+  return {pass: 'Recent target added as an app rule'};
+})()
+JS
+
 browser set viewport 1280 800
 for theme in light dark; do
   browser set media "$theme"

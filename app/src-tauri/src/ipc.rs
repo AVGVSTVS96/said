@@ -111,6 +111,15 @@ pub fn reply_control(
         .try_send(result.map_err(|error| error.to_string()));
 }
 
+pub fn notice(app: &tauri::AppHandle, message: &str) {
+    eprintln!("{message}");
+    if let Some(window) = app.get_webview_window("setup") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit_to("setup", "notice", message);
+}
+
 pub fn tray_icon(recording: bool) -> tauri::image::Image<'static> {
     match (cfg!(target_os = "macos"), recording) {
         (true, false) => tauri::include_image!("icons/tray/iconTemplate@2x.png"),
@@ -126,7 +135,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
         move |requests| {
             let recorder = CpalRecorder::new(paths.data.join("audio"));
             let mut host = Host::open(Desktop::default(), recorder, paths)?;
-            host.install()?;
+            host.install(false)?;
             if let Some(overlay) = app
                 .get_webview_window("overlay")
                 .map(|view| view.as_ref().window().clone())
@@ -145,7 +154,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                 let mut changed = host.poll()?;
                 for hotkey in host.platform.hotkeys().try_iter() {
                     if let Err(error) = host.hotkey(hotkey, host.platform.release_observable()) {
-                        eprintln!("{error}");
+                        notice(&app, &error.to_string());
                     }
                     changed = true;
                 }
@@ -158,9 +167,10 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                             C::Hotkey | C::HotkeyInteractive | C::HotkeyInsertLast
                         ) {
                             match host.platform.control_hotkey(command) {
-                                Some((hotkey, observable)) => {
-                                    host.hotkey(hotkey, observable).map(|_| "applied".into())
-                                }
+                                Some((hotkey, observable)) => host
+                                    .hotkey(hotkey, observable)
+                                    .map(|_| "applied".into())
+                                    .inspect_err(|error| notice(&app, &error.to_string())),
                                 None => Ok("handled by native key edges".into()),
                             }
                         } else {

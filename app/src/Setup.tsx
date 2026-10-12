@@ -54,7 +54,7 @@ export function Setup({
   const download = host?.download;
   const ready = download?.state === "ready";
   const recording = scratchSession?.phase === "recording";
-  const busy = download?.state === "downloading" || download?.state === "loading";
+  const busy = download?.state === "verifying" || download?.state === "downloading" || download?.state === "loading";
   async function save() {
     if (configured && !invalidShortcut)
       await send({
@@ -100,7 +100,7 @@ export function Setup({
             </span>
             <span className="actions">
               <span className="quiet" role="status">
-                {({ missing: "Download needed", downloading: "Downloading", loading: "Loading model", ready: "Ready", failed: "Download failed" } as Record<string, string>)[download?.state ?? ""] ?? "Waiting"}
+                {({ missing: "Download needed", verifying: "Verifying", downloading: "Downloading", loading: "Loading model", ready: "Ready", failed: "Download failed" } as Record<string, string>)[download?.state ?? ""] ?? "Waiting"}
               </span>
               <button
                 disabled={!host || busy}

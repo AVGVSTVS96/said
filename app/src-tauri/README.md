@@ -1,12 +1,12 @@
 # Native host
 
-Setup opens automatically until setup is complete. Setup and Settings show the
+Setup opens automatically until setup is complete. On macOS, a Dock click with no visible window reopens Setup or, once complete, History. Shortcut and tray actions that fail open Setup and show the reason. Setup and Settings show the
 active input capability and all three configurable shortcuts. Portal registration
 runs in the background; settings saves retain the control socket and focus adapter.
 
 The `said` host embeds the built renderer with `custom-protocol`. Build `app/dist` before a standalone host build. `--worker` dispatch happens before Tauri initialization and runs the same Parakeet code used by the benchmark.
 
-`runtime::Host` executes core effects on one actor. It opens owner-only storage and a data lock, verifies/downloads the model and native runtime, warms the worker, and recovers pending recordings without automatic paste. Pending saves precede capture; completed durable saves precede focus checks and delivery. Recorder stop drains final frames before engine finish. Live gaps replay the durable WAV with a new recognition identity.
+`runtime::Host` executes core effects on one actor. It opens owner-only storage and a data lock, verifies/downloads the model and native runtime, warms the worker, and recovers pending recordings without automatic paste. Each file's SHA-256 is checked once after download; later launches trust a stamp of its size and modification time, and Verify in Setup rehashes everything. Pending saves precede capture; completed durable saves precede focus checks and delivery. Recorder stop drains final frames before engine finish. Live gaps replay the durable WAV with a new recognition identity.
 
 Linux consumes Niri focus events and logind session signals. Native key edges and compositor commands are routed separately to avoid double toggles. Other Wayland desktops provide clipboard-only delivery. macOS queues application and window focus notifications, checks grants passively, runs AppKit operations on the main thread and configures the nonactivating panel before showing it. Permission requests are explicit actions; microphone usage text lives in `Info.plist`.
 
@@ -16,7 +16,7 @@ Linux consumes Niri focus events and logind session signals. Native key edges an
 - `ui_action({ action: UiAction })` and `host_action({ action: HostAction })` resolve after applying the action and publishing its snapshot. Failed operations reject. Durable history actions must use the stored edited text rather than stale raw session state.
 - `said-audio://localhost/<utterance-id>` resolves the WAV only through an existing history row. Range responses support whole-clip playback with bounded reads. The renderer cannot supply an arbitrary file path.
 
-Settings and app rules persist to plain files. History uses SQLite FTS; retry creates a new row sharing the WAV. Reference-aware deletion keeps recordings used by other rows. Setup scratch recording suppresses delivery, including during replay. Interactive insertion refocuses the remembered external target; History insertion uses the last external target when the app owns focus.
+Settings and app rules persist to plain files. Default app rules are per platform; loading drops untouched rules that only the other platform defines. History uses SQLite FTS; retry creates a new row sharing the WAV. Reference-aware deletion keeps recordings used by other rows. Setup scratch recording suppresses delivery, including during replay. Interactive insertion refocuses the remembered external target; History insertion uses the last external target when the app owns focus.
 
 ## CLI
 
@@ -31,7 +31,7 @@ said interactive
 said insert-last
 said cancel
 said status
-said history search 'no AND file'
+said history search "don't rename"
 ```
 
 `said hotkey` is the compositor-bind path. Explicit `toggle`, `interactive` and `insert-last` commands remain available. The three editable settings are `hotkey`, `interactive_hotkey` and

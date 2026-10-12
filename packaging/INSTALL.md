@@ -16,7 +16,7 @@ Build the artifacts with [packaging instructions](README.md). Recognition runs l
 
 Hold the dictation or interactive shortcut to talk and release to finish. A quick tap starts toggle recording; the next press stops it. Escape cancels during recording. Insert last never presses Enter.
 
-All three shortcuts are editable in Settings. Interactive review has its own shortcut; Shift is not reserved. macOS ties grants to the app's signature. Builds signed with the same identity keep them; an ad-hoc build loses them on every rebuild. If Accessibility looks on in System Settings but Setup still says denied, run `tccutil reset Accessibility io.github.avgvstvs96.said`, then press **Allow** again. For autostart, add said to **General → Login Items → Open at Login**.
+All three shortcuts are editable in Settings: click one and press the new keys. Interactive review has its own shortcut; Shift is not reserved. macOS ties grants to the app's signature. Builds signed with the same identity keep them; an ad-hoc build loses them on every rebuild. If Accessibility looks on in System Settings but Setup still says denied, run `tccutil reset Accessibility io.github.avgvstvs96.said`, then press **Allow** again. For autostart, add said to **General → Login Items → Open at Login**.
 
 Live microphone, permissions, focus and paste acceptance remains pending in a separate test account. See the [manual checklist](../crates/platform/macos/MANUAL-CHECKLIST.md).
 
