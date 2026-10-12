@@ -21,7 +21,7 @@ The Apple Silicon app has build and [native unit-test receipts](crates/platform/
 
 ## Install
 
-Release [v0.1.1](../../releases/tag/v0.1.1) ships a macOS app for Apple Silicon (ad-hoc signed, not notarized), an Arch package and a portable Linux tarball, with `SHA256SUMS`. The repository is private while in preview, so the release is reachable by people with access; everyone else builds from source below. For the Arch package:
+Release [v0.1.1](../../releases/tag/v0.1.1) ships a macOS app for Apple Silicon (ad-hoc signed, not notarized), an Arch package and a portable Linux tarball, with `SHA256SUMS`. You can also build from source below. For the Arch package:
 
 ```sh
 sudo pacman -U said-*.pkg.tar.zst
