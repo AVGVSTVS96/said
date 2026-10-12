@@ -34,7 +34,11 @@ export function Overlay({
           : "";
   return (
     <main className="stage overlay-stage" aria-label="Dictation overlay">
-      <section className="panel overlay-panel" aria-label="Live dictation">
+      <section
+        className="panel overlay-panel"
+        aria-label="Live dictation"
+        data-arming={session?.phase === "recording" && session.level === null}
+      >
         {session ? (
           <>
             <div className="row">

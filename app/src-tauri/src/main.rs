@@ -87,7 +87,7 @@ fn run() -> Result<()> {
         let mut host = Host::open(platform, recorder, paths)?;
         let client = WorkerClient::warm(worker_config(&host.paths.models, &host.settings.engine)?)?;
         host.set_client(client);
-        host.start(Mode::Quick, false)?;
+        host.start(Mode::Quick)?;
         let deadline = Instant::now() + Duration::from_secs(120);
         loop {
             host.poll()?;
@@ -222,7 +222,6 @@ fn run() -> Result<()> {
                         let _ = app.state::<ipc::Connection>().0.send(ipc::Request::Action(
                             said_core::HostAction::Start {
                                 mode: Mode::Interactive,
-                                scratch: false,
                             },
                             reply,
                         ));
@@ -257,6 +256,19 @@ fn run() -> Result<()> {
                         .state::<ipc::Connection>()
                         .0
                         .send(ipc::Request::CloseInteractive);
+                }
+                if window.label() == "setup" {
+                    let connection = window.app_handle().state::<ipc::Connection>();
+                    for action in [
+                        said_core::HostAction::Preview {
+                            active: false,
+                            microphone: None,
+                        },
+                        said_core::HostAction::Trial { armed: false },
+                    ] {
+                        let (reply, _) = crossbeam_channel::bounded(1);
+                        let _ = connection.0.try_send(ipc::Request::Action(action, reply));
+                    }
                 }
                 let _ = window.hide();
             }

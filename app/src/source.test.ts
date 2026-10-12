@@ -102,3 +102,12 @@ test("host termination invalidates live state and rejects queued and future acti
   expect(source.getSnapshot().connectionError).toBe("capture actor stopped");
   expect(calls).toHaveLength(1);
 });
+
+test("snapshots without history keep the rows from the last one that carried them", () => {
+  const fake = createFakeSource().getSnapshot();
+  const source = createCoreSource(async () => {});
+  source.receive({ ...fake, sequence: 1 });
+  source.receive({ ...fake, history: null, sessions: [], sequence: 2 });
+  expect(source.getSnapshot().history).toBe(fake.history);
+  expect(source.getSnapshot().sessions).toEqual([]);
+});

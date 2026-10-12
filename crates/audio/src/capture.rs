@@ -1,6 +1,9 @@
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, atomic::Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     thread::{self, JoinHandle},
     time::Duration,
 };
@@ -14,7 +17,7 @@ use rtrb::{Producer, RingBuffer};
 use said_core::{AudioEvent, InputDevice, Result, UtteranceId};
 
 use crate::{
-    Recorder, Resampler,
+    Preview, Recorder, Resampler,
     pipeline::{self, EVENT_QUEUE, Pipeline},
     transport::{BACKEND_ERROR, CaptureState, DISCONNECTED, copy_input},
     wav::create_audio_dir,
@@ -35,6 +38,18 @@ pub fn list_devices() -> Result<Vec<InputDevice>> {
             })
         })
         .collect()
+}
+
+fn input_device(id: Option<&str>) -> Result<cpal::Device> {
+    let host = cpal::default_host();
+    Ok(match id {
+        Some(id) => host
+            .device_by_id(&id.parse()?)
+            .ok_or("selected input device is unavailable")?,
+        None => host
+            .default_input_device()
+            .ok_or("no default input device")?,
+    })
 }
 
 pub struct CpalRecorder {
@@ -60,15 +75,7 @@ impl Recorder for CpalRecorder {
         if self.active.is_some() {
             return Err("capture already active; stop before starting another utterance".into());
         }
-        let host = cpal::default_host();
-        let device = match device {
-            Some(id) => host
-                .device_by_id(&id.parse()?)
-                .ok_or("selected input device is unavailable")?,
-            None => host
-                .default_input_device()
-                .ok_or("no default input device")?,
-        };
+        let device = input_device(device)?;
         let config = device.default_input_config()?;
         let rate = config.sample_rate();
         let channels = config.channels();
@@ -136,6 +143,59 @@ impl Recorder for CpalRecorder {
         let (state, worker) = self.active.take().ok_or("capture is not active")?;
         state.stop.store(true, Ordering::Release);
         worker.join().map_err(|_| "audio capture thread panicked")?
+    }
+    fn preview(&self, device: Option<&str>) -> Result<Preview> {
+        let device = input_device(device)?;
+        let config = device.default_input_config()?;
+        let window = (config.sample_rate() as usize * config.channels() as usize / 30).max(1);
+        let (producer, mut consumer) =
+            RingBuffer::new(config.sample_rate() as usize * config.channels() as usize);
+        let (sender, levels) = bounded(16);
+        let (ready_tx, ready_rx) = bounded(1);
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker_stop = stop.clone();
+        let worker = thread::Builder::new()
+            .name("audio-preview".into())
+            .spawn(move || {
+                let state = Arc::new(CaptureState::default());
+                let started = (|| -> Result<cpal::Stream> {
+                    let stream = build_stream(&device, &config, producer, state.clone())?;
+                    stream.play()?;
+                    Ok(stream)
+                })();
+                let stream = match started {
+                    Ok(stream) => stream,
+                    Err(error) => {
+                        let _ = ready_tx.send(Err(error.to_string()));
+                        return;
+                    }
+                };
+                let _ = ready_tx.send(Ok(()));
+                let (mut sum, mut count) = (0.0f64, 0);
+                while !worker_stop.load(Ordering::Acquire) {
+                    if state.stop.load(Ordering::Acquire) {
+                        let _ = sender.send(Err("Microphone stopped responding".into()));
+                        break;
+                    }
+                    while let Ok(sample) = consumer.pop() {
+                        sum += (sample as f64).powi(2);
+                        count += 1;
+                        if count == window {
+                            let _ = sender.try_send(Ok(crate::level((sum / count as f64).sqrt())));
+                            (sum, count) = (0.0, 0);
+                        }
+                    }
+                    thread::sleep(Duration::from_millis(10));
+                }
+                drop(stream);
+            })?;
+        match ready_rx.recv()? {
+            Ok(()) => Ok(Preview::new(levels, Some((stop, worker)))),
+            Err(error) => {
+                let _ = worker.join();
+                Err(error.into())
+            }
+        }
     }
 }
 

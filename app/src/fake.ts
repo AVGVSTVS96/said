@@ -6,6 +6,7 @@ import {
   type UiAction,
   type Utterance,
 } from "./source";
+import type { DownloadState, HostAction, HostState } from "./contracts";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const target = {
@@ -60,15 +61,75 @@ function fixtures(): Utterance[] {
   }));
 }
 
-export function createFakeSource() {
+const trialId = "00000000-0000-4000-8000-0000000000aa";
+
+function fakeHost(mac: boolean, model: DownloadState["state"]): HostState {
+  return {
+    models: [{ id: settings.engine, license: "CC-BY-4.0, NVIDIA", source: "https://huggingface.co/nvidia" }],
+    download:
+      model === "ready"
+        ? { state: "ready", file: settings.engine, received: 671088640, total: 671088640, error: null }
+        : { state: "downloading", file: "encoder.int8.onnx", received: 432013312, total: 671088640, error: null },
+    permissions: mac ? { microphone: "authorized", accessibility: "denied" } : {},
+    instructions: mac
+      ? ["Hold-to-talk available. Hold a shortcut to talk; tap to toggle."]
+      : [
+          "Toggle mode. Press a shortcut to start; press it again to stop. Hold-to-talk needs input access or a working GlobalShortcuts portal.",
+          'binds {\n    Super+Z { spawn "said" "hotkey"; }\n}',
+        ],
+    notifications: {},
+    disk_bytes: 0,
+    disk_error: null,
+    unavailable: null,
+    trial: null,
+    input: mac ? "hold" : "toggle",
+    preview: null,
+    preview_error: null,
+    setup_complete: false,
+  };
+}
+
+export function createFakeSource({ mac = false, model = "ready" }: { mac?: boolean; model?: DownloadState["state"] } = {}) {
   let session: SessionView;
   let history: Utterance[];
+  let configured: Settings;
+  let host: HostState;
+  let trial: SessionView | null;
+  let query = "";
   let step = 0;
   let editorTail = 0;
   let ownedTail = false;
   const actions: UiAction[] = [];
+  function hostAction(action: HostAction) {
+    if (action.type === "settings_save") configured = action.settings;
+    else if (action.type === "download_model") host = { ...host, download: fakeHost(mac, "ready").download };
+    else if (action.type === "permission")
+      host = { ...host, permissions: { ...host.permissions, [action.permission]: "authorized" } };
+    else if (action.type === "preview") host = { ...host, preview: action.active ? 0.46 : null };
+    else if (action.type === "setup_complete") host = { ...host, setup_complete: true };
+    else if (action.type === "history_search") query = action.query.toLocaleLowerCase();
+    else if (action.type === "start") {
+      trial = {
+        id: trialId,
+        mode: "quick",
+        target: { app_id: "said", window_id: "setup", name: "said" },
+        phase: "recording",
+        committed: "",
+        partial: "Testing one, two",
+        level: 0.52,
+        edited: null,
+      };
+      host = { ...host, trial: trialId, notifications: {} };
+    } else if (action.type === "stop" && trial?.phase === "recording") {
+      const clipboard = host.input === "clipboard";
+      trial = { ...trial, phase: clipboard ? "saved" : "pasted", committed: "Testing one, two, three.", partial: "", level: null };
+      host = { ...host, notifications: { [trialId]: clipboard ? "Copied" : "Pasted" } };
+    } else if (action.type !== "trial" && action.type !== "stop") throw new Error("This operation needs a native host.");
+    publish();
+  }
   const source = createCoreSource(async (action) => {
-    if (!["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(action.type)) throw new Error("This operation needs a native host.");
+    if (!["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(action.type))
+      return hostAction(action as HostAction);
     actions.push(action as UiAction);
     const actionId = "id" in action ? action.id : history[0]?.id;
     if (!actionId) return;
@@ -120,9 +181,12 @@ export function createFakeSource() {
 
   function publish() {
     source.receive({
-      sessions: [session],
-      history,
-      settings,
+      sessions: trial ? [session, trial] : [session],
+      history: query
+        ? history.filter((row) => `${row.text}\n${row.raw_text}`.toLocaleLowerCase().includes(query))
+        : history,
+      settings: configured,
+      host,
       devices: [
         { id: "synthetic-input", name: "Example microphone", is_default: true },
         {
@@ -140,6 +204,12 @@ export function createFakeSource() {
     ownedTail = false;
     actions.length = 0;
     history = fixtures();
+    configured = mac
+      ? { ...settings, hotkey: "alt+space", interactive_hotkey: "alt+x", insert_last_hotkey: "alt+a", apps: {} }
+      : settings;
+    host = fakeHost(mac, model);
+    trial = null;
+    query = "";
     session = {
       id,
       mode: "interactive",

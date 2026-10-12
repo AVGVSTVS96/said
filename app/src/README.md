@@ -4,7 +4,7 @@ Five screens share `tokens.css`, the app half of the brand (paper, ink, the blue
 
 The overlay and the interactive panel are transparent windows: the panel sits inside a stage with enough margin for its shadow, and `FloatingPanel` keeps the interactive window's size and min/max bounds equal to the stage so compositors treat it as a fixed-size floating window. Window geometry lives in `../src-tauri/tauri.base.json`.
 
-From `app`, run `bun run dev`, then open `/?demo=1&screen=interactive`. The same route accepts `overlay`, `history`, `settings` and `setup`; `controls=0` hides the development toolbar. Next event advances a finite synthetic stream without microphone, clipboard, hotkeys or desktop input. The demo requires the explicit demo query; normal browser previews show the disconnected state until native host data arrives.
+From `app`, run `bun run dev`, then open `/?demo=1&screen=interactive`. The same route accepts `overlay`, `history`, `settings` and `setup`; `controls=0` hides the development toolbar, `os=mac` shows the macOS setup (permissions, hold-to-talk) and `model=downloading` starts with a partial model download. Next event advances a finite synthetic stream without microphone, clipboard, hotkeys or desktop input. The demo requires the explicit demo query; normal browser previews show the disconnected state until native host data arrives.
 
 `source.ts` is the generated-type adapter. `createCoreSource(send)` accepts the host's typed action dispatcher. Feed `receive({ sessions, history, settings, devices })` from host subscriptions, and render `<App source={source} />`. The aggregate is a UI subscription interface, not a new Rust/wire contract. IPC command and event names belong to the host integration. Dispatch preserves action order, including delayed edits. The host's send promise resolves after the action has been applied and its snapshot delivered; errors reject it. Screens import contract types through this adapter.
 
@@ -12,7 +12,7 @@ The unedited editor displays committed bytes plus the current provisional tail. 
 
 `main.tsx` connects production windows through Tauri invoke and Channels using generated
 `HostAction`/`HostSnapshot` types. The host supplies settings/app saves, model progress and terms,
-permission/input instructions, scratch setup, range-based whole-clip playback, SQLite FTS search,
+permission/input instructions, the microphone preview and setup trial, range-based whole-clip playback, SQLite FTS search,
 retry/delete/retention, disk usage and availability notifications. See the
 [native host](../src-tauri/README.md) for IPC and acceptance limits.
 

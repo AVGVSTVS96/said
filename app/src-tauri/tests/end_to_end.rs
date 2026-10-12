@@ -193,9 +193,9 @@ fn cold_start_spools_frames_and_stop_drains_before_the_next_recording() {
     )
     .unwrap();
     host.set_client(client);
-    host.start(Mode::Quick, false).unwrap();
+    host.start(Mode::Quick).unwrap();
     host.stop().unwrap();
-    host.start(Mode::Quick, false).unwrap();
+    host.start(Mode::Quick).unwrap();
     host.stop().unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
@@ -226,7 +226,7 @@ fn cold_start_spools_frames_and_stop_drains_before_the_next_recording() {
         assert_eq!(samples, [11, 22, 33, 44]);
     }
     assert_eq!(host.platform.calls.borrow().iter().filter(|call|matches!(call,PlatformCall::Paste {text:received,send:false,..} if received.as_bytes()==text.as_bytes())).count(),2);
-    host.start(Mode::Quick, false).unwrap();
+    host.start(Mode::Quick).unwrap();
     let interrupted = host.session.views().last().unwrap().id;
     drop(host);
     let history = SqliteHistory::open(&root).unwrap();

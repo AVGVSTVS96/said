@@ -483,3 +483,11 @@ fn native_two_second_smoke() {
     assert!(count > 0);
     println!("{count} normalized samples captured");
 }
+
+#[test]
+fn level_maps_speech_to_the_middle_of_the_meter() {
+    assert_eq!(crate::level(0.0), 0.0);
+    assert_eq!(crate::level(1.0), 1.0);
+    assert!((crate::level(0.0316) - 0.5).abs() < 0.01);
+    assert!(crate::level(0.01) > 0.3 && crate::level(0.1) < 0.7);
+}

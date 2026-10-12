@@ -9,17 +9,14 @@ import { createCoreSource } from "../src/source";
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 export async function setupRegression(mac = false) {
-  const fixture = createFakeSource().getSnapshot();
+  const fixture = createFakeSource({ mac }).getSnapshot();
   const source = createCoreSource(async () => {});
   source.receive({
     ...fixture,
     host: {
-      models: [],
-      download: { state: "ready", file: "", received: 1, total: 1, error: null },
+      ...fixture.host!,
       permissions: mac ? { microphone: "denied", accessibility: "denied", input_monitoring: "denied" } : {},
       instructions: ["Toggle mode. Press a shortcut to start and again to finish.", "Hold-to-talk requires input access or a working GlobalShortcuts portal.", 'binds { Super+Z { spawn "said" "hotkey"; } }'],
-      notifications: {}, disk_bytes: 0, disk_error: null, unavailable: null,
-      scratch: null, setup_complete: false,
     },
   });
   const mount = document.createElement("div");
@@ -27,12 +24,24 @@ export async function setupRegression(mac = false) {
   const root = createRoot(mount);
   flushSync(() => root.render(<App source={source} />));
   await frame();
-  const button = [...mount.querySelectorAll("button")].find((button) => button.textContent?.includes("Finish setup"))!;
-  const bounds = button.getBoundingClientRect();
-  if (bounds.top < 0 || bounds.bottom > innerHeight || document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth) {
-    throw new Error("Finish setup requires scrolling");
+  const steps = [...mount.querySelectorAll<HTMLButtonElement>(".setup-steps button")];
+  const footers = [];
+  for (const step of steps) {
+    flushSync(() => step.click());
+    await frame();
+    const primary = mount.querySelector(".setup-foot .primary")!;
+    const bounds = primary.getBoundingClientRect();
+    if (bounds.top < 0 || bounds.bottom > innerHeight || document.documentElement.scrollHeight > innerHeight || document.documentElement.scrollWidth > innerWidth) {
+      throw new Error(`${step.textContent} step needs scrolling to reach ${primary.textContent}`);
+    }
+    footers.push(`${step.textContent}: ${primary.textContent}`);
   }
-  const result = { mac, width: innerWidth, height: innerHeight, finishBottom: bounds.bottom };
+  const finish = mount.querySelector<HTMLButtonElement>(".setup-foot .primary")!;
+  const reason = mount.querySelector(".setup-reason")?.textContent ?? "";
+  if (!finish.textContent?.includes("Finish setup") || finish.disabled !== mac || (mac && !reason.includes("Allow Microphone and Accessibility"))) {
+    throw new Error(`Finish setup is not reachable with a reason: ${finish.textContent} ${reason}`);
+  }
+  const result = { mac, width: innerWidth, height: innerHeight, footers, reason };
   root.unmount();
   return result;
 }

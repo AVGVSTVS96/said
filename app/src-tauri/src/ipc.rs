@@ -1,6 +1,6 @@
 use crate::{
     desktop::Desktop,
-    runtime::{Host, HostPlatform},
+    runtime::{Change, Host, HostPlatform},
     storage::Paths,
 };
 use crossbeam_channel::{Receiver, Sender, bounded};
@@ -18,6 +18,7 @@ use tauri::{Emitter, Manager, ipc::Channel};
 
 pub enum Request {
     Subscribe(
+        String,
         Channel<HostSnapshot>,
         Sender<std::result::Result<HostSnapshot, String>>,
     ),
@@ -62,11 +63,13 @@ impl Connection {
 #[tauri::command]
 pub async fn connect(
     connection: tauri::State<'_, Connection>,
+    window: tauri::Window,
     updates: Channel<HostSnapshot>,
 ) -> std::result::Result<HostSnapshot, String> {
     let connection = connection.inner().clone();
+    let label = window.label().to_owned();
     tauri::async_runtime::spawn_blocking(move || {
-        connection.response(|reply| Request::Subscribe(updates, reply))
+        connection.response(|reply| Request::Subscribe(label, updates, reply))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -111,6 +114,11 @@ pub fn reply_control(
         .try_send(result.map_err(|error| error.to_string()));
 }
 
+const LEVEL_INTERVAL: Duration = Duration::from_millis(33);
+// Level-only snapshots skip windows that draw no meter: every IPC message grows WebKit's
+// memory (https://github.com/tauri-apps/wry/issues/1489).
+const LEVEL_WINDOWS: [&str; 3] = ["overlay", "interactive", "setup"];
+
 pub fn notice(app: &tauri::AppHandle, message: &str) {
     eprintln!("{message}");
     if let Some(window) = app.get_webview_window("setup") {
@@ -142,7 +150,10 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
             {
                 host.platform.make_overlay(&overlay);
             }
-            let mut subscribers = vec![];
+            let mut subscribers: Vec<(String, Channel<HostSnapshot>)> = vec![];
+            let mut sent_history = None;
+            let mut level_pending = false;
+            let mut published = Instant::now();
             let mut overlay_until: Option<Instant> = None;
             let mut overlay_id = None;
             let mut overlay_terminal = false;
@@ -151,12 +162,12 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
             let mut tray_label = String::new();
             let mut tray_recording = None;
             loop {
-                let mut changed = host.poll()?;
+                let mut change = host.poll()?;
                 for hotkey in host.platform.hotkeys().try_iter() {
                     if let Err(error) = host.hotkey(hotkey, host.platform.release_observable()) {
                         notice(&app, &error.to_string());
                     }
-                    changed = true;
+                    change = Change::State;
                 }
                 #[cfg(target_os = "linux")]
                 for request in host.platform.control_requests().try_iter() {
@@ -177,22 +188,23 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                             crate::cli::control(&mut host, command)
                         }
                     });
-                    changed = true;
+                    change = Change::State;
                 }
                 let mut reply = None;
                 match requests.recv_timeout(Duration::from_millis(10)) {
-                    Ok(Request::Subscribe(channel, response)) => {
-                        subscribers.push(channel);
+                    Ok(Request::Subscribe(label, channel, response)) => {
+                        subscribers.push((label, channel));
+                        sent_history = None;
                         reply = Some((response, Ok(())));
-                        changed = true;
+                        change = Change::State;
                     }
                     Ok(Request::Ui(action, response)) => {
                         reply = Some((response, host.ui(action)));
-                        changed = true;
+                        change = Change::State;
                     }
                     Ok(Request::Action(action, response)) => {
                         reply = Some((response, host.action(action)));
-                        changed = true;
+                        change = Change::State;
                     }
                     Ok(Request::Audio(id, response)) => {
                         let result = host
@@ -205,7 +217,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                     }
                     Ok(Request::CloseInteractive) => {
                         interactive_closed = true;
-                        changed = true;
+                        change = Change::State;
                     }
                     Ok(Request::Shutdown)
                     | Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
@@ -227,7 +239,20 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                     }
                     overlay_until = None;
                 }
-                if changed {
+                level_pending |= change == Change::Level;
+                if change != Change::State && level_pending && published.elapsed() >= LEVEL_INTERVAL
+                {
+                    level_pending = false;
+                    published = Instant::now();
+                    let snapshot = host.snapshot(false)?;
+                    subscribers.retain(|(label, channel)| {
+                        !LEVEL_WINDOWS.contains(&label.as_str())
+                            || channel.send(snapshot.clone()).is_ok()
+                    });
+                }
+                if change == Change::State {
+                    level_pending = false;
+                    published = Instant::now();
                     if interactive_closed {
                         let ids: Vec<_> = host
                             .session
@@ -248,7 +273,9 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                             host.session.dismiss(id);
                         }
                     }
-                    let snapshot = host.snapshot()?;
+                    let revision = host.history_revision();
+                    let snapshot = host.snapshot(sent_history != Some(revision))?;
+                    sent_history = Some(revision);
                     let recording = host.recording();
                     if tray_recording != Some(recording)
                         && let Some(tray) = app.tray_by_id("main")
@@ -281,16 +308,12 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                         tray_label = label;
                     }
 
-                    subscribers.retain(|channel: &Channel<HostSnapshot>| {
-                        channel.send(snapshot.clone()).is_ok()
-                    });
+                    subscribers.retain(|(_, channel)| channel.send(snapshot.clone()).is_ok());
                     if let Some((sender, result)) = reply {
                         let _ = sender
                             .send(result.map(|_| snapshot.clone()).map_err(|e| e.to_string()));
                     }
-                    if let Some(view) = snapshot.sessions.last()
-                        && snapshot.host.scratch != Some(view.id)
-                    {
+                    if let Some(view) = snapshot.sessions.last() {
                         if view.mode == Mode::Interactive {
                             if let Some(window) = app.get_webview_window("overlay") {
                                 let _ = window.hide();

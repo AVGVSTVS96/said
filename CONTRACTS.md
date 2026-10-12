@@ -13,7 +13,7 @@ The Rust definitions are authoritative: `crates/core/src/types.rs`, the Engine/R
 
 ## Capture and recognition
 
-Create and acknowledge a durable pending row before starting capture. Start the engine before delivering live frames. Recorder frames are 16 kHz mono signed i16 with a 0..1 level. A missing device choice resolves the system default when capture starts.
+Create and acknowledge a durable pending row before starting capture. Start the engine before delivering live frames. Recorder frames are 16 kHz mono signed i16 with a 0..1 level (frame RMS on a -60..0 dBFS scale). A missing device choice resolves the system default when capture starts.
 
 The recorder writes durable audio independently of a slow live receiver. Stop drains the capture ring, resampler and queued frames, repairs/syncs the WAV, then emits `Stopped`. Feed the last frames before asking the engine to finish. A live-frame gap invalidates that recognition; replay the WAV. A capture failure without a durable stop is not a successful recording.
 
@@ -41,7 +41,7 @@ Hotkey channels have one consumer; cloned receivers compete. Native Down/Up edge
 
 Schema version 1 uses a STRICT utterance table, transactional migrations, immutable-original/audio triggers and external-content FTS5. Edit changes edited text, delivery updates delivery metadata, and delete removes the row/search entry transactionally. Shared WAVs outlive individual retry rows. File deletion can fail after the transaction; startup orphan cleanup handles leftovers.
 
-The host sends complete sequenced snapshots. Renderers discard duplicates/older sequences. Actions resolve after application/publication and reject on failure. Renderer drafts survive failed edits; explicit insertion waits for the latest edit. `SessionView.edited` owns accepted edits, including the empty string. Streaming updates do not overwrite user-owned regions.
+The host sends complete sequenced snapshots, except that `history` is null when it has not changed since the last snapshot; renderers keep their previous rows. A window may skip sequences that only changed levels. Renderers discard duplicates/older sequences. Actions resolve after application/publication and reject on failure. Renderer drafts survive failed edits; explicit insertion waits for the latest edit. `SessionView.edited` owns accepted edits, including the empty string. Streaming updates do not overwrite user-owned regions.
 
 TypeScript types are exported from Rust into `app/src/bindings`; the renderer imports `contracts.ts`. The renderer never reads engine pipes or performs native paste. Playback takes an existing utterance ID and resolves its shared WAV in the host; arbitrary renderer filesystem paths are not accepted.
 

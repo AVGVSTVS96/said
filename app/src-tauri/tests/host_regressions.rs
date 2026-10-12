@@ -1,12 +1,12 @@
 use crossbeam_channel::Receiver;
 use said_app::{
-    runtime::{Host, HostPlatform},
+    runtime::{Change, Host, HostPlatform},
     storage::Paths,
 };
 use said_audio::fake::FakeRecorder;
 use said_core::{
-    EngineEvent, EngineOutput, History, Hotkey, Mode, Phase, Result, SessionEvent, Settings,
-    Target, UiAction, UtteranceId,
+    EngineEvent, EngineOutput, History, HostAction, Hotkey, Mode, Phase, Result, SessionEvent,
+    Settings, Target, UiAction, UtteranceId,
 };
 use said_engine::host::{WorkerClient, WorkerConfig};
 use said_platform::{
@@ -65,6 +65,7 @@ impl Directory {
                 depart_at: Cell::new(0),
                 paste_failure: Cell::new(false),
                 instructions: RefCell::new(vec![]),
+                own_window: Cell::new(false),
             },
             FakeRecorder::new(vec![(vec![1, 2], 0.2)], 1),
             Paths::new(self.0.clone(), self.0.join("config")),
@@ -86,6 +87,7 @@ struct TestPlatform {
     depart_at: Cell<u8>,
     paste_failure: Cell<bool>,
     instructions: RefCell<Vec<String>>,
+    own_window: Cell<bool>,
 }
 impl Platform for TestPlatform {
     type Window = ();
@@ -121,6 +123,9 @@ impl Platform for TestPlatform {
     }
 }
 impl HostPlatform for TestPlatform {
+    fn is_self(&self, _: &Target) -> bool {
+        self.own_window.get()
+    }
     fn poll(&mut self) -> Vec<SessionEvent> {
         self.focus_queue
             .drain()
@@ -140,7 +145,7 @@ impl HostPlatform for TestPlatform {
     }
 }
 fn complete(host: &mut Host<TestPlatform, FakeRecorder>, mode: Mode) -> UtteranceId {
-    host.start(mode, false).unwrap();
+    host.start(mode).unwrap();
     let id = host.session.views().last().unwrap().id;
     host.stop().unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
@@ -250,7 +255,7 @@ fn invalid_history_edits_reject_and_failed_saves_leave_retained_text_unchanged()
         })
         .is_err()
     );
-    host.start(Mode::Quick, false).unwrap();
+    host.start(Mode::Quick).unwrap();
     let active = host.session.views().last().unwrap().id;
     assert!(
         host.ui(UiAction::Edit {
@@ -300,11 +305,11 @@ fn optional_disk_metrics_fail_without_stopping_capture_or_losing_the_last_value(
     use std::os::unix::fs::PermissionsExt;
     let directory = Directory::new();
     let mut host = directory.host();
-    let previous = host.snapshot().unwrap().host.disk_bytes;
+    let previous = host.snapshot(true).unwrap().host.disk_bytes;
     let denied = directory.0.join("statistics");
     fs::create_dir(&denied).unwrap();
     fs::set_permissions(&denied, fs::Permissions::from_mode(0o0)).unwrap();
-    let snapshot = host.snapshot().unwrap();
+    let snapshot = host.snapshot(true).unwrap();
     assert_eq!(snapshot.host.disk_bytes, previous);
     assert!(
         snapshot
@@ -317,7 +322,7 @@ fn optional_disk_metrics_fail_without_stopping_capture_or_losing_the_last_value(
     let id = complete(&mut host, Mode::Quick);
     assert!(host.history.get(id).unwrap().unwrap().pasted_at.is_some());
     fs::set_permissions(&denied, fs::Permissions::from_mode(0o700)).unwrap();
-    assert!(host.snapshot().unwrap().host.disk_error.is_none());
+    assert!(host.snapshot(true).unwrap().host.disk_error.is_none());
 }
 
 #[cfg(target_os = "linux")]
@@ -419,18 +424,94 @@ fn tray_recording_art_differs_from_the_idle_icon() {
 }
 
 #[test]
-fn snapshot_refreshes_capabilities_without_a_settings_or_session_change() {
+fn capabilities_refresh_without_a_settings_or_session_change() {
     let directory = Directory::new();
     let mut host = directory.host();
     *host.platform.instructions.borrow_mut() = vec!["Shortcut registration pending".into()];
+    assert!(host.refresh_capabilities());
     assert_eq!(
-        host.snapshot().unwrap().host.instructions,
+        host.snapshot(false).unwrap().host.instructions,
         ["Shortcut registration pending"]
     );
     *host.platform.instructions.borrow_mut() = vec!["Shortcut release available".into()];
+    assert!(host.refresh_capabilities());
+    assert!(!host.refresh_capabilities());
     assert_eq!(
-        host.snapshot().unwrap().host.instructions,
+        host.snapshot(false).unwrap().host.instructions,
         ["Shortcut release available"]
+    );
+}
+
+#[test]
+fn a_setup_trial_pastes_through_the_real_path_and_leaves_no_history() {
+    let directory = Directory::new();
+    let mut host = directory.host();
+    let earlier = complete(&mut host, Mode::Quick);
+    let revision = host.history_revision();
+    assert!(host.snapshot(false).unwrap().history.is_none());
+    host.platform.own_window.set(true);
+    host.action(HostAction::Trial { armed: true }).unwrap();
+    host.start(Mode::Quick).unwrap();
+    let trial = host.state.trial.expect("a dictation into setup is a trial");
+    assert!(host.history_revision() > revision);
+    let history = host.snapshot(true).unwrap().history.unwrap();
+    assert!(history.iter().all(|row| row.id != trial));
+    host.stop().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while host
+        .session
+        .views()
+        .find(|view| view.id == trial)
+        .unwrap()
+        .phase
+        != Phase::Pasted
+    {
+        host.poll().unwrap();
+        assert!(Instant::now() < deadline, "the trial must reach the paste");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    assert_paste(&host, "do delete the file");
+    assert!(host.history.get(trial).unwrap().is_none());
+    assert!(!host.history.audio_path(trial).exists());
+    assert_eq!(host.history.last().unwrap().unwrap().id, earlier);
+    host.platform.own_window.set(false);
+    let ordinary = complete(&mut host, Mode::Quick);
+    assert_eq!(host.state.trial, Some(trial));
+    assert!(host.history.get(ordinary).unwrap().is_some());
+}
+
+#[test]
+fn microphone_preview_reports_levels_and_yields_the_device_to_capture() {
+    let directory = Directory::new();
+    let mut host = directory.host();
+    host.action(HostAction::Preview {
+        active: true,
+        microphone: None,
+    })
+    .unwrap();
+    assert_eq!(host.state.preview, Some(0.2));
+    assert_eq!(host.poll().unwrap(), Change::None);
+    host.start(Mode::Quick).unwrap();
+    host.poll().unwrap();
+    assert_eq!(host.state.preview, None);
+    host.stop().unwrap();
+    host.poll().unwrap();
+    assert_eq!(host.state.preview, Some(0.2));
+    host.action(HostAction::Preview {
+        active: true,
+        microphone: Some("unplugged".into()),
+    })
+    .unwrap();
+    assert_eq!(host.state.preview, None);
+    assert!(host.state.preview_error.is_some());
+    host.action(HostAction::Preview {
+        active: false,
+        microphone: None,
+    })
+    .unwrap();
+    assert_eq!(
+        (host.state.preview, host.state.preview_error.as_deref()),
+        (None, None)
     );
 }
 
@@ -439,7 +520,7 @@ fn queued_departures_before_query_during_query_and_before_chord_withhold_automat
     for departure_at in 0..=2 {
         let directory = Directory::new();
         let mut host = directory.host();
-        host.start(Mode::Quick, false).unwrap();
+        host.start(Mode::Quick).unwrap();
         let id = host.session.views().last().unwrap().id;
         host.stop().unwrap();
         host.event(SessionEvent::Engine(EngineOutput {
