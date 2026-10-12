@@ -16,7 +16,7 @@ Build the artifacts with [packaging instructions](README.md). Recognition runs l
 
 Hold the dictation or interactive shortcut to talk and release to finish. A quick tap starts toggle recording; the next press stops it. Escape cancels during recording. Insert last never presses Enter.
 
-All three shortcuts are editable in Settings. Interactive review has its own shortcut; Shift is not reserved. Rebuilding an ad-hoc bundle can invalidate permission grants, so re-enable the exact installed app after an upgrade. For autostart, add said to **General → Login Items → Open at Login**.
+All three shortcuts are editable in Settings: click one and press the new keys. Interactive review has its own shortcut; Shift is not reserved. Rebuilding an ad-hoc bundle can invalidate permission grants, so re-enable the exact installed app after an upgrade. For autostart, add said to **General → Login Items → Open at Login**.
 
 Live microphone, permissions, focus and paste acceptance remains pending in a separate test account. See the [manual checklist](../crates/platform/macos/MANUAL-CHECKLIST.md).
 

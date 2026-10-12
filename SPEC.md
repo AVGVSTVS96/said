@@ -8,11 +8,11 @@ The saved original is the Parakeet adapter's finalized text. Core concatenates c
 
 Provisional text can change. Committed chunks append and are not revised within one recognition. Your edits are stored separately from the immutable original. Retry creates a new recognition sharing the same recording.
 
-Pending history is saved before capture starts. Audio streams to a durable WAV while recording. Completed history is saved before automatic paste. A failed save inhibits delivery. Clipboard text remains after insertion. Paste success means the adapter posted a chord; it cannot prove that a destination accepted the text. Automatic Enter is off by default and requires an explicit per-app setting in quick mode. Interactive and insert-last never submit.
+Pending history is saved before capture starts. Audio streams to a durable WAV while recording. Completed history is saved before automatic paste. A failed save inhibits delivery. Clipboard text remains after insertion. Paste success means the adapter posted a chord; it cannot prove that a destination accepted the text. Automatic Enter is off by default and requires an explicit per-app setting in quick mode. Default app rules list common terminals for the running platform: Linux app ids with Ctrl+Shift+V, and macOS bundle ids, where the paste chord is always Cmd+V and a rule only controls Enter. Loading settings drops untouched defaults from the other platform. Interactive and insert-last never submit.
 
 ## Interaction
 
-Quick dictation and interactive review have separate configurable shortcuts; insert-last has a third. Hold the selected recording shortcut to record and release to finish. A tap shorter than 300 ms starts toggle recording; the next press stops it. Linux compositor-only input has no release edge, so every press toggles. Setup/status describe the selected input mode; the current shortcut and Niri binds are documented in [installation](packaging/INSTALL.md).
+Quick dictation and interactive review have separate configurable shortcuts; insert-last has a third. Settings and Setup record a shortcut when you click it and press the keys; Escape cancels. Hold the selected recording shortcut to record and release to finish. A tap shorter than 300 ms starts toggle recording; the next press stops it. Linux compositor-only input has no release edge, so every press toggles. Setup/status describe the selected input mode; the current shortcut and Niri binds are documented in [installation](packaging/INSTALL.md). A shortcut or tray action that cannot start, such as while the model is still loading, opens Setup with the reason. On macOS, clicking the Dock icon with no window open shows Setup until it is complete, then History.
 
 Quick dictation remembers the external target, shows live text in a nonfocusing overlay, finishes recognition, saves and checks focus before delivery. Observed departures inhibit automatic paste even after returning. Linux consumes Niri focus events. macOS focus observation and live delivery acceptance are subject to the limits below.
 
@@ -20,7 +20,7 @@ Interactive recording opens a normal editor. Edited regions remain user-owned wh
 
 History provides word-prefix full-text search, playback, editing, copy, insertion, recognition retry and deletion. Insert last uses the latest stored transcript, including explicit edits. Deletion removes the row and search entry; the WAV is removed after its last referencing row is gone. File-deletion failure can leave an orphan for startup cleanup.
 
-Setup selects a microphone, verifies/downloads the model, configures the shortcut, reports input mode and permissions, and records into a local scratch field without pasting into another application. macOS grants are requested explicitly. Linux hold needs readable physical keyboards or a working GlobalShortcuts portal. Joining `input` requires a fresh login and grants keyboard-device access.
+Setup selects a microphone, verifies/downloads the model (launches trust a size/modification-time stamp written after a full SHA-256 check; Verify rehashes), configures the shortcut, reports input mode and permissions, and records into a local scratch field without pasting into another application. macOS grants are requested explicitly. Linux hold needs readable physical keyboards or a working GlobalShortcuts portal. Joining `input` requires a fresh login and grants keyboard-device access.
 
 ## Failure behavior
 
@@ -76,7 +76,7 @@ macOS uses a Quartz event tap for shortcuts, Accessibility window identities for
 | Worker spool / development cache | `~/.cache/said-models/` | `~/.cache/said-models/` |
 | Linux control socket | `$XDG_RUNTIME_DIR/said.sock`, 0600 | Not used |
 
-Personal directories/files are owner-only. The app holds a data-directory lock; Linux CLI peers must have the same UID. History uses SQLite STRICT tables, immutable-original triggers and FTS5. Settings writes use a temporary file, sync and rename. Retention is explicit; there is no automatic age limit. Nothing syncs across machines. Model provisioning uses network downloads; audio is not uploaded.
+Personal directories/files are owner-only. The app holds a data-directory lock; Linux CLI peers must have the same UID. History uses SQLite STRICT tables, immutable-original triggers and FTS5. Settings writes use a temporary file, sync and rename. Retention is explicit and asks for confirmation; there is no automatic age limit. Nothing syncs across machines. Model provisioning uses network downloads; audio is not uploaded.
 
 ## Verification and limits
 

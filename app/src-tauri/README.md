@@ -1,6 +1,6 @@
 # Native host
 
-Setup opens automatically until setup is complete. Setup and Settings show the
+Setup opens automatically until setup is complete. On macOS, a Dock click with no visible window reopens Setup or, once complete, History. Shortcut and tray actions that fail open Setup and show the reason. Setup and Settings show the
 active input capability and all three configurable shortcuts. Portal registration
 runs in the background; settings saves retain the control socket and focus adapter.
 
@@ -16,7 +16,7 @@ Linux consumes Niri focus events and logind session signals. Native key edges an
 - `ui_action({ action: UiAction })` and `host_action({ action: HostAction })` resolve after applying the action and publishing its snapshot. Failed operations reject. Durable history actions must use the stored edited text rather than stale raw session state.
 - `said-audio://localhost/<utterance-id>` resolves the WAV only through an existing history row. Range responses support whole-clip playback with bounded reads. The renderer cannot supply an arbitrary file path.
 
-Settings and app rules persist to plain files. History uses SQLite FTS; retry creates a new row sharing the WAV. Reference-aware deletion keeps recordings used by other rows. Setup scratch recording suppresses delivery, including during replay. Interactive insertion refocuses the remembered external target; History insertion uses the last external target when the app owns focus.
+Settings and app rules persist to plain files. Default app rules are per platform; loading drops untouched rules that only the other platform defines. History uses SQLite FTS; retry creates a new row sharing the WAV. Reference-aware deletion keeps recordings used by other rows. Setup scratch recording suppresses delivery, including during replay. Interactive insertion refocuses the remembered external target; History insertion uses the last external target when the app owns focus.
 
 ## CLI
 
