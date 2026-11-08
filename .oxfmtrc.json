@@ -1,0 +1,12 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "sortImports": true,
+  "ignorePatterns": [
+    "app/src/bindings/**",
+    "app/src/product.ts",
+    "bench/results/**",
+    "crates/**",
+    "target/**",
+    "Cargo.toml"
+  ]
+}

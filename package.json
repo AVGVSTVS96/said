@@ -1,0 +1,30 @@
+{
+  "name": "said",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "app"
+    ],
+    "catalog": {
+      "@types/bun": "1.4.4",
+      "typescript": "7.0.2"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "check": "bun --filter said-ui generate && oxlint && oxfmt --check && bun --filter said-ui typecheck && bun --filter said-ui test && cargo fmt --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo test --locked --workspace",
+    "fix": "oxlint --fix; oxfmt; cargo fmt",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "@oxlint/plugins": "1.92.0",
+    "@types/bun": "catalog:",
+    "lefthook": "2.2.2",
+    "oxfmt": "0.77.0",
+    "oxlint": "1.92.0",
+    "oxlint-tsgolint": "7.0.2006",
+    "typescript": "catalog:",
+    "ultracite": "8.1.1"
+  },
+  "packageManager": "bun@1.4.3"
+}
