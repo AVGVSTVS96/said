@@ -6,26 +6,27 @@ import type { AppAction } from "./source";
 
 test("core actions stay ordered across delayed edits and insertion", async () => {
   const calls: AppAction[] = [];
-  let finish: (() => void) | undefined;
+  const first = Promise.withResolvers<null>();
 
   const source = createCoreSource(async (action) => {
     calls.push(action);
 
     if (calls.length === 1) {
-      await new Promise<void>((resolve) => {
-        finish = resolve;
-      });
+      await first.promise;
     }
   });
 
-  const first = source.dispatch({ type: "edit", id: "one", text: "first" });
-  const second = source.dispatch({ type: "edit", id: "one", text: "second\n" });
-  const insert = source.dispatch({ type: "insert", id: "one" });
+  const dispatched = [
+    source.dispatch({ type: "edit", id: "one", text: "first" }),
+    source.dispatch({ type: "edit", id: "one", text: "second\n" }),
+    source.dispatch({ type: "insert", id: "one" }),
+  ];
+
   await Promise.resolve();
   await Promise.resolve();
   expect(calls).toEqual([{ type: "edit", id: "one", text: "first" }]);
-  finish!();
-  await Promise.all([first, second, insert]);
+  first.resolve(null);
+  await Promise.all(dispatched);
   expect(calls).toEqual([
     { type: "edit", id: "one", text: "first" },
     { type: "edit", id: "one", text: "second\n" },
@@ -36,35 +37,38 @@ test("core actions stay ordered across delayed edits and insertion", async () =>
 test("a rejected action does not block later retries", async () => {
   let calls = 0;
 
-  const source = createCoreSource(async () => {
-    if (++calls === 1) {
+  const source = createCoreSource(() => {
+    calls += 1;
+
+    if (calls === 1) {
       throw new Error("save failed");
     }
   });
 
-  await expect(source.dispatch({ type: "insert_last" })).rejects.toThrow("save failed");
+  expect(await source.dispatch({ type: "insert_last" }).catch(String)).toBe("Error: save failed");
   await source.dispatch({ type: "insert_last" });
   expect(calls).toBe(2);
 });
 
 test("the fake saves original and edited text separately without desktop side effects", async () => {
   const fake = createFakeSource();
-  const { id } = fake.getSnapshot().sessions[0];
+  const { id } = fake.session;
   await fake.dispatch({ type: "edit", id, text: "  manual edit\n\n" });
 
-  for (let step = 0; step < 6; step++) {
+  for (let step = 0; step < 6; step += 1) {
     fake.next();
   }
-  const row = fake.getSnapshot().history.find((row) => row.id === id)!;
-  expect(row.raw_text).toBe(
+
+  const saved = fake.getSnapshot().history.find((row) => row.id === id);
+  expect(saved?.raw_text).toBe(
     "um, no, keep the the old value, actually no, use cache_key, no no don't rename it.",
   );
-  expect(row.text).toBe("  manual edit\n\nuse cache_key, no no don't rename it.");
+  expect(saved?.text).toBe("  manual edit\n\nuse cache_key, no no don't rename it.");
   await fake.dispatch({ type: "copy", id });
   await fake.dispatch({ type: "insert", id });
   expect(fake.actions.at(-1)).toEqual({ type: "insert", id });
-  expect(fake.getSnapshot().history.find((row) => row.id === id)!.pasted_at).toBeNull();
-  expect(fake.getSnapshot().sessions[0].phase).toBe("reviewing");
+  expect(fake.getSnapshot().history.find((row) => row.id === id)?.pasted_at).toBeNull();
+  expect(fake.session.phase).toBe("reviewing");
 });
 
 test("snapshot listeners unsubscribe and the idle snapshot is stable", () => {
@@ -73,7 +77,7 @@ test("snapshot listeners unsubscribe and the idle snapshot is stable", () => {
   let updates = 0;
 
   const unsubscribe = fake.subscribe(() => {
-    updates++;
+    updates += 1;
   });
 
   fake.next();
@@ -84,18 +88,16 @@ test("snapshot listeners unsubscribe and the idle snapshot is stable", () => {
 
 test("host termination invalidates live state and rejects queued and future actions", async () => {
   const calls: AppAction[] = [];
-  let release: (() => void) | undefined;
+  const release = Promise.withResolvers<null>();
 
   const source = createCoreSource(async (action) => {
     calls.push(action);
-    await new Promise<void>((resolve) => {
-      release = resolve;
-    });
+    await release.promise;
   });
 
   let changes = 0;
   source.subscribe(() => {
-    changes++;
+    changes += 1;
   });
   source.receive({ sessions: [], history: [], settings: null, devices: [], sequence: 1 });
   const first = source.dispatch({ type: "insert_last" });
@@ -109,10 +111,12 @@ test("host termination invalidates live state and rejects queued and future acti
   expect(source.getSnapshot().connectionError).toBe("capture actor stopped");
   expect(source.getSnapshot().sessions).toEqual([]);
   expect(changes).toBe(2);
-  release!();
+  release.resolve(null);
   await first;
-  await expect(queued).rejects.toThrow("capture actor stopped");
-  await expect(source.dispatch({ type: "insert_last" })).rejects.toThrow("capture actor stopped");
+  expect(await queued.catch(String)).toBe("Error: capture actor stopped");
+  expect(await source.dispatch({ type: "insert_last" }).catch(String)).toBe(
+    "Error: capture actor stopped",
+  );
   source.receive({ ...before, sequence: 2 });
   expect(source.getSnapshot().connectionError).toBe("capture actor stopped");
   expect(calls).toHaveLength(1);
@@ -120,7 +124,7 @@ test("host termination invalidates live state and rejects queued and future acti
 
 test("snapshots without history keep the rows from the last one that carried them", () => {
   const fake = createFakeSource().getSnapshot();
-  const source = createCoreSource(async () => {});
+  const source = createCoreSource(() => {});
   source.receive({ ...fake, sequence: 1 });
   source.receive({ ...fake, history: null, sessions: [], sequence: 2 });
   expect(source.getSnapshot().history).toBe(fake.history);

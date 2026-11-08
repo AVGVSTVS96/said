@@ -13,16 +13,16 @@ test("a user's draft survives late partials, commits and an empty edit", () => {
   const fake = createFakeSource();
   const draft = editDraft("my edit\n  stays here\n");
 
-  for (let step = 0; step < 6; step++) {
+  for (let step = 0; step < 6; step += 1) {
     fake.next();
-    const session = fake.getSnapshot().sessions[0];
-    expect(editorText(draft, session.committed, session.partial)).toBe(draft.text);
-    expect(editorText(editDraft(""), session.committed, session.partial)).toBe("");
+    const { committed, partial } = fake.session;
+    expect(editorText(draft, committed, partial)).toBe(draft.text);
+    expect(editorText(editDraft(""), committed, partial)).toBe("");
   }
 });
 
 test("the adapter reads core-owned edited text, including empty text", () => {
-  const session = createFakeSource().getSnapshot().sessions[0];
+  const { session } = createFakeSource();
   const edited = { ...session, edited: "user-owned" };
   const empty = { ...session, edited: "" };
   expect(userText(edited)).toBe("user-owned");
@@ -32,12 +32,13 @@ test("the adapter reads core-owned edited text, including empty text", () => {
 
 test("core-owned editor snapshots preserve the edit while later words stream", async () => {
   const fake = createFakeSource();
-  const { id } = fake.getSnapshot().sessions[0];
+  const { id } = fake.session;
   await fake.dispatch({ type: "edit", id, text: "  my edit stays  \n" });
 
-  for (let step = 0; step < 6; step++) {
+  for (let step = 0; step < 6; step += 1) {
     fake.next();
   }
+
   expect(userText(fake.getSnapshot().sessions[0])).toBe(
     "  my edit stays  \nuse cache_key, no no don't rename it.",
   );
@@ -45,7 +46,7 @@ test("core-owned editor snapshots preserve the edit while later words stream", a
 
 test("editing committed words leaves the unedited provisional tail live", async () => {
   const fake = createFakeSource();
-  const { id } = fake.getSnapshot().sessions[0];
+  const { id } = fake.session;
   await fake.dispatch({
     type: "edit",
     id,

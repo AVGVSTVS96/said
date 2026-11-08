@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { HostState, Settings } from "./contracts";
+import type { Settings } from "./contracts";
+import { fakeHost } from "./fake";
 import {
   DesktopStatus,
   ShortcutFields,
@@ -27,6 +28,7 @@ test("all configured shortcuts are displayed and invalid or duplicate chords can
     "different",
   );
   expect(shortcutError({ ...settings, hotkey: "super+unknown" }, false)).toContain("named key");
+
   const html = renderToStaticMarkup(
     <ShortcutFields settings={settings} mac={false} onChange={() => {}} />,
   );
@@ -36,15 +38,16 @@ test("all configured shortcuts are displayed and invalid or duplicate chords can
   }
 });
 
+const press = (code: string, held: Partial<KeyboardEvent> = {}) => ({
+  code,
+  ctrlKey: false,
+  altKey: false,
+  shiftKey: false,
+  metaKey: false,
+  ...held,
+});
+
 test("the recorder turns physical keys into the settings syntax and asks for a modifier", () => {
-  const press = (code: string, held: Partial<KeyboardEvent> = {}) => ({
-    code,
-    ctrlKey: false,
-    altKey: false,
-    shiftKey: false,
-    metaKey: false,
-    ...held,
-  });
   expect(recordKey(press("Space", { altKey: true }), true)).toEqual({ shortcut: "alt+space" });
   expect(recordKey(press("KeyZ", { metaKey: true }), false)).toEqual({ shortcut: "super+z" });
   expect(recordKey(press("KeyK", { metaKey: true, shiftKey: true }), true)).toEqual({
@@ -74,6 +77,7 @@ test("recorder labels use Mac symbols and spelled-out names elsewhere", () => {
   expect(shortcutKeys("ctrl+shift+cmd+k", true)).toBe("⌃⇧⌘K");
   expect(shortcutKeys("super+z", false)).toBe("Super+Z");
   expect(shortcutKeys("ctrl+leftbrace", false)).toBe("Ctrl+[");
+
   const html = renderToStaticMarkup(
     <ShortcutFields
       settings={{
@@ -86,6 +90,7 @@ test("recorder labels use Mac symbols and spelled-out names elsewhere", () => {
       onChange={() => {}}
     />,
   );
+
   expect(html).toContain("⌥Space");
   expect(html).toContain('aria-label="Dictation shortcut: Option+Space"');
 });
@@ -97,12 +102,14 @@ test("Mac insert hints name Option and use the configured key", () => {
 
 test("toggle capability and its cause are visible without expanding desktop setup", () => {
   const host = {
+    ...fakeHost(false, "ready"),
     instructions: [
       "Toggle mode. Press again to stop.",
       "No readable physical keyboards.",
       'binds { Super+Z { spawn "said" "hotkey"; } }',
     ],
-  } as HostState;
+  };
+
   const html = renderToStaticMarkup(<DesktopStatus host={host} />);
   expect(html).toContain('<p role="status">Toggle mode. Press again to stop.</p>');
   expect(html.indexOf("No readable physical keyboards")).toBeLessThan(html.indexOf("<details>"));

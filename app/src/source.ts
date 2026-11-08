@@ -20,9 +20,20 @@ export type {
 
 export type AppAction = UiAction | HostAction;
 
-export function userText(session?: SessionView) {
-  return session?.edited ?? null;
-}
+export type Send = (action: AppAction) => Promise<boolean>;
+
+const uiActions = new Set<AppAction["type"]>([
+  "insert",
+  "copy",
+  "edit",
+  "discard",
+  "cancel",
+  "insert_last",
+]);
+
+export const isUiAction = (action: AppAction): action is UiAction => uiActions.has(action.type);
+
+export const userText = (session?: SessionView) => session?.edited ?? null;
 
 export type CoreSnapshot = Readonly<{
   sessions: readonly SessionView[];
@@ -39,13 +50,13 @@ type Incoming = Omit<CoreSnapshot, "history"> & {
 };
 
 export interface CoreSource {
-  getSnapshot(): CoreSnapshot;
-  subscribe(listener: () => void): () => void;
-  dispatch(action: AppAction): Promise<void>;
+  getSnapshot: () => CoreSnapshot;
+  subscribe: (listener: () => void) => () => void;
+  dispatch: (action: AppAction) => Promise<void>;
   connected: boolean;
 }
 
-export function createCoreSource(send: (action: AppAction) => Promise<void>) {
+export const createCoreSource = (send: (action: AppAction) => Promise<void> | void) => {
   let snapshot: CoreSnapshot = {
     sessions: [],
     history: [],
@@ -57,34 +68,41 @@ export function createCoreSource(send: (action: AppAction) => Promise<void>) {
   let connected = true;
   const listeners = new Set<() => void>();
 
+  const notify = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
+
   return {
     get connected() {
       return connected;
     },
     getSnapshot: () => snapshot,
-    subscribe(listener: () => void) {
+    subscribe: (listener: () => void) => {
       listeners.add(listener);
 
       return () => {
         listeners.delete(listener);
       };
     },
-    async dispatch(action: AppAction) {
-      pending = pending
-        .catch(() => {})
-        .then(async () => {
-          if (!connected) {
-            throw new Error(snapshot.connectionError ?? "The host connection is not available.");
-          }
-          return send(action);
-        });
+    dispatch: async (action: AppAction) => {
+      const run = async () => {
+        if (!connected) {
+          throw new Error(snapshot.connectionError ?? "The host connection is not available.");
+        }
 
-      return pending;
+        await send(action);
+      };
+
+      pending = pending.then(run, run);
+      await pending;
     },
-    receive(next: Incoming) {
+    receive: (next: Incoming) => {
       if (!connected) {
         return;
       }
+
       if (
         next.sequence !== undefined &&
         snapshot.sequence !== undefined &&
@@ -92,31 +110,27 @@ export function createCoreSource(send: (action: AppAction) => Promise<void>) {
       ) {
         return;
       }
+
       snapshot = { ...next, history: next.history ?? snapshot.history };
-      listeners.forEach((listener) => {
-        listener();
-      });
+      notify();
     },
-    disconnect(error: string) {
+    disconnect: (error: string) => {
       connected = false;
       snapshot = {
-        ...snapshot,
         sessions: [],
+        history: snapshot.history,
         settings: null,
         devices: [],
-        host: undefined,
         connectionError: error,
       };
-      listeners.forEach((listener) => {
-        listener();
-      });
+      notify();
     },
   };
-}
+};
 
 export const disconnectedSource: CoreSource = {
   ...createCoreSource(async () => {
-    throw new Error("The core connection is not available.");
+    await Promise.reject(new Error("The core connection is not available."));
   }),
   connected: false,
 };

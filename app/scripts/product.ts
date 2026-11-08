@@ -1,11 +1,30 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-
 const root = new URL("../../", import.meta.url);
-const parsed = Bun.TOML.parse(await readFile(new URL("product.toml", root), "utf-8")) as Record<
-  string,
-  unknown
->;
+
+const isText = (value: unknown): value is string => typeof value === "string" && value !== "";
+
+const isObject = (value: unknown): value is object => typeof value === "object" && value !== null;
+
+const toml = new Map<string, unknown>(
+  Object.entries(Bun.TOML.parse(await Bun.file(new URL("product.toml", root)).text())),
+);
+
+const field = (key: string) => {
+  const value = toml.get(key);
+
+  if (!isText(value)) {
+    throw new Error(`product.toml needs a nonempty ${key}`);
+  }
+
+  return value;
+};
+
+const writeIfChanged = async (path: URL, content: string) => {
+  const file = Bun.file(path);
+
+  if (!(await file.exists()) || (await file.text()) !== content) {
+    await Bun.write(file, content);
+  }
+};
 
 const product = {
   name: field("name"),
@@ -13,38 +32,18 @@ const product = {
   storage_key: field("storage_key"),
 };
 
-const base = JSON.parse(await readFile(new URL("app/src-tauri/tauri.base.json", root), "utf-8"));
-const config = { ...base, productName: product.name, identifier: product.bundle_id };
+const base: unknown = await Bun.file(new URL("app/src-tauri/tauri.base.json", root)).json();
+
+if (!isObject(base)) {
+  throw new Error("tauri.base.json must hold an object");
+}
 
 await writeIfChanged(
   new URL("app/src-tauri/tauri.conf.json", root),
-  `${JSON.stringify(config, null, 2)}\n`,
+  `${JSON.stringify({ ...base, productName: product.name, identifier: product.bundle_id }, null, 2)}\n`,
 );
 
 await writeIfChanged(
   new URL("app/src/product.ts", root),
   `export const product = ${JSON.stringify(product, null, 2)} as const;\n`,
 );
-
-function field(key: string): string {
-  const value = parsed[key];
-
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`product.toml needs a nonempty ${key}`);
-  }
-
-  return value;
-}
-
-async function writeIfChanged(path: URL, content: string) {
-  const previous = await readFile(path, "utf-8").catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== "ENOENT") {
-      throw error;
-    }
-    return;
-  });
-
-  if (previous !== content) {
-    await writeFile(fileURLToPath(path), content);
-  }
-}

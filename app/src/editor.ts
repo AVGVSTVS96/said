@@ -3,10 +3,7 @@ export interface Draft {
   edited: boolean;
 }
 
-export function editorText(draft: Draft | null, committed: string, partial: string) {
-  return draft?.edited ? draft.text : committed + partial;
-}
+export const editorText = (draft: Draft | null, committed: string, partial: string) =>
+  draft?.edited === true ? draft.text : committed + partial;
 
-export function editDraft(text: string): Draft {
-  return { text, edited: true };
-}
+export const editDraft = (text: string): Draft => ({ text, edited: true });

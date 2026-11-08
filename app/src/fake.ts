@@ -1,5 +1,5 @@
 import type { DownloadState, HostAction, HostState } from "./contracts";
-import { createCoreSource } from "./source";
+import { createCoreSource, isUiAction } from "./source";
 import type { EngineEvent, SessionView, Settings, UiAction, Utterance } from "./source";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -31,7 +31,7 @@ const trace: readonly EngineEvent[] = [
   { type: "final" },
 ];
 
-function fixtures(): Utterance[] {
+const fixtures = (): Utterance[] => {
   const examples = [
     {
       text: "no no, keep the retry flag. actually, use --retry=2",
@@ -57,58 +57,56 @@ function fixtures(): Utterance[] {
     pasted_to: index === 0 ? target : null,
     pasted_at: index === 0 ? Date.UTC(2026, 0, 1, 14, 24, 5) : null,
   }));
-}
+};
 
 const trialId = "00000000-0000-4000-8000-0000000000aa";
 
-function fakeHost(mac: boolean, model: DownloadState["state"]): HostState {
-  return {
-    models: [
-      {
-        id: settings.engine,
-        license: "CC-BY-4.0, NVIDIA",
-        source: "https://huggingface.co/nvidia",
-      },
-    ],
-    download:
-      model === "ready"
-        ? {
-            state: "ready",
-            file: settings.engine,
-            received: 671_088_640,
-            total: 671_088_640,
-            error: null,
-          }
-        : {
-            state: "downloading",
-            file: "encoder.int8.onnx",
-            received: 432_013_312,
-            total: 671_088_640,
-            error: null,
-          },
-    permissions: mac ? { microphone: "authorized", accessibility: "denied" } : {},
-    instructions: mac
-      ? ["Hold-to-talk available. Hold a shortcut to talk; tap to toggle."]
-      : [
-          "Toggle mode. Press a shortcut to start; press it again to stop. Hold-to-talk needs input access or a working GlobalShortcuts portal.",
-          'binds {\n    Super+Z { spawn "said" "hotkey"; }\n}',
-        ],
-    notifications: {},
-    disk_bytes: 0,
-    disk_error: null,
-    unavailable: null,
-    trial: null,
-    input: mac ? "hold" : "toggle",
-    preview: null,
-    preview_error: null,
-    setup_complete: false,
-  };
-}
+export const fakeHost = (mac: boolean, model: DownloadState["state"]): HostState => ({
+  models: [
+    {
+      id: settings.engine,
+      license: "CC-BY-4.0, NVIDIA",
+      source: "https://huggingface.co/nvidia",
+    },
+  ],
+  download:
+    model === "ready"
+      ? {
+          state: "ready",
+          file: settings.engine,
+          received: 671_088_640,
+          total: 671_088_640,
+          error: null,
+        }
+      : {
+          state: "downloading",
+          file: "encoder.int8.onnx",
+          received: 432_013_312,
+          total: 671_088_640,
+          error: null,
+        },
+  permissions: mac ? { microphone: "authorized", accessibility: "denied" } : {},
+  instructions: mac
+    ? ["Hold-to-talk available. Hold a shortcut to talk; tap to toggle."]
+    : [
+        "Toggle mode. Press a shortcut to start; press it again to stop. Hold-to-talk needs input access or a working GlobalShortcuts portal.",
+        'binds {\n    Super+Z { spawn "said" "hotkey"; }\n}',
+      ],
+  notifications: {},
+  disk_bytes: 0,
+  disk_error: null,
+  unavailable: null,
+  trial: null,
+  input: mac ? "hold" : "toggle",
+  preview: null,
+  preview_error: null,
+  setup_complete: false,
+});
 
-export function createFakeSource({
+export const createFakeSource = ({
   mac = false,
   model = "ready",
-}: { mac?: boolean; model?: DownloadState["state"] } = {}) {
+}: { mac?: boolean; model?: DownloadState["state"] } = {}) => {
   let session: SessionView;
   let history: Utterance[];
   let configured: Settings;
@@ -120,7 +118,24 @@ export function createFakeSource({
   let ownedTail = false;
   const actions: UiAction[] = [];
 
-  function hostAction(action: HostAction) {
+  const current = () => ({
+    sessions: trial ? [session, trial] : [session],
+    history: query
+      ? history.filter((row) => `${row.text}\n${row.raw_text}`.toLocaleLowerCase().includes(query))
+      : history,
+    settings: configured,
+    host,
+    devices: [
+      { id: "synthetic-input", name: "Example microphone", is_default: true },
+      {
+        id: "synthetic-usb",
+        name: "Example USB microphone",
+        is_default: false,
+      },
+    ],
+  });
+
+  const hostAction = (action: HostAction) => {
     if (action.type === "settings_save") {
       configured = action.settings;
     } else if (action.type === "download_model") {
@@ -158,54 +173,53 @@ export function createFakeSource({
     } else if (action.type !== "trial" && action.type !== "stop") {
       throw new Error("This operation needs a native host.");
     }
-    publish();
-  }
+  };
 
-  const source = createCoreSource(async (action) => {
-    if (!["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(action.type)) {
-      hostAction(action as HostAction);
-      return;
+  const edit = (text: string) => {
+    const previous = session.edited ?? session.committed + session.partial;
+
+    if (session.edited === null) {
+      editorTail = session.committed.length;
     }
-    actions.push(action as UiAction);
+
+    let prefix = 0;
+
+    while (prefix < previous.length && previous[prefix] === text[prefix]) {
+      prefix += 1;
+    }
+
+    let suffix = 0;
+
+    while (
+      suffix < Math.min(previous.length, text.length) - prefix &&
+      previous[previous.length - suffix - 1] === text[text.length - suffix - 1]
+    ) {
+      suffix += 1;
+    }
+
+    if (previous.length - suffix > editorTail || (prefix >= editorTail && session.partial !== "")) {
+      ownedTail = true;
+    } else {
+      editorTail += text.length - previous.length;
+    }
+
+    session = { ...session, edited: text };
+  };
+
+  const uiAction = (action: UiAction) => {
+    actions.push(action);
     const actionId = "id" in action ? action.id : history[0]?.id;
 
-    if (!actionId) {
+    if (actionId === undefined) {
       return;
     }
-    const row = history.find((row) => row.id === actionId);
 
     if (action.type === "edit") {
       if (action.id === session.id) {
-        const previous = session.edited ?? session.committed + session.partial;
-
-        if (session.edited === null) {
-          editorTail = session.committed.length;
-        }
-        let prefix = 0;
-
-        while (prefix < previous.length && previous[prefix] === action.text[prefix]) {
-          prefix++;
-        }
-        let suffix = 0;
-
-        while (
-          suffix < Math.min(previous.length, action.text.length) - prefix &&
-          previous[previous.length - suffix - 1] === action.text[action.text.length - suffix - 1]
-        ) {
-          suffix++;
-        }
-        if (
-          previous.length - suffix > editorTail ||
-          (prefix >= editorTail && session.partial !== "")
-        ) {
-          ownedTail = true;
-        } else {
-          editorTail += action.text.length - previous.length;
-        }
-        session = { ...session, edited: action.text };
+        edit(action.text);
       }
 
-      if (row) {
+      if (history.some((row) => row.id === action.id)) {
         history = history.map((row) =>
           row.id === action.id ? { ...row, text: action.text } : row,
         );
@@ -216,6 +230,7 @@ export function createFakeSource({
       if (session.id === actionId) {
         session = { ...session, phase: "saved", partial: "", level: null };
       }
+
       history = history.map((row) =>
         row.id === actionId
           ? {
@@ -225,32 +240,23 @@ export function createFakeSource({
           : row,
       );
     }
+  };
 
-    publish();
+  const source = createCoreSource((action) => {
+    if (isUiAction(action)) {
+      uiAction(action);
+    } else {
+      hostAction(action);
+    }
+
+    source.receive(current());
   });
 
-  function publish() {
-    source.receive({
-      sessions: trial ? [session, trial] : [session],
-      history: query
-        ? history.filter((row) =>
-            `${row.text}\n${row.raw_text}`.toLocaleLowerCase().includes(query),
-          )
-        : history,
-      settings: configured,
-      host,
-      devices: [
-        { id: "synthetic-input", name: "Example microphone", is_default: true },
-        {
-          id: "synthetic-usb",
-          name: "Example USB microphone",
-          is_default: false,
-        },
-      ],
-    });
-  }
+  const publish = () => {
+    source.receive(current());
+  };
 
-  function reset() {
+  const reset = () => {
     step = 0;
     editorTail = 0;
     ownedTail = false;
@@ -279,22 +285,22 @@ export function createFakeSource({
       edited: null,
     };
     publish();
-  }
+  };
 
-  function next() {
-    const event = trace[step++];
+  const next = () => {
+    const event = trace[step];
+    step += 1;
 
-    if (!event || session.phase !== "recording") {
+    if (event === undefined || session.phase !== "recording") {
       return;
     }
+
     if ((event.type === "partial" || event.type === "committed") && session.edited !== null) {
-      session = {
-        ...session,
-        edited: ownedTail ? session.edited : session.edited.slice(0, editorTail) + event.text,
-      };
+      const edited = ownedTail ? session.edited : session.edited.slice(0, editorTail) + event.text;
+      session = { ...session, edited };
 
       if (event.type === "committed") {
-        editorTail = session.edited!.length;
+        editorTail = edited.length;
         ownedTail = false;
       }
     }
@@ -306,6 +312,7 @@ export function createFakeSource({
         level: 0.28 + (step % 3) * 0.19,
       };
     }
+
     if (event.type === "committed") {
       session = {
         ...session,
@@ -314,6 +321,7 @@ export function createFakeSource({
         level: 0.55,
       };
     }
+
     if (event.type === "final") {
       session = { ...session, phase: "reviewing", level: null };
       history = [
@@ -334,16 +342,16 @@ export function createFakeSource({
     }
 
     publish();
-  }
+  };
 
-  function phase(value: SessionView["phase"]) {
+  const phase = (value: SessionView["phase"]) => {
     session = {
       ...session,
       phase: value,
       level: value === "recording" ? 0.42 : null,
     };
     publish();
-  }
+  };
 
   reset();
 
@@ -353,8 +361,8 @@ export function createFakeSource({
     reset,
     phase,
     actions,
-    get step() {
-      return step;
+    get session() {
+      return session;
     },
   };
-}
+};
