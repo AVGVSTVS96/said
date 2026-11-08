@@ -30,13 +30,12 @@ impl Desktop {
     pub fn control_requests(&self) -> Receiver<linux::control::ControlRequest> {
         self.native
             .as_ref()
-            .map(LinuxPlatform::control_requests)
-            .unwrap_or_else(never)
+            .map_or_else(never, LinuxPlatform::control_requests)
     }
     #[cfg(target_os = "linux")]
     pub fn control_hotkey(
         &self,
-        command: linux::control::ControlCommand,
+        command: &linux::control::ControlCommand,
     ) -> Option<(Hotkey, bool)> {
         self.native.as_ref()?.control_hotkey(command)
     }
@@ -44,10 +43,7 @@ impl Desktop {
 impl Platform for Desktop {
     type Window = tauri::Window;
     fn hotkeys(&self) -> Receiver<Hotkey> {
-        self.native
-            .as_ref()
-            .map(Platform::hotkeys)
-            .unwrap_or_else(never)
+        self.native.as_ref().map_or_else(never, Platform::hotkeys)
     }
     fn focused(&self) -> Option<Target> {
         self.native.as_ref()?.focused()
@@ -151,7 +147,7 @@ impl HostPlatform for Desktop {
                 macos::permissions::Permissions::check(),
             ));
         }
-        self.hotkey = settings.hotkey.clone();
+        self.hotkey.clone_from(&settings.hotkey);
         self.settings = Some(settings.clone());
         Ok(())
     }
@@ -431,12 +427,7 @@ fn shortcut(value: &str) -> Result<macos::Shortcut> {
 }
 #[cfg(target_os = "macos")]
 fn configure_overlay(window: &tauri::Window) -> Result<()> {
-    let pointer = std::ptr::NonNull::new(window.ns_window()?).ok_or("missing native window")?;
-    unsafe {
-        macos::overlay::configure(pointer)?;
-    }
-    crate::permissions::position_overlay(pointer);
-    Ok(())
+    macos::overlay::configure(window)
 }
 pub fn show_overlay(window: &tauri::Window) -> Result<()> {
     #[cfg(target_os = "linux")]
@@ -445,12 +436,7 @@ pub fn show_overlay(window: &tauri::Window) -> Result<()> {
     {
         let window = window.clone();
         window.clone().run_on_main_thread(move || {
-            if let Ok(pointer) = window.ns_window()
-                && let Some(pointer) = std::ptr::NonNull::new(pointer)
-            {
-                crate::permissions::position_overlay(pointer);
-                let _ = unsafe { macos::overlay::show(pointer) };
-            }
+            let _ = macos::overlay::show(&window);
         })?;
     }
     Ok(())
@@ -471,7 +457,7 @@ pub fn request_permission(permission: &str) -> Result<()> {
                 let first = permissions::Permissions::check().microphone
                     == MicrophonePermission::NotDetermined;
                 if first {
-                    crate::permissions::microphone();
+                    permissions::request_microphone();
                 }
                 first
             }

@@ -2,10 +2,12 @@ pub mod fake;
 pub mod focus;
 
 #[cfg(all(target_os = "linux", feature = "native"))]
+#[allow(unsafe_code, reason = "libc FFI: flock, inotify, memfd")]
 #[path = "../linux/mod.rs"]
 pub mod linux;
 
 #[cfg(all(target_os = "macos", feature = "native"))]
+#[allow(unsafe_code, reason = "AppKit, Accessibility and CoreGraphics FFI")]
 #[path = "../macos/mod.rs"]
 pub mod macos;
 

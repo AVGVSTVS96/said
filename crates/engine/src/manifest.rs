@@ -60,10 +60,12 @@ impl Model {
     fn transducer_files(&self) -> Result<[&str; 4]> {
         let mut files = Vec::new();
         for stem in ["encoder", "decoder", "joiner"] {
-            let mut matches = self
-                .files
-                .keys()
-                .filter(|name| name.starts_with(&format!("{stem}.")) && name.ends_with(".onnx"));
+            let mut matches = self.files.keys().filter(|name| {
+                name.starts_with(&format!("{stem}."))
+                    && Path::new(name)
+                        .extension()
+                        .is_some_and(|extension| extension == "onnx")
+            });
             let name = matches.next().ok_or("missing transducer ONNX file")?;
             if matches.next().is_some() {
                 return Err("ambiguous transducer ONNX files".into());
@@ -136,7 +138,7 @@ pub fn model_cache() -> Result<PathBuf> {
 }
 
 pub fn worker_main(model: Option<&str>, manifest: &Manifest, cache: &Path) -> Result<()> {
-    let model = model.map(Ok).unwrap_or_else(|| manifest.default_model())?;
+    let model = model.map_or_else(|| manifest.default_model(), Ok)?;
     let config = manifest.models.get(model).ok_or("unknown model")?;
     if config.adapter == "parakeet" {
         let library = manifest

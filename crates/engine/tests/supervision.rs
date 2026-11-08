@@ -318,7 +318,7 @@ fn idle_unload_reloads_and_spools_every_sample_from_the_next_start() {
     let script = fixture.directory.join("delayed.py");
     let starts = fixture.directory.join("starts");
     let captured = fixture.directory.join("captured");
-    fs::write(&script, r#"import sys, struct, json, time
+    fs::write(&script, r"import sys, struct, json, time
 with open(sys.argv[1], 'a') as starts:
     starts.write('x')
 time.sleep(0.2)
@@ -338,7 +338,7 @@ while prefix := r.read(4):
     elif value['type'] == 'finish':
         send({'type': 'event', 'id': value['id'], 'event': {'type': 'committed', 'text': 'first words'}})
         send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
-"#).unwrap();
+").unwrap();
     let client = said_engine::host::WorkerClient::warm(WorkerConfig {
         executable: PathBuf::from("python3"),
         args: vec![
@@ -386,7 +386,7 @@ while prefix := r.read(4):
 fn queued_audio_is_not_a_hang_and_measured_work_allows_a_slow_finish() {
     let fixture = Fixture::new();
     let script = fixture.directory.join("slow.py");
-    fs::write(&script, r#"import sys, struct, json, time
+    fs::write(&script, r"import sys, struct, json, time
 r = sys.stdin.buffer
 w = sys.stdout.buffer
 audio = open(sys.argv[1], 'wb')
@@ -407,7 +407,7 @@ while prefix := r.read(4):
         time.sleep(0.15)
         send({'type': 'event', 'id': value['id'], 'event': {'type': 'committed', 'text': 'no no tail'}})
         send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
-"#).unwrap();
+").unwrap();
     for queue_frames in [1, 2] {
         let config = WorkerConfig {
             executable: "python3".into(),
@@ -422,7 +422,7 @@ while prefix := r.read(4):
         };
         let (mut engine, output) = WorkerEngine::new(UtteranceId::random(), config).unwrap();
         engine.start().unwrap();
-        let samples: Vec<_> = (0..160000).map(|sample| sample as i16).collect();
+        let samples: Vec<_> = (0..160_000).map(|sample| sample as i16).collect();
         for block in samples.chunks(1600) {
             engine.feed(block);
         }
@@ -486,7 +486,7 @@ fn queued_finish_returns_before_the_lease_and_preserves_every_spooled_sample() {
     let script = fixture.directory.join("capture.py");
     fs::write(
         &script,
-        r#"import sys, struct, json
+        r"import sys, struct, json
 from pathlib import Path
 r = sys.stdin.buffer
 w = sys.stdout.buffer
@@ -509,7 +509,7 @@ while prefix := r.read(4):
         send({'type': 'event', 'id': value['id'], 'event': {'type': 'final'}})
     elif value['type'] == 'cancel':
         audio.close()
-"#,
+",
     )
     .unwrap();
     let client = said_engine::host::WorkerClient::warm(WorkerConfig {

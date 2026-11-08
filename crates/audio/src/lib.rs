@@ -28,6 +28,10 @@ pub const CHANNELS: u16 = 1;
 pub const FLUSH_INTERVAL_MS: u64 = 250;
 
 #[cfg(test)]
+#[allow(
+    unsafe_code,
+    reason = "a counting GlobalAlloc proves the capture path does not allocate"
+)]
 mod tests;
 
 pub trait Recorder {

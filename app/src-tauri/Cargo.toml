@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 
@@ -33,11 +36,6 @@ path = "src/main.rs"
 tauri-build = "2"
 toml = "1"
 serde_json.workspace = true
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
-block2 = "0.6"
-objc2-foundation = { version = "0.3", features = ["NSString"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = { version = "5", default-features = false, features = ["blocking-api", "tokio"] }

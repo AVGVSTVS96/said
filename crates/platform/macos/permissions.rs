@@ -168,3 +168,17 @@ mod tests {
         );
     }
 }
+
+pub fn request_microphone() {
+    use block2::RcBlock;
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, Bool};
+    use objc2_foundation::NSString;
+    let completion = RcBlock::new(|_: Bool| {});
+    let media = NSString::from_str("soun");
+    unsafe {
+        let class = AnyClass::get(c"AVCaptureDevice").expect("AVFoundation is linked");
+        let _: () =
+            msg_send![class, requestAccessForMediaType: &*media, completionHandler: &*completion];
+    }
+}

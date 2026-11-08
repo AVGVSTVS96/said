@@ -114,7 +114,7 @@ impl ControlSocket {
                 if metadata.file_type().is_socket()
                     && metadata.uid() == unsafe { libc::geteuid() } =>
             {
-                fs::remove_file(&path)?
+                fs::remove_file(&path)?;
             }
             Ok(_) => return Err("refusing to replace a non-socket control path".into()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -200,8 +200,8 @@ fn serve(stream: &mut UnixStream, sender: &Sender<ControlRequest>) -> Result<Str
             stream.as_raw_fd(),
             libc::SOL_SOCKET,
             libc::SO_PEERCRED,
-            (&mut credentials as *mut libc::ucred).cast(),
-            &mut length,
+            (&raw mut credentials).cast(),
+            &raw mut length,
         )
     } != 0
         || credentials.uid != unsafe { libc::geteuid() }

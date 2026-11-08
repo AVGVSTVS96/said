@@ -74,7 +74,7 @@ impl Platform for FakePlatform {
         Ok(())
     }
 
-    fn make_overlay(&self, _: &()) {
+    fn make_overlay(&self, (): &()) {
         self.calls.borrow_mut().push(PlatformCall::MakeOverlay);
     }
 }

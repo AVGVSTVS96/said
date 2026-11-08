@@ -374,6 +374,10 @@ fn emit(events: &Sender<EngineOutput>, id: UtteranceId, event: EngineEvent) -> b
     events.try_send(EngineOutput { id, event }).is_ok()
 }
 
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the worker thread owns its channels until it exits"
+)]
 fn supervise(
     id: UtteranceId,
     config: WorkerConfig,
@@ -427,8 +431,7 @@ fn supervise(
         .and_then(|idle| idle.transport.lock().ok()?.worker.take());
     let existing_is_warm = existing.is_some();
     let mut transport = existing
-        .map(Ok)
-        .unwrap_or_else(|| Transport::spawn(&config))
+        .map_or_else(|| Transport::spawn(&config), Ok)
         .and_then(|worker| {
             worker.send(WorkerRequest::Start { id }, None)?;
             Ok(worker)
@@ -500,9 +503,9 @@ fn supervise(
                 .watchdog
                 .budget(config.audio_timeout, uncommitted_samples)
         };
-        let wait = progress
-            .map(|since: Instant| timeout.saturating_sub(since.elapsed()))
-            .unwrap_or(Duration::from_secs(3600));
+        let wait = progress.map_or(Duration::from_secs(3600), |since: Instant| {
+            timeout.saturating_sub(since.elapsed())
+        });
         select! {
             recv(cancellation) -> signal => {
                 if signal.is_ok() { return; }
@@ -555,7 +558,7 @@ fn supervise(
                             uncommitted_samples = pending.iter().map(|(_, samples)| samples).sum();
                             if finishing.is_some() && pending.is_empty() { progress = Some(Instant::now()); }
                         }
-                        _ => {}
+                        EngineEvent::Partial(_) => {}
                     }
                     if !emit(&events, id, event) { transport = Err("host event queue overflow".into()); }
                 }

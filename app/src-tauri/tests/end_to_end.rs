@@ -82,16 +82,16 @@ fn parakeet_worker_host_history_and_paste_preserve_exact_bytes() {
             .header("Range", "bytes=0-79")
             .body(Vec::new())
             .unwrap();
-        let response = said_app::ipc::audio(&said_app::ipc::Connection(sender), request);
+        let response = said_app::ipc::audio(&said_app::ipc::Connection(sender), &request);
         assert_eq!(response.status(), 206);
         assert_eq!(response.headers()["Content-Type"], "audio/wav");
         assert_eq!(response.body(), &fs::read(audio).unwrap()[..80]);
         service.join().unwrap();
         if clip == "silence" {
-            assert!(expected.is_empty());
+            assert_eq!(expected, "");
             assert_eq!(receipt["paste"].as_array().unwrap().len(), 0);
         } else {
-            assert!(!expected.is_empty());
+            assert_ne!(expected, "");
             assert_eq!(receipt["paste"].as_array().unwrap().len(), 1);
             assert_eq!(
                 receipt["paste"][0]["text"].as_str().unwrap().as_bytes(),

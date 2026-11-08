@@ -178,7 +178,7 @@ fn run() -> Result<()> {
                 .map(|state| state.inner().clone());
             std::thread::spawn(move || {
                 let response = match connection {
-                    Some(connection) => ipc::audio(&connection, request),
+                    Some(connection) => ipc::audio(&connection, &request),
                     None => tauri::http::Response::builder()
                         .status(503)
                         .body(Vec::new())

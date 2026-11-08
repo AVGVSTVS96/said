@@ -6,7 +6,9 @@ use crate::{
 use crossbeam_channel::{Receiver, Sender, bounded};
 use said_audio::CpalRecorder;
 use said_core::History;
-use said_core::{Result, *};
+use said_core::{
+    HostAction, HostSnapshot, Mode, Phase, Result, SessionEvent, UiAction, UtteranceId,
+};
 use said_platform::Platform;
 use std::{
     fs::File,
@@ -177,10 +179,10 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                             command,
                             C::Hotkey | C::HotkeyInteractive | C::HotkeyInsertLast
                         ) {
-                            match host.platform.control_hotkey(command) {
+                            match host.platform.control_hotkey(&command) {
                                 Some((hotkey, observable)) => host
                                     .hotkey(hotkey, observable)
-                                    .map(|_| "applied".into())
+                                    .map(|()| "applied".into())
                                     .inspect_err(|error| notice(&app, &error.to_string())),
                                 None => Ok("handled by native key edges".into()),
                             }
@@ -311,7 +313,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
                     subscribers.retain(|(_, channel)| channel.send(snapshot.clone()).is_ok());
                     if let Some((sender, result)) = reply {
                         let _ = sender
-                            .send(result.map(|_| snapshot.clone()).map_err(|e| e.to_string()));
+                            .send(result.map(|()| snapshot.clone()).map_err(|e| e.to_string()));
                     }
                     if let Some(view) = snapshot.sessions.last() {
                         if view.mode == Mode::Interactive {
@@ -376,7 +378,7 @@ pub fn spawn(app: tauri::AppHandle, paths: Paths) -> Result<Connection> {
 }
 pub fn audio(
     connection: &Connection,
-    request: tauri::http::Request<Vec<u8>>,
+    request: &tauri::http::Request<Vec<u8>>,
 ) -> tauri::http::Response<Vec<u8>> {
     let result = (|| -> Result<_> {
         let id = UtteranceId(request.uri().path().trim_start_matches('/').parse()?);

@@ -1,7 +1,9 @@
 pub mod fake;
 pub mod host;
 pub mod manifest;
+#[allow(unsafe_code, reason = "dlopen of the sherpa-onnx runtime")]
 mod native;
+#[allow(unsafe_code, reason = "sherpa-onnx C API")]
 pub mod parakeet;
 pub mod protocol;
 mod sherpa_abi;

@@ -17,7 +17,7 @@ impl Niri {
         let niri = Self {
             socket: socket.into(),
         };
-        niri.request(json!("Version"))?;
+        niri.request(&json!("Version"))?;
         Ok(niri)
     }
 
@@ -26,7 +26,7 @@ impl Niri {
     }
 
     pub fn focused(&self) -> Result<Option<Target>> {
-        let reply = self.request(json!("FocusedWindow"))?;
+        let reply = self.request(&json!("FocusedWindow"))?;
         let window = &reply["FocusedWindow"];
         if window.is_null() {
             return Ok(None);
@@ -36,7 +36,7 @@ impl Niri {
 
     pub fn focus(&self, target: &Target) -> Result<()> {
         let id: u64 = target.window_id.parse()?;
-        let windows = self.request(json!("Windows"))?;
+        let windows = self.request(&json!("Windows"))?;
         let exists = windows["Windows"].as_array().is_some_and(|windows| {
             windows.iter().any(|window| {
                 window["id"].as_u64() == Some(id)
@@ -47,7 +47,7 @@ impl Niri {
             return Err("target window closed or its app identity changed".into());
         }
         let changes = self.focus_changes()?;
-        self.request(json!({"Action": {"FocusWindow": {"id": id}}}))?;
+        self.request(&json!({"Action": {"FocusWindow": {"id": id}}}))?;
         let deadline = std::time::Instant::now() + Duration::from_secs(2);
         while !self
             .focused()?
@@ -63,7 +63,7 @@ impl Niri {
     }
 
     pub fn focused_output_position(&self) -> Result<Option<(i32, i32)>> {
-        let reply = self.request(json!("FocusedOutput"))?;
+        let reply = self.request(&json!("FocusedOutput"))?;
         let logical = &reply["FocusedOutput"]["logical"];
         if logical.is_null() {
             return Ok(None);
@@ -82,7 +82,7 @@ impl Niri {
         Ok(reader)
     }
 
-    fn request(&self, request: Value) -> Result<Value> {
+    fn request(&self, request: &Value) -> Result<Value> {
         let mut stream = UnixStream::connect(&self.socket)?;
         stream.set_read_timeout(Some(Duration::from_secs(2)))?;
         stream.set_write_timeout(Some(Duration::from_secs(2)))?;
@@ -164,8 +164,8 @@ impl Niri {
                 if reader
                     .read_line(&mut line)
                     .ok()
-                    .filter(|size| *size > 0)
-                    .is_none()
+                    .as_ref()
+                    .is_none_or(|size| *size == 0)
                 {
                     break;
                 }

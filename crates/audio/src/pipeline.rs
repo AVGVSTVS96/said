@@ -61,7 +61,7 @@ impl Pipeline {
                 (self
                     .pcm
                     .iter()
-                    .map(|&s| (s as f64 / 32768.0).powi(2))
+                    .map(|&s| (f64::from(s) / 32768.0).powi(2))
                     .sum::<f64>()
                     / self.pcm.len() as f64)
                     .sqrt(),
@@ -126,7 +126,7 @@ impl Pipeline {
         }
         let _ = self.sender.try_send(AudioEvent::Stopped {
             id: self.id,
-            duration_ms: samples * 1000 / SAMPLE_RATE as u64,
+            duration_ms: samples * 1000 / u64::from(SAMPLE_RATE),
         });
         Ok(())
     }

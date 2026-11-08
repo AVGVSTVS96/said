@@ -4,8 +4,6 @@ pub mod download;
 pub mod ipc;
 #[cfg(target_os = "linux")]
 pub mod login;
-#[cfg(target_os = "macos")]
-pub mod permissions;
 pub mod proof;
 pub mod runtime;
 pub mod storage;

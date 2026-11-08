@@ -70,7 +70,7 @@ impl Recorder for ReplayRecorder {
                             break;
                         }
                         copy_input(&pcm[..take], 1, &mut producer, &worker_state, |s| {
-                            s as f32 / 32768.0
+                            f32::from(s) / 32768.0
                         });
                         pipeline::drain(&mut consumer, &mut resampler, &mut pipeline)?;
                         pipeline.checkpoint()?;

@@ -36,9 +36,13 @@ impl Resampler {
                 )
             })
             .transpose()?;
-        let input_size = fft.as_ref().map_or(320, |r| r.input_frames_max());
-        let output_size = fft.as_ref().map_or(320, |r| r.output_frames_max());
-        let skip = fft.as_ref().map_or(0, |r| r.output_delay());
+        let input_size = fft
+            .as_ref()
+            .map_or(320, rubato::Resampler::input_frames_max);
+        let output_size = fft
+            .as_ref()
+            .map_or(320, rubato::Resampler::output_frames_max);
+        let skip = fft.as_ref().map_or(0, rubato::Resampler::output_delay);
         Ok(Self {
             rate,
             channels: channels as usize,
@@ -65,7 +69,7 @@ impl Resampler {
         }
         for &sample in interleaved {
             self.channel_sum += if sample.is_finite() {
-                sample as f64
+                f64::from(sample)
             } else {
                 0.0
             };
@@ -96,7 +100,7 @@ impl Resampler {
         if !self.input.is_empty() {
             self.process(&mut emit)?;
         }
-        let expected = self.input_count * SAMPLE_RATE as u64 / self.rate as u64;
+        let expected = self.input_count * u64::from(SAMPLE_RATE) / u64::from(self.rate);
         while self.output_count < expected {
             self.process(&mut emit)?;
         }
@@ -112,7 +116,7 @@ impl Resampler {
             let (_, produced) = fft.process_into_buffer(&input, &mut output, None)?;
             let skip = self.skip.min(produced);
             self.skip -= skip;
-            let expected = self.input_count * SAMPLE_RATE as u64 / self.rate as u64;
+            let expected = self.input_count * u64::from(SAMPLE_RATE) / u64::from(self.rate);
             let take = (produced - skip).min((expected - self.output_count) as usize);
             if take > 0 {
                 emit(&self.output[skip..skip + take])?;

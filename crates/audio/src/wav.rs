@@ -138,7 +138,7 @@ fn validate(file: &mut File) -> io::Result<u64> {
     if &bytes[..4] == b"RF64" {
         Ok(u64::from_le_bytes(bytes[28..36].try_into().unwrap()) / 2)
     } else {
-        Ok(u32::from_le_bytes(bytes[76..80].try_into().unwrap()) as u64 / 2)
+        Ok(u64::from(u32::from_le_bytes(bytes[76..80].try_into().unwrap())) / 2)
     }
 }
 
@@ -146,7 +146,7 @@ fn header(samples: u64) -> [u8; HEADER_LEN as usize] {
     let mut bytes = [0; HEADER_LEN as usize];
     let data_len = samples * 2;
     let riff_len = data_len + HEADER_LEN - 8;
-    let rf64 = riff_len > u32::MAX as u64;
+    let rf64 = riff_len > u64::from(u32::MAX);
     bytes[..4].copy_from_slice(if rf64 { b"RF64" } else { b"RIFF" });
     bytes[4..8].copy_from_slice(&(if rf64 { u32::MAX } else { riff_len as u32 }).to_le_bytes());
     bytes[8..12].copy_from_slice(b"WAVE");

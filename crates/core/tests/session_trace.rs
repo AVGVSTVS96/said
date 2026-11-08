@@ -254,7 +254,7 @@ impl Harness {
                     }
                 }
                 Effect::RecordDelivery { id, target, at } => {
-                    self.history.record_delivery(id, &target, at).unwrap()
+                    self.history.record_delivery(id, &target, at).unwrap();
                 }
                 Effect::Notify { message, .. } => self.notices.push(message),
                 Effect::Copy { text, .. } => self.clipboard = text,

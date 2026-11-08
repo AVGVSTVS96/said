@@ -2,7 +2,10 @@ use std::path::Path;
 
 use ts_rs::{ExportError, TS};
 
-use crate::types::*;
+use crate::types::{
+    AudioEvent, Effect, HostAction, HostSnapshot, Hotkey, InputDevice, SessionEvent, SessionView,
+    Settings, UiAction, Utterance, WorkerRequest, WorkerResponse,
+};
 
 pub fn export(output: impl AsRef<Path>) -> std::result::Result<(), ExportError> {
     let config = ts_rs::Config::default().with_out_dir(output.as_ref());

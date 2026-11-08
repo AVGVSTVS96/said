@@ -10,12 +10,26 @@ unsafe extern "C" fn never_focus(_: ffi::Ref, _: ffi::Ref) -> bool {
     false
 }
 
-/// Convert a hidden native window before its first presentation.
-///
+/// Converts the hidden overlay window to a non-activating panel before its first presentation.
+/// Call on the AppKit main thread.
+pub fn configure(window: &tauri::Window) -> Result<()> {
+    let window = NonNull::new(window.ns_window()?).ok_or("missing native window")?;
+    unsafe { convert(window)? };
+    position(window);
+    Ok(())
+}
+
+/// Shows the overlay `configure` converted. Call on the AppKit main thread.
+pub fn show(window: &tauri::Window) -> Result<()> {
+    let window = NonNull::new(window.ns_window()?).ok_or("missing native window")?;
+    position(window);
+    unsafe { order_front(window) }
+}
+
 /// # Safety
 /// `window` must point to a live AppKit NSWindow owned by the caller. It must
 /// remain alive through the call; invoke on the AppKit main thread.
-pub unsafe fn configure(window: NonNull<c_void>) -> Result<()> {
+unsafe fn convert(window: NonNull<c_void>) -> Result<()> {
     if unsafe { ffi::pthread_main_np() } == 0 {
         return Err("Configure the overlay on the AppKit main thread".into());
     }
@@ -77,8 +91,8 @@ pub unsafe fn configure(window: NonNull<c_void>) -> Result<()> {
 }
 
 /// # Safety
-/// `window` must be a live panel previously configured by `configure`, on the main thread.
-pub unsafe fn show(window: NonNull<c_void>) -> Result<()> {
+/// `window` must be a live panel previously converted by `convert`, on the main thread.
+unsafe fn order_front(window: NonNull<c_void>) -> Result<()> {
     if unsafe { ffi::pthread_main_np() } == 0 {
         return Err("Show the overlay on the AppKit main thread".into());
     }
@@ -86,4 +100,25 @@ pub unsafe fn show(window: NonNull<c_void>) -> Result<()> {
         objc::send::<()>(window.as_ptr(), c"orderFrontRegardless");
     }
     Ok(())
+}
+
+fn position(window: NonNull<c_void>) {
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, AnyObject};
+    use objc2_foundation::{NSPoint, NSRect};
+    unsafe {
+        let class = AnyClass::get(c"NSScreen").expect("AppKit is linked");
+        let screen: *mut AnyObject = msg_send![class, mainScreen];
+        if screen.is_null() {
+            return;
+        }
+        let visible: NSRect = msg_send![screen, visibleFrame];
+        let panel = window.as_ptr().cast::<AnyObject>();
+        let frame: NSRect = msg_send![panel, frame];
+        let origin = NSPoint::new(
+            visible.origin.x + (visible.size.width - frame.size.width) / 2.0,
+            visible.origin.y + 20.0,
+        );
+        let _: () = msg_send![panel, setFrameOrigin: origin];
+    }
 }

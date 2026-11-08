@@ -129,7 +129,7 @@ impl ParakeetModel {
             config.model_config.provider = provider.as_ptr();
             config.model_config.model_type = c"nemo_transducer".as_ptr();
             config.decoding_method = c"greedy_search".as_ptr();
-            let recognizer = unsafe { (api.create)(&config) };
+            let recognizer = unsafe { (api.create)(&raw const config) };
             if recognizer.is_null() {
                 return Err("could not load Parakeet model".into());
             }
@@ -238,10 +238,9 @@ impl Decoded {
         }
         boundaries.push(raw.len());
         for (word, span) in words.iter_mut().zip(boundaries.windows(2)) {
-            word.text = raw
-                .get(span[0]..span[1])
+            raw.get(span[0]..span[1])
                 .ok_or("Parakeet split a Unicode word")?
-                .to_owned();
+                .clone_into(&mut word.text);
         }
         Ok(words)
     }
@@ -266,19 +265,6 @@ fn text(words: &[Word], first: bool) -> String {
 }
 
 fn merge(previous: &[Word], next: &[Word], offset: usize) -> Vec<Word> {
-    if previous.is_empty() {
-        return next.to_vec();
-    }
-    if next.is_empty() {
-        return previous.to_vec();
-    }
-    let count = next
-        .iter()
-        .take_while(|word| word.start <= offset + 5 * RATE + RATE * 80 / 1000)
-        .count();
-    if count == 0 {
-        return previous.iter().chain(next).cloned().collect();
-    }
     #[derive(Clone, Copy, Default)]
     enum Step {
         #[default]
@@ -291,6 +277,19 @@ fn merge(previous: &[Word], next: &[Word], offset: usize) -> Vec<Word> {
         matches: usize,
         error: usize,
         step: Step,
+    }
+    if previous.is_empty() {
+        return next.to_vec();
+    }
+    if next.is_empty() {
+        return previous.to_vec();
+    }
+    let count = next
+        .iter()
+        .take_while(|word| word.start <= offset + 5 * RATE + RATE * 80 / 1000)
+        .count();
+    if count == 0 {
+        return previous.iter().chain(next).cloned().collect();
     }
     let width = count + 1;
     let mut cells = vec![Cell::default(); (previous.len() + 1) * width];

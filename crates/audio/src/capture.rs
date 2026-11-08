@@ -178,7 +178,7 @@ impl Recorder for CpalRecorder {
                         break;
                     }
                     while let Ok(sample) = consumer.pop() {
-                        sum += (sample as f64).powi(2);
+                        sum += f64::from(sample).powi(2);
                         count += 1;
                         if count == window {
                             let _ = sender.try_send(Ok(crate::level((sum / count as f64).sqrt())));

@@ -337,7 +337,7 @@ fn restart_recovery_and_insert_last_run_against_sqlite_and_fake_adapters() {
                         events.push_back(SessionEvent::Pasted { id, at: 1000 });
                     }
                     Effect::RecordDelivery { id, target, at } => {
-                        history.record_delivery(id, &target, at).unwrap()
+                        history.record_delivery(id, &target, at).unwrap();
                     }
                     Effect::Show { .. } | Effect::Notify { .. } => {}
                     other => panic!("unexpected recovery effect {other:?}"),

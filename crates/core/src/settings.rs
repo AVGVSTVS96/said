@@ -99,13 +99,6 @@ impl Settings {
     }
 
     pub fn load(path: &Path, default_engine: &str) -> Result<Self> {
-        let content = match fs::read_to_string(path) {
-            Ok(content) => content,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Self::defaults(default_engine));
-            }
-            Err(error) => return Err(error.into()),
-        };
         #[derive(serde::Deserialize)]
         struct FileSettings {
             hotkey: Option<String>,
@@ -115,6 +108,13 @@ impl Settings {
             microphone: Option<String>,
             apps: Option<BTreeMap<String, AppSettings>>,
         }
+        let content = match fs::read_to_string(path) {
+            Ok(content) => content,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::defaults(default_engine));
+            }
+            Err(error) => return Err(error.into()),
+        };
         let file: FileSettings = toml::from_str(&content)?;
         let mut settings = Self::defaults(default_engine);
         if let Some(value) = file.hotkey {
@@ -194,7 +194,7 @@ mod tests {
         settings.apps.insert("user.added".into(), default_rule());
         settings.save(&path).unwrap();
         let loaded = Settings::load(&path, "local-model").unwrap();
-        let mut expected: Vec<_> = APPS.iter().map(|id| id.to_string()).collect();
+        let mut expected: Vec<_> = APPS.iter().map(std::string::ToString::to_string).collect();
         expected.extend([kept, "user.added".into()]);
         expected.sort();
         assert_eq!(loaded.apps.into_keys().collect::<Vec<_>>(), expected);

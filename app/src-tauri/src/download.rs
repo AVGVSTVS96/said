@@ -12,7 +12,7 @@ use std::{
 fn hash(path: &Path, mut progress: impl FnMut(u64)) -> Result<String> {
     let mut file = File::open(path)?;
     let mut digest = Sha256::new();
-    let mut bytes = [0; 65536];
+    let mut bytes = vec![0; 65536];
     let mut received = 0;
     loop {
         let count = file.read(&mut bytes)?;
@@ -74,7 +74,7 @@ fn verified(
             received,
             total: Some(total),
             error: None,
-        })
+        });
     })?;
     if actual != expected {
         let _ = fs::remove_file(stamp_path(path));
@@ -99,7 +99,7 @@ fn download(
         let mut received = 0;
         let mut file = private_file(&temporary)?;
         file.set_len(0)?;
-        let mut buffer = [0; 65536];
+        let mut buffer = vec![0; 65536];
         loop {
             let count = response.read(&mut buffer)?;
             if count == 0 {
@@ -196,7 +196,10 @@ pub fn install(
             continue;
         };
         if entry.header().entry_type().is_file()
-            && (name.ends_with(".so") || name.contains(".so.") || name.ends_with(".dylib"))
+            && (name.contains(".so.")
+                || path
+                    .extension()
+                    .is_some_and(|extension| extension == "so" || extension == "dylib"))
         {
             install_library(&mut entry, &runtime.join(name))?;
         }

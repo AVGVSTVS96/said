@@ -39,7 +39,7 @@ fn main() -> Result<()> {
                 EngineEvent::Committed(chunk) => text.push_str(&chunk),
                 EngineEvent::Final => return text,
                 EngineEvent::Error(error) => panic!("{error}"),
-                _ => {}
+                EngineEvent::Partial(_) => {}
             }
         }
     });

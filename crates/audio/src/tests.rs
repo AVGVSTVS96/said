@@ -310,10 +310,11 @@ fn wav_checkpoints_recover_stale_headers_and_partial_samples_without_overwriting
 
 #[test]
 fn recordings_beyond_riff_limit_use_rf64_and_recovery_rejects_foreign_files() {
+    use std::io::Read;
     let scratch = Scratch::new();
     let path = scratch.0.join("capture.wav");
     WavWriter::create(&path).unwrap().finish().unwrap();
-    let samples = u32::MAX as u64 / 2 + 1000;
+    let samples = u64::from(u32::MAX) / 2 + 1000;
     OpenOptions::new()
         .write(true)
         .open(&path)
@@ -322,7 +323,6 @@ fn recordings_beyond_riff_limit_use_rf64_and_recovery_rejects_foreign_files() {
         .unwrap();
     assert_eq!(recover_wav(&path).unwrap(), samples);
     let mut bytes = [0; 4];
-    use std::io::Read;
     fs::File::open(&path)
         .unwrap()
         .read_exact(&mut bytes)
@@ -411,7 +411,7 @@ fn one_hour_synthetic_capture_has_flat_ram() {
     let mut baseline = 0;
     #[cfg(target_os = "linux")]
     let mut maximum = 0;
-    for _tick in 0..36_000 {
+    for tick in 0..36_000 {
         copy_input(&input, 1, &mut producer, &state, |s| s);
         while consumer.slots() > 0 {
             pipeline::drain(&mut consumer, &mut resampler, &mut pipeline).unwrap();
@@ -420,8 +420,7 @@ fn one_hour_synthetic_capture_has_flat_ram() {
         for event in receiver.try_iter() {
             assert!(matches!(event, AudioEvent::Frame(_)));
         }
-        #[cfg(target_os = "linux")]
-        if _tick % 1000 == 0 && _tick >= 1000 {
+        if cfg!(target_os = "linux") && tick % 1000 == 0 && tick >= 1000 {
             let rss = fs::read_to_string("/proc/self/status")
                 .unwrap()
                 .lines()

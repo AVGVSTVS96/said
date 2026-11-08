@@ -138,7 +138,7 @@ pub fn read(path: &Path, ci: bool) -> Result<Vec<Clip>> {
 pub fn hash(path: &Path) -> Result<String> {
     let mut file = File::open(path)?;
     let mut hash = Sha256::new();
-    let mut buffer = [0_u8; 65536];
+    let mut buffer = vec![0_u8; 65536];
     loop {
         let count = file.read(&mut buffer)?;
         if count == 0 {

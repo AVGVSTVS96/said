@@ -19,12 +19,10 @@ impl Paths {
         #[cfg(target_os = "linux")]
         let (data, config) = (
             std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| home.join(".local/share"))
+                .map_or_else(|| home.join(".local/share"), PathBuf::from)
                 .join(key),
             std::env::var_os("XDG_CONFIG_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| home.join(".config"))
+                .map_or_else(|| home.join(".config"), PathBuf::from)
                 .join(key),
         );
         #[cfg(target_os = "macos")]

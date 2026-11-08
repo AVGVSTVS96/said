@@ -35,8 +35,7 @@ pub fn cli(args: &[String]) -> Result<()> {
         };
         let cache = flag("--model-cache")
             .map(PathBuf::from)
-            .map(Ok)
-            .unwrap_or_else(model_cache)?;
+            .map_or_else(model_cache, Ok)?;
         return worker_main(Some(model), &manifest, &cache);
     }
     if args.first().map(String::as_str) != Some("bench") {

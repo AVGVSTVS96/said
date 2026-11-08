@@ -1,7 +1,12 @@
 use crate::storage::{Paths, atomic_write, disk_bytes};
 use crossbeam_channel::{Receiver, Sender, bounded};
 use said_audio::{Preview, Recorder};
-use said_core::{history::SqliteHistory, *};
+use said_core::{
+    AudioEvent, DownloadState, Effect, EngineEvent, EngineOutput, History, HostAction,
+    HostSnapshot, HostState, Hotkey, InputDevice, InputMode, Mode, ModelInfo, Phase, Result,
+    Session, SessionEvent, Settings, StartContext, Target, UiAction, UtteranceId, UtteranceStatus,
+    history::SqliteHistory,
+};
 use said_engine::{
     Engine,
     host::{WorkerClient, WorkerConfig, WorkerEngine, recognize_file_with_cancel},
@@ -98,6 +103,10 @@ pub struct Host<P: HostPlatform, R: Recorder> {
     devices: Vec<InputDevice>,
     devices_at: Instant,
     capabilities_at: Instant,
+    #[allow(
+        clippy::option_option,
+        reason = "Some(None) asks for the default microphone"
+    )]
     preview_request: Option<Option<String>>,
     preview: Option<(Option<String>, Preview)>,
     preview_retry: Option<Instant>,
@@ -221,7 +230,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             sequence: 0,
             query: String::new(),
             external,
-            replaying: Default::default(),
+            replaying: BTreeMap::default(),
             devices,
             devices_at: Instant::now(),
             capabilities_at: Instant::now(),
@@ -414,7 +423,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             | UiAction::Edit { id, .. }
             | UiAction::Discard { id }
             | UiAction::Cancel { id } => Some(*id),
-            _ => None,
+            UiAction::InsertLast => None,
         };
         if matches!(action, UiAction::Insert { .. })
             && id.is_some_and(|id| {
@@ -458,7 +467,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     .copy(row.text.as_deref().ok_or("recognition is unfinished")?)?,
                 UiAction::Edit { text, .. } => self.history.edit(id, &text)?,
                 UiAction::Discard { .. } => {
-                    self.history.set_status(id, UtteranceStatus::Discarded)?
+                    self.history.set_status(id, UtteranceStatus::Discarded)?;
                 }
                 UiAction::Cancel { .. } => return Err("recording is no longer active".into()),
                 UiAction::InsertLast => unreachable!(),
@@ -527,7 +536,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
             }
             HostAction::DownloadModel => self.install(true)?,
             HostAction::Permission { permission } => {
-                crate::desktop::request_permission(&permission)?
+                crate::desktop::request_permission(&permission)?;
             }
             HostAction::HistorySearch { query } => {
                 self.history.search(&query)?;
@@ -970,7 +979,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                             response = Some(SessionEvent::Engine(EngineOutput {
                                 id,
                                 event: EngineEvent::Error(format!("{error}")),
-                            }))
+                            }));
                         }
                     }
                 }
@@ -1013,12 +1022,10 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                         if !stopped {
                             response = Some(SessionEvent::CaptureFailed {
                                 id,
-                                message: result
-                                    .err()
-                                    .map(|error| error.to_string())
-                                    .unwrap_or_else(|| {
-                                        "Audio stopped without a durable flush".into()
-                                    }),
+                                message: result.err().map_or_else(
+                                    || "Audio stopped without a durable flush".into(),
+                                    |error| error.to_string(),
+                                ),
                             });
                         }
                     }
@@ -1083,7 +1090,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                     for event in self.platform.poll() {
                         self.event(event)?;
                     }
-                    response = Some(SessionEvent::FocusChecked { id, target })
+                    response = Some(SessionEvent::FocusChecked { id, target });
                 }
                 Effect::FocusTarget { id, target } => {
                     let _ = self.platform.focus(&target);
@@ -1105,7 +1112,7 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                             id,
                             message: error.to_string(),
                         },
-                    })
+                    });
                 }
                 Effect::Copy { text, .. } => self.platform.copy(&text)?,
                 Effect::EditHistory { id, text } => {
@@ -1116,20 +1123,20 @@ impl<P: HostPlatform, R: Recorder> Host<P, R> {
                             id,
                             message: error.to_string(),
                         },
-                    })
+                    });
                 }
                 Effect::SetStatus { id, status } => {
                     self.history_revision += 1;
-                    self.history.set_status(id, status)?
+                    self.history.set_status(id, status)?;
                 }
                 Effect::LoadLast => {
                     response = Some(SessionEvent::InsertLast {
                         utterance: self.history.last()?,
-                    })
+                    });
                 }
                 Effect::RecordDelivery { id, target, at } => {
                     self.history_revision += 1;
-                    self.history.record_delivery(id, &target, at)?
+                    self.history.record_delivery(id, &target, at)?;
                 }
                 Effect::Show { .. } => {}
                 Effect::Notify { id, message } => {

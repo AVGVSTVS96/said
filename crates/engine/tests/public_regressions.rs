@@ -24,7 +24,7 @@ fn recognize(client: &WorkerClient, path: PathBuf) -> (String, usize) {
             engine.finish();
             engine
         });
-        for event in output.iter() {
+        for event in &output {
             match event.event {
                 EngineEvent::Committed(chunk) => {
                     text.push_str(&chunk);
@@ -114,7 +114,7 @@ fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() 
         ] {
             let path = bench.join(format!("{name}.wav"));
             let warm = recognize(&client, path.clone()).0;
-            assert!(!warm.is_empty());
+            assert_ne!(warm, "");
             if name == "dont-delete" {
                 assert!(warm.to_lowercase().starts_with("don't delete"));
                 let deadline = std::time::Instant::now() + Duration::from_secs(5);
@@ -143,7 +143,7 @@ fn quiet_meeting_speech_survives_previous_streams_and_long_dictation_finishes() 
         );
         let first = recognize(&client, bench.join("ami-project.wav")).0;
         let second = recognize(&client, bench.join("ami-project.wav")).0;
-        assert!(!first.is_empty());
+        assert_ne!(first, "");
         assert_eq!(
             first, second,
             "earlier utterances must not affect VAD or decoding"

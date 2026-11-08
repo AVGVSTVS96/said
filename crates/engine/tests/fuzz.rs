@@ -64,7 +64,7 @@ fn mutation_fuzzing_request_and_response_decoders() {
     }
     for _ in 0..50_000 {
         let mut bytes = corpus[random() as usize % corpus.len()].clone();
-        for _ in 0..(random() % 8 + 1) {
+        for _ in 0..=(random() % 8) {
             match random() % 4 {
                 0 if !bytes.is_empty() => {
                     let index = random() as usize % bytes.len();

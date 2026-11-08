@@ -53,9 +53,9 @@ fn native_adapter_and_worker_preserve_identical_raw_transcripts() {
         let worker_text = recognize_file(UtteranceId::random(), &config, &path).unwrap();
         assert_eq!(worker_text.as_bytes(), text.as_bytes());
         if name == "silence" {
-            assert!(text.is_empty());
+            assert_eq!(text, "");
         } else {
-            assert!(!text.is_empty());
+            assert_ne!(text, "");
         }
         println!(
             "{}",

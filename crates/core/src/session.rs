@@ -1,6 +1,9 @@
 use std::collections::VecDeque;
 
-use crate::*;
+use crate::{
+    AudioEvent, Effect, EngineEvent, Hotkey, Mode, Phase, SessionEvent, SessionView, StartContext,
+    Target, UiAction, Utterance, UtteranceId, UtteranceStatus,
+};
 
 #[derive(Default)]
 pub struct Session {
@@ -628,7 +631,7 @@ impl Session {
         next.replay = true;
         next.stopped = true;
         next.view.phase = Phase::Finishing;
-        next.view.edited = entry.view.edited.clone();
+        next.view.edited.clone_from(&entry.view.edited);
         next.editor_tail = next.view.edited.as_ref().map_or(0, String::len);
         next.owned_tail = next.view.edited.is_some();
         let interrupted = entry.save(UtteranceStatus::Failed);
@@ -686,7 +689,7 @@ impl Session {
                 send: false,
             });
             entry.view.committed = utterance.raw_text.clone().unwrap();
-            entry.view.edited = utterance.text.clone();
+            entry.view.edited.clone_from(&utterance.text);
             entry.utterance = utterance;
             entry.pending = false;
             entry.stopped = true;
@@ -963,14 +966,14 @@ fn event_id(event: &SessionEvent) -> UtteranceId {
         | SessionEvent::PasteFailed { id, .. }
         | SessionEvent::Cancel { id }
         | SessionEvent::EditSaved { id }
-        | SessionEvent::EditFailed { id, .. } => *id,
-        SessionEvent::Engine(output) => output.id,
-        SessionEvent::Audio(AudioEvent::Frame(frame)) => frame.id,
-        SessionEvent::Audio(
+        | SessionEvent::EditFailed { id, .. }
+        | SessionEvent::Audio(
             AudioEvent::Stopped { id, .. }
             | AudioEvent::Disconnected { id }
             | AudioEvent::Error { id, .. },
         ) => *id,
+        SessionEvent::Engine(output) => output.id,
+        SessionEvent::Audio(AudioEvent::Frame(frame)) => frame.id,
         _ => unreachable!(),
     }
 }

@@ -113,7 +113,7 @@ fn main() -> said_core::Result<()> {
     let request = controls.recv_timeout(Duration::from_secs(5))?;
     assert_eq!(request.command, ControlCommand::Hotkey);
     assert_eq!(
-        platform.control_hotkey(request.command),
+        platform.control_hotkey(&request.command),
         Some((Hotkey::Down, false))
     );
     request.reply.send(Ok("toggle".into()))?;

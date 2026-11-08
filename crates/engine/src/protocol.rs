@@ -113,7 +113,7 @@ fn read_block(reader: &mut impl Read, limit: usize) -> Result<Option<Vec<u8>>> {
         match reader.read(&mut prefix[..1]) {
             Ok(0) => return Ok(None),
             Ok(_) => break,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
             Err(error) => return Err(error.into()),
         }
     }

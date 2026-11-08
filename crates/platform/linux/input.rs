@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::CString;
+use std::fmt::Write as _;
 use std::fs;
 use std::io::{self, Read, Write};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -80,7 +81,11 @@ impl Shortcuts {
                 "Insert last dictation",
             ),
         ] {
-            result.push_str(&format!("    {} repeat=false allow-inhibiting=false hotkey-overlay-title=\"{title}: said\" {{ spawn \"said\" {action}; }}\n", chord.niri()));
+            let _ = writeln!(
+                result,
+                "    {} repeat=false allow-inhibiting=false hotkey-overlay-title=\"{title}: said\" {{ spawn \"said\" {action}; }}",
+                chord.niri()
+            );
         }
         result.push('}');
         result
@@ -400,6 +405,10 @@ fn watch_directory(directory: &Path) -> Result<OwnedFd> {
     Ok(watch)
 }
 
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the listener thread owns its descriptors until it exits"
+)]
 fn listen(
     directory: PathBuf,
     watch: OwnedFd,
@@ -470,7 +479,7 @@ fn listen(
                         events,
                         &sender,
                         enabled.load(Ordering::Acquire),
-                    )
+                    );
                 })
                 .err();
             if error.is_some_and(|error| error.kind() != io::ErrorKind::WouldBlock) {

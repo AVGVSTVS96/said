@@ -180,7 +180,7 @@ impl LinuxPlatform {
         }
     }
 
-    pub fn control_hotkey(&self, command: ControlCommand) -> Option<(Hotkey, bool)> {
+    pub fn control_hotkey(&self, command: &ControlCommand) -> Option<(Hotkey, bool)> {
         let event = match command {
             ControlCommand::Hotkey
             | ControlCommand::HotkeyInteractive

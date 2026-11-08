@@ -69,22 +69,22 @@ impl Options {
                     .engines
                     .push(args.next().ok_or("engine missing")?.clone()),
                 "--audio-root" => {
-                    options.audio_root = Some(args.next().ok_or("audio root missing")?.into())
+                    options.audio_root = Some(args.next().ok_or("audio root missing")?.into());
                 }
                 "--output" => {
-                    options.output = args.next().ok_or("output directory missing")?.into()
+                    options.output = args.next().ok_or("output directory missing")?.into();
                 }
                 "--trace" => {
-                    options.trace = Some(fs::canonicalize(args.next().ok_or("trace missing")?)?)
+                    options.trace = Some(fs::canonicalize(args.next().ok_or("trace missing")?)?);
                 }
                 "--model-manifest" => {
                     options.model_manifest = Some(fs::canonicalize(
                         args.next().ok_or("model manifest missing")?,
-                    )?)
+                    )?);
                 }
                 "--model-cache" => {
                     options.model_cache =
-                        fs::canonicalize(args.next().ok_or("model cache missing")?)?
+                        fs::canonicalize(args.next().ok_or("model cache missing")?)?;
                 }
                 "--startup-seconds" | "--audio-seconds" | "--finish-seconds" => {
                     let seconds: u64 = args.next().ok_or("deadline missing")?.parse()?;
@@ -389,19 +389,19 @@ pub fn run(mut options: Options) -> Result<()> {
                 let path = clip.path(&options.manifest, options.audio_root.as_deref());
                 match recognize(&client, &path, options.unpaced) {
                     Ok(recognition) => {
-                        let a = score::normalized_tokens(&clip.reference)
+                        let reference_words = score::normalized_tokens(&clip.reference)
                             .len()
                             .max(clip.reference.split_whitespace().count());
-                        let b = score::normalized_tokens(&recognition.text)
+                        let recognized_words = score::normalized_tokens(&recognition.text)
                             .len()
                             .max(recognition.text.split_whitespace().count());
-                        if (a + 1)
-                            .checked_mul(b + 1)
+                        if (reference_words + 1)
+                            .checked_mul(recognized_words + 1)
                             .is_none_or(|cells| cells > 64_000_000)
                         {
                             return Err("alignment exceeds 64 million cells; split the reference into auditable clips".into());
                         }
-                        let scored = score::score(
+                        let clip_score = score::score(
                             &clip.reference,
                             &recognition.text,
                             &clip.terms,
@@ -412,10 +412,10 @@ pub fn run(mut options: Options) -> Result<()> {
                             "{}",
                             json!({"engine": model, "id": clip.id, "audio_sha256": clip.sha256,
                             "reference": clip.reference, "reference_status": clip.reference_status, "tags": clip.tags,
-                            "pair": clip.pair, "polarity": clip.polarity, "status": "ok", "recognition": recognition, "score": scored})
+                            "pair": clip.pair, "polarity": clip.polarity, "status": "ok", "recognition": recognition, "score": clip_score})
                         )?;
                         tags.push(clip.tags.clone());
-                        scores.push(scored);
+                        scores.push(clip_score);
                         timings.push(recognition);
                     }
                     Err(error) => {
@@ -542,7 +542,13 @@ fn verify_model(manifest: &Manifest, model: &str, cache: &Path, trace: bool) -> 
         for file in fs::read_dir(directory)? {
             let file = file?;
             let name = file.file_name().to_string_lossy().into_owned();
-            if file.path().is_file() && (name.contains(".so") || name.ends_with(".dylib")) {
+            if file.path().is_file()
+                && (name.contains(".so")
+                    || file
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "dylib"))
+            {
                 runtime_files.insert(name, corpus::hash(&file.path())?);
             }
         }
@@ -568,6 +574,6 @@ fn host() -> Value {
             .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
     };
     json!({"os": std::env::consts::OS, "architecture": std::env::consts::ARCH, "cpu": cpu,
-        "logical_cpus": thread::available_parallelism().ok().map(|n| n.get()),
+        "logical_cpus": thread::available_parallelism().ok().map(std::num::NonZero::get),
         "kernel": std::process::Command::new("uname").arg("-r").output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())})
 }
