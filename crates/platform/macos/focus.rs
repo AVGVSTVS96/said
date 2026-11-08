@@ -78,7 +78,7 @@ unsafe fn frontmost() -> Option<Frontmost> {
 unsafe fn attribute(element: Ref, name: &str) -> std::result::Result<Owned, i32> {
     let name = Owned::string(name);
     let mut value = null_mut();
-    match unsafe { ffi::AXUIElementCopyAttributeValue(element, name.0, &mut value) } {
+    match unsafe { ffi::AXUIElementCopyAttributeValue(element, name.0, &raw mut value) } {
         0 => Owned::new(value).map_err(|_| 0),
         status => Err(status),
     }
@@ -93,7 +93,7 @@ impl State {
             _ => false,
         };
         if !same {
-            *current = target.clone();
+            current.clone_from(&target);
             self.queue.push(target);
         }
     }
@@ -176,7 +176,7 @@ impl State {
             let application = Owned::new(ffi::AXUIElementCreateApplication(pid))?;
             ffi::AXUIElementSetMessagingTimeout(application.0, 0.2);
             let mut observer = null_mut();
-            let status = ffi::AXObserverCreate(pid, window_changed, &mut observer);
+            let status = ffi::AXObserverCreate(pid, window_changed, &raw mut observer);
             if status != 0 {
                 return Err(format!(
                     "Cannot observe focused windows (Accessibility error {status}); use Copy."
@@ -189,7 +189,7 @@ impl State {
                 observer.0,
                 application.0,
                 notification.0,
-                (self as *const Self).cast_mut().cast(),
+                std::ptr::from_ref::<Self>(self).cast_mut().cast(),
             );
             if status != 0 {
                 return Err(format!(
@@ -216,7 +216,7 @@ unsafe extern "C" fn window_changed(_: Ref, _: Ref, _: Ref, context: Ref) {
 }
 unsafe extern "C" fn application_changed(object: Ref, _: Ref, _: Ref) {
     let mut context = null_mut();
-    unsafe { ffi::object_getInstanceVariable(object, c"context".as_ptr(), &mut context) };
+    unsafe { ffi::object_getInstanceVariable(object, c"context".as_ptr(), &raw mut context) };
     if let Some(state) = unsafe { context.cast::<State>().as_ref() } {
         objc::autorelease(|| state.changed());
     }
@@ -247,7 +247,7 @@ fn observer_class() -> Ref {
 }
 
 /// Window identities plus notification-driven focus changes. Every method that touches AX
-/// or AppKit must run on the main queue.
+/// or `AppKit` must run on the main queue.
 #[derive(Default)]
 pub struct Focus {
     state: Box<State>,
@@ -268,7 +268,7 @@ impl Focus {
                 ffi::object_setInstanceVariable(
                     observer,
                     c"context".as_ptr(),
-                    (&*self.state as *const State).cast_mut().cast(),
+                    (&raw const *self.state).cast_mut().cast(),
                 );
                 let workspace = objc::send::<Ref>(objc::class(c"NSWorkspace"), c"sharedWorkspace");
                 let center = objc::send::<Ref>(workspace, c"notificationCenter");
@@ -295,7 +295,7 @@ impl Focus {
         self.observe()?;
         self.state.focused()
     }
-    /// The remembered window's process, AX element and NSRunningApplication.
+    /// The remembered window's process, AX element and `NSRunningApplication`.
     pub fn window(&self, target: &Target) -> Option<(i32, Ref, Ref)> {
         self.state
             .windows
@@ -349,27 +349,30 @@ impl Drop for Focus {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn window(id: &str) -> Option<Target> {
-        Some(Target {
+    fn window(id: &str) -> Target {
+        Target {
             app_id: "scratch".into(),
             window_id: id.into(),
             name: "Scratch".into(),
-        })
+        }
     }
     #[test]
     fn only_actual_window_changes_queue_and_departure_then_return_both_remain() {
         let state = State::default();
-        state.record(window("A"));
-        state.record(window("A"));
+        state.record(Some(window("A")));
+        state.record(Some(window("A")));
         state.record(Some(Target {
             name: "Renamed".into(),
-            ..window("A").unwrap()
+            ..window("A")
         }));
-        assert_eq!(state.queue.drain(), [window("A")]);
-        state.record(window("B"));
+        assert_eq!(state.queue.drain(), [Some(window("A"))]);
+        state.record(Some(window("B")));
         state.record(None);
         state.record(None);
-        state.record(window("A"));
-        assert_eq!(state.queue.drain(), [window("B"), None, window("A")]);
+        state.record(Some(window("A")));
+        assert_eq!(
+            state.queue.drain(),
+            [Some(window("B")), None, Some(window("A"))]
+        );
     }
 }

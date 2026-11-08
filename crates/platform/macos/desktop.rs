@@ -85,7 +85,7 @@ impl Desktop {
             })
         })
     }
-    pub fn copy(&self, text: &str) -> Result<()> {
+    pub fn copy(text: &str) -> Result<()> {
         objc::main_thread(|| objc::autorelease(|| write_clipboard(text)))
     }
     pub fn paste(&self, target: &Target, text: &str, send: bool, automatic: bool) -> Result<()> {
@@ -183,9 +183,9 @@ fn command_v_keycode() -> Result<u16> {
                 1,
                 keyboard,
                 1,
-                &mut dead,
+                &raw mut dead,
                 chars.len(),
-                &mut length,
+                &raw mut length,
                 chars.as_mut_ptr(),
             );
             if status == 0 && length == 1 {

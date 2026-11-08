@@ -94,10 +94,7 @@ impl<W> MacosPlatform<W> {
         self.desktop.focus_changes()
     }
     pub fn input_statuses(&self) -> Receiver<InputStatus> {
-        self.input
-            .as_ref()
-            .map(Input::statuses)
-            .unwrap_or_else(never)
+        self.input.as_ref().map_or_else(never, Input::statuses)
     }
     pub fn overlay_errors(&self) -> Receiver<String> {
         self.errors.clone()
@@ -111,16 +108,13 @@ impl<W> MacosPlatform<W> {
         self.desktop.focused()
     }
     pub fn copy(&self, text: &str) -> Result<()> {
-        self.desktop.copy(text)
+        Desktop::copy(text)
     }
 }
 impl<W: Sync> Platform for MacosPlatform<W> {
     type Window = W;
     fn hotkeys(&self) -> Receiver<Hotkey> {
-        self.input
-            .as_ref()
-            .map(Input::hotkeys)
-            .unwrap_or_else(never)
+        self.input.as_ref().map_or_else(never, Input::hotkeys)
     }
     fn focused(&self) -> Option<Target> {
         self.focused_target().ok()

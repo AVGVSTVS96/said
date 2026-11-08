@@ -43,7 +43,7 @@ impl Permissions {
         }
         match self.microphone {
             MicrophonePermission::NotDetermined => {
-                steps.push("Press Allow next to Microphone, then choose Allow.")
+                steps.push("Press Allow next to Microphone, then choose Allow.");
             }
             MicrophonePermission::Denied => steps
                 .push("Turn on this app in System Settings > Privacy & Security > Microphone."),
@@ -120,6 +120,20 @@ fn session_unavailable(mut value: impl FnMut(&str) -> Option<bool>) -> bool {
         || value("kCGSessionLoginDoneKey") == Some(false)
 }
 
+pub fn request_microphone() {
+    use block2::RcBlock;
+    use objc2::msg_send;
+    use objc2::runtime::{AnyClass, Bool};
+    use objc2_foundation::NSString;
+    let completion = RcBlock::new(|_: Bool| {});
+    let media = NSString::from_str("soun");
+    unsafe {
+        let class = AnyClass::get(c"AVCaptureDevice").expect("AVFoundation is linked");
+        let _: () =
+            msg_send![class, requestAccessForMediaType: &*media, completionHandler: &*completion];
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,19 +180,5 @@ mod tests {
             secure_input_enabled(),
             session_locked()
         );
-    }
-}
-
-pub fn request_microphone() {
-    use block2::RcBlock;
-    use objc2::msg_send;
-    use objc2::runtime::{AnyClass, Bool};
-    use objc2_foundation::NSString;
-    let completion = RcBlock::new(|_: Bool| {});
-    let media = NSString::from_str("soun");
-    unsafe {
-        let class = AnyClass::get(c"AVCaptureDevice").expect("AVFoundation is linked");
-        let _: () =
-            msg_send![class, requestAccessForMediaType: &*media, completionHandler: &*completion];
     }
 }

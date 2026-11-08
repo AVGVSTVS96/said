@@ -52,9 +52,6 @@ pub unsafe fn string(object: Ref) -> Option<String> {
 }
 
 pub fn main_thread<F: FnOnce() -> R + Send, R: Send>(work: F) -> R {
-    if unsafe { ffi::pthread_main_np() } != 0 {
-        return work();
-    }
     struct Job<F, R> {
         work: Option<F>,
         result: Option<std::thread::Result<R>>,
@@ -62,6 +59,9 @@ pub fn main_thread<F: FnOnce() -> R + Send, R: Send>(work: F) -> R {
     unsafe extern "C" fn run<F: FnOnce() -> R, R>(context: Ref) {
         let job = unsafe { &mut *context.cast::<Job<F, R>>() };
         job.result = Some(catch_unwind(AssertUnwindSafe(job.work.take().unwrap())));
+    }
+    if unsafe { ffi::pthread_main_np() } != 0 {
+        return work();
     }
     let mut job = Job {
         work: Some(work),
@@ -71,7 +71,7 @@ pub fn main_thread<F: FnOnce() -> R + Send, R: Send>(work: F) -> R {
         ffi::dispatch_sync_f(
             // dispatch_get_main_queue is an inline C accessor for this queue object.
             (&raw const ffi::_dispatch_main_q).cast_mut(),
-            (&mut job as *mut Job<_, R>).cast::<c_void>(),
+            (&raw mut job).cast::<c_void>(),
             run::<F, R>,
         );
     }
@@ -82,13 +82,12 @@ pub fn main_thread<F: FnOnce() -> R + Send, R: Send>(work: F) -> R {
 }
 
 pub fn autorelease<R>(work: impl FnOnce() -> R) -> R {
-    let pool = unsafe { send::<Ref>(class(c"NSAutoreleasePool"), c"new") };
     struct Pool(Ref);
     impl Drop for Pool {
         fn drop(&mut self) {
             unsafe { send::<()>(self.0, c"drain") };
         }
     }
-    let _pool = Pool(pool);
+    let _pool = Pool(unsafe { send::<Ref>(class(c"NSAutoreleasePool"), c"new") });
     work()
 }

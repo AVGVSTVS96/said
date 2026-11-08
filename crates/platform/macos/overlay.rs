@@ -6,12 +6,14 @@ use said_core::Result;
 
 use super::{ffi, objc};
 
+static PANEL: OnceLock<usize> = OnceLock::new();
+
 unsafe extern "C" fn never_focus(_: ffi::Ref, _: ffi::Ref) -> bool {
     false
 }
 
 /// Converts the hidden overlay window to a non-activating panel before its first presentation.
-/// Call on the AppKit main thread.
+/// Call on the `AppKit` main thread.
 pub fn configure(window: &tauri::Window) -> Result<()> {
     let window = NonNull::new(window.ns_window()?).ok_or("missing native window")?;
     unsafe { convert(window)? };
@@ -19,7 +21,7 @@ pub fn configure(window: &tauri::Window) -> Result<()> {
     Ok(())
 }
 
-/// Shows the overlay `configure` converted. Call on the AppKit main thread.
+/// Shows the overlay `configure` converted. Call on the `AppKit` main thread.
 pub fn show(window: &tauri::Window) -> Result<()> {
     let window = NonNull::new(window.ns_window()?).ok_or("missing native window")?;
     position(window);
@@ -27,8 +29,8 @@ pub fn show(window: &tauri::Window) -> Result<()> {
 }
 
 /// # Safety
-/// `window` must point to a live AppKit NSWindow owned by the caller. It must
-/// remain alive through the call; invoke on the AppKit main thread.
+/// `window` must point to a live `AppKit` `NSWindow` owned by the caller. It must
+/// remain alive through the call; invoke on the `AppKit` main thread.
 unsafe fn convert(window: NonNull<c_void>) -> Result<()> {
     if unsafe { ffi::pthread_main_np() } == 0 {
         return Err("Configure the overlay on the AppKit main thread".into());
@@ -50,7 +52,6 @@ unsafe fn convert(window: NonNull<c_void>) -> Result<()> {
                 return Err("Overlay handle is not an NSWindow".into());
             }
             // Like tauri-nspanel, conversion changes the hidden window's runtime class.
-            static PANEL: OnceLock<usize> = OnceLock::new();
             let class = *PANEL.get_or_init(|| {
                 let class =
                     ffi::objc_allocateClassPair(panel, c"saidNonactivatingPanel".as_ptr(), 0);

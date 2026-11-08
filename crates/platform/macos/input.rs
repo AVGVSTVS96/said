@@ -99,7 +99,7 @@ impl Input {
                     sender,
                     status_sender,
                     worker_recording,
-                    worker_stop,
+                    &worker_stop,
                     &ready_sender,
                 );
                 if let Err(error) = result {
@@ -144,7 +144,7 @@ fn run(
     hotkeys: Sender<Hotkey>,
     statuses: Sender<InputStatus>,
     recording: Arc<AtomicBool>,
-    stop: Arc<AtomicBool>,
+    stop: &AtomicBool,
     ready: &Sender<std::result::Result<(), String>>,
 ) -> Result<()> {
     let mut tap = Tap {
@@ -163,7 +163,7 @@ fn run(
             0,
             (1 << 10) | (1 << 11) | (1 << 12),
             callback,
-            (&mut tap as *mut Tap).cast(),
+            (&raw mut tap).cast(),
         )
     })
     .map_err(|_| "macOS refused the shortcut listener.")?;
@@ -238,7 +238,7 @@ mod tests {
             recording: Arc::new(AtomicBool::new(false)),
             status: InputStatus::Available,
         };
-        let context = (&mut tap as *mut Tap).cast();
+        let context = (&raw mut tap).cast();
         let down =
             Owned::new(unsafe { ffi::CGEventCreateKeyboardEvent(std::ptr::null_mut(), 49, true) })
                 .unwrap();
@@ -303,7 +303,7 @@ mod tests {
                 std::ptr::null_mut(),
                 u32::MAX - 1,
                 std::ptr::null_mut(),
-                (&mut tap as *mut Tap).cast(),
+                (&raw mut tap).cast(),
             );
         }
         assert_eq!(

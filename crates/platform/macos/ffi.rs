@@ -177,7 +177,7 @@ impl Owned {
                 std::ptr::null_mut(),
                 value.as_ptr(),
                 value.len() as isize,
-                0x08000100,
+                0x0800_0100,
                 false,
             )
         })
@@ -209,12 +209,12 @@ mod tests {
                         location: 0,
                         length,
                     },
-                    0x08000100,
+                    0x0800_0100,
                     0,
                     false,
                     bytes.as_mut_ptr(),
                     bytes.len() as isize,
-                    &mut used,
+                    &raw mut used,
                 )
             },
             length
