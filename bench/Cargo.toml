@@ -14,7 +14,8 @@ said-engine.workspace = true
 crossbeam-channel.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sha2 = "0.10"
+sha2.workspace = true
+hex.workspace = true
 unicode-normalization = "0.1"
 
 [[bin]]

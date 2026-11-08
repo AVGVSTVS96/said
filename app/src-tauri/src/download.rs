@@ -25,7 +25,7 @@ fn hash(path: &Path, mut progress: impl FnMut(u64)) -> Result<String> {
             progress(received);
         }
     }
-    Ok(format!("{:x}", digest.finalize()))
+    Ok(hex::encode(digest.finalize()))
 }
 
 fn stamp_path(path: &Path) -> PathBuf {

@@ -6,7 +6,8 @@ use std::sync::{
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
+use ashpd::desktop::CreateSessionOptions;
+use ashpd::desktop::global_shortcuts::{BindShortcutsOptions, GlobalShortcuts, NewShortcut};
 use crossbeam_channel::Sender;
 use futures_util::StreamExt;
 use said_core::{Hotkey, Result};
@@ -117,7 +118,7 @@ async fn listen(
     };
     let session = tokio::select! {
         _ = &mut stopped => return Ok(()),
-        result = portal.create_session() => result?,
+        result = portal.create_session(CreateSessionOptions::default()) => result?,
     };
     let mut tracker = PortalTracker::default();
     let result = async {
@@ -133,7 +134,7 @@ async fn listen(
                 .preferred_trigger(triggers[2].as_str()),
         ];
         portal
-            .bind_shortcuts(&session, &shortcuts, None)
+            .bind_shortcuts(&session, &shortcuts, None, BindShortcutsOptions::default())
             .await?
             .response()?;
         available.store(true, Ordering::Release);

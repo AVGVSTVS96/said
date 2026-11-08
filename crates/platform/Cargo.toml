@@ -22,7 +22,7 @@ libc = { version = "0.2", optional = true }
 evdev = { version = "0.13", optional = true }
 gtk = { version = "0.18", optional = true }
 gtk-layer-shell = { version = "0.8", features = ["v0_6"], optional = true }
-ashpd = { version = "0.12.3", optional = true }
+ashpd = { version = "0.14", features = ["global_shortcuts"], optional = true }
 futures-util = { version = "0.3", optional = true }
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"], optional = true }
 wayland-client = { version = "0.31", optional = true }

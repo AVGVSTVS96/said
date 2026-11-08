@@ -146,7 +146,7 @@ pub fn hash(path: &Path) -> Result<String> {
         }
         hash.update(&buffer[..count]);
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(hex::encode(hash.finalize()))
 }
 
 pub fn verify(clips: &[Clip], manifest: &Path, audio_root: Option<&Path>) -> Result<()> {

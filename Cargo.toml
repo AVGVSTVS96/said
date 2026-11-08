@@ -21,6 +21,8 @@ ts-rs = { version = "12", features = ["uuid-impl", "no-serde-warnings"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 crossbeam-channel = "0.5"
 thiserror = "2"
+sha2 = "0.11"
+hex = "0.4"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
