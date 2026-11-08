@@ -15,31 +15,22 @@ Read [SPEC.md](SPEC.md) for current behavior and limits, and [CONTRACTS.md](CONT
 | `bench`           | Public corpus, replay runner, scoring and receipts                              |
 | `packaging`       | Arch package, Linux staging, macOS app/DMG and distribution notices             |
 
-Use Rust 2024 and React/TypeScript, with small modules and short call paths. Comments explain non-obvious platform facts. Tests should prove a meaningful behavior or failure path. Fixtures must be synthetic or freely licensed; keep personal recordings, transcripts, databases and research outside this public repository. Include provenance for new data and preserve third-party credits for reused code.
+Use Rust 2024 and React/TypeScript, with small modules and short call paths. In Rust, comments explain non-obvious platform facts; TypeScript carries none (oxlint enforces it). Tests should prove a meaningful behavior or failure path. Fixtures must be synthetic or freely licensed; keep personal recordings, transcripts, databases and research outside this public repository. Include provenance for new data and preserve third-party credits for reused code.
 
 ## Local checks
 
-Rust 1.90+ and Bun 1.4+ are required. Set `CARGO_BUILD_JOBS=2` to bound parallel compilation. Default workspace members exclude Tauri; pure tests need no display or microphone.
+Rust 1.90+ and Bun 1.4+ are required, plus the [native build dependencies](packaging/README.md) on Linux. `.cargo/config.toml` bounds compilation to two jobs. Checks need no display or microphone.
 
 ```sh
-cargo fmt --all --check
-CARGO_BUILD_JOBS=2 cargo clippy --locked -p said-core -p said-audio -p said-engine -p said-platform -p said-bench --all-targets -- -D warnings
-CARGO_BUILD_JOBS=2 cargo test --locked -p said-core -p said-audio -p said-engine -p said-platform -p said-bench
-cd app
 bun install --frozen-lockfile
-bun run typecheck
-bun run build
+bun run check
 ```
 
-`bun run generate` exports product metadata and shared types. Rust builds also export types. The renderer imports `src/contracts.ts` and sends actions through Tauri IPC; native adapters own clipboard and input operations. `bun run dev` previews the renderer; `/?demo=1&screen=interactive` selects a synthetic development demo. `bun run tauri dev` launches the native app and can request desktop permissions or register input listeners.
+`check` builds the renderer, runs oxlint, oxfmt and the renderer tests, then cargo fmt, clippy with `-D warnings` and tests over the whole workspace. `bun run fix` applies the formatters and lint fixes. CI runs `check` on Linux and macOS, and lefthook runs it before each commit.
 
-A host check needs the [native build dependencies](packaging/README.md):
+`bun --filter said-ui generate` exports product metadata and shared types. Rust builds also export types. The renderer imports `src/contracts.ts` and sends actions through Tauri IPC; native adapters own clipboard and input operations. `bun --filter said-ui dev` previews the renderer; `/?demo=1&screen=interactive` selects a synthetic development demo. `bun --filter said-ui tauri dev` launches the native app and can request desktop permissions or register input listeners.
 
-```sh
-CARGO_BUILD_JOBS=2 cargo check --locked -p said-app --features custom-protocol
-CARGO_BUILD_JOBS=2 cargo test --locked -p said-app --test end_to_end
-bash packaging/tests/notices.sh
-```
+Packaging checks its notices with `bash packaging/tests/notices.sh`.
 
 ## Native verification
 
@@ -55,7 +46,7 @@ The command is a verification procedure, not a claim that the golden suite curre
 
 Desktop checks belong in isolated scratch sessions. Linux uses [nested/headless compositors](crates/platform/linux/README.md#acceptance-checks). macOS uses the [separate-account checklist](crates/platform/macos/MANUAL-CHECKLIST.md). Pure and decoder tests do not establish native acceptance. Avoid acquiring live desktop hotkeys, injecting into personal applications or changing permission grants during automated checks.
 
-CI runs format, lint and pure tests on Linux/macOS, plus renderer checks and Linux host check/end-to-end fakes. It does not run the model suite, nested Niri or live macOS acceptance. Keep result claims tied to their command, commit and scope.
+CI does not run the model suite, nested Niri or live macOS acceptance. Keep result claims tied to their command, commit and scope.
 
 ## Distribution credits
 

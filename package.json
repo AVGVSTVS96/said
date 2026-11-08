@@ -12,7 +12,7 @@
   },
   "type": "module",
   "scripts": {
-    "check": "bun --filter said-ui generate && oxlint && oxfmt --check && bun --filter said-ui typecheck && bun --filter said-ui test && cargo fmt --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo test --locked --workspace",
+    "check": "bun --filter said-ui build && oxlint && oxfmt --check && bun --filter said-ui test && cargo fmt --check && cargo clippy --locked --workspace --all-targets -- -D warnings && cargo test --locked --workspace",
     "fix": "oxlint --fix; oxfmt; cargo fmt",
     "prepare": "lefthook install"
   },
