@@ -1,17 +1,23 @@
 import { expect, test } from "bun:test";
-import { createCoreSource, type AppAction } from "./source";
+
 import { createFakeSource } from "./fake";
+import { createCoreSource } from "./source";
+import type { AppAction } from "./source";
 
 test("core actions stay ordered across delayed edits and insertion", async () => {
   const calls: AppAction[] = [];
   let finish: (() => void) | undefined;
+
   const source = createCoreSource(async (action) => {
     calls.push(action);
-    if (calls.length === 1)
+
+    if (calls.length === 1) {
       await new Promise<void>((resolve) => {
         finish = resolve;
       });
+    }
   });
+
   const first = source.dispatch({ type: "edit", id: "one", text: "first" });
   const second = source.dispatch({ type: "edit", id: "one", text: "second\n" });
   const insert = source.dispatch({ type: "insert", id: "one" });
@@ -29,34 +35,35 @@ test("core actions stay ordered across delayed edits and insertion", async () =>
 
 test("a rejected action does not block later retries", async () => {
   let calls = 0;
+
   const source = createCoreSource(async () => {
-    if (++calls === 1) throw new Error("save failed");
+    if (++calls === 1) {
+      throw new Error("save failed");
+    }
   });
-  await expect(source.dispatch({ type: "insert_last" })).rejects.toThrow(
-    "save failed",
-  );
+
+  await expect(source.dispatch({ type: "insert_last" })).rejects.toThrow("save failed");
   await source.dispatch({ type: "insert_last" });
   expect(calls).toBe(2);
 });
 
 test("the fake saves original and edited text separately without desktop side effects", async () => {
   const fake = createFakeSource();
-  const id = fake.getSnapshot().sessions[0].id;
+  const { id } = fake.getSnapshot().sessions[0];
   await fake.dispatch({ type: "edit", id, text: "  manual edit\n\n" });
-  for (let step = 0; step < 6; step++) fake.next();
+
+  for (let step = 0; step < 6; step++) {
+    fake.next();
+  }
   const row = fake.getSnapshot().history.find((row) => row.id === id)!;
   expect(row.raw_text).toBe(
     "um, no, keep the the old value, actually no, use cache_key, no no don't rename it.",
   );
-  expect(row.text).toBe(
-    "  manual edit\n\nuse cache_key, no no don't rename it.",
-  );
+  expect(row.text).toBe("  manual edit\n\nuse cache_key, no no don't rename it.");
   await fake.dispatch({ type: "copy", id });
   await fake.dispatch({ type: "insert", id });
   expect(fake.actions.at(-1)).toEqual({ type: "insert", id });
-  expect(
-    fake.getSnapshot().history.find((row) => row.id === id)!.pasted_at,
-  ).toBeNull();
+  expect(fake.getSnapshot().history.find((row) => row.id === id)!.pasted_at).toBeNull();
   expect(fake.getSnapshot().sessions[0].phase).toBe("reviewing");
 });
 
@@ -64,9 +71,11 @@ test("snapshot listeners unsubscribe and the idle snapshot is stable", () => {
   const fake = createFakeSource();
   expect(fake.getSnapshot()).toBe(fake.getSnapshot());
   let updates = 0;
+
   const unsubscribe = fake.subscribe(() => {
     updates++;
   });
+
   fake.next();
   unsubscribe();
   fake.next();
@@ -76,12 +85,18 @@ test("snapshot listeners unsubscribe and the idle snapshot is stable", () => {
 test("host termination invalidates live state and rejects queued and future actions", async () => {
   const calls: AppAction[] = [];
   let release: (() => void) | undefined;
+
   const source = createCoreSource(async (action) => {
     calls.push(action);
-    await new Promise<void>((resolve) => { release = resolve; });
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
   });
+
   let changes = 0;
-  source.subscribe(() => { changes++; });
+  source.subscribe(() => {
+    changes++;
+  });
   source.receive({ sessions: [], history: [], settings: null, devices: [], sequence: 1 });
   const first = source.dispatch({ type: "insert_last" });
   const queued = source.dispatch({ type: "insert_last" });

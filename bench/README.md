@@ -82,7 +82,18 @@ Absolute paths are used unchanged. Every selected WAV is hash-checked before
 any engine starts; audio is streamed in 1,600-sample blocks, not loaded whole.
 
 ```json
-{"id":"example","audio":"clips/example.wav","sha256":"<64 hex digits>","reference":"Um, don't use --force","tags":["filler","negation","flag"],"license":"CC0-1.0","source":"synthetic example","reference_status":"listened","terms":[{"text":"--force","kind":"flag"}],"ci":true}
+{
+  "id": "example",
+  "audio": "clips/example.wav",
+  "sha256": "<64 hex digits>",
+  "reference": "Um, don't use --force",
+  "tags": ["filler", "negation", "flag"],
+  "license": "CC0-1.0",
+  "source": "synthetic example",
+  "reference_status": "listened",
+  "terms": [{ "text": "--force", "kind": "flag" }],
+  "ci": true
+}
 ```
 
 `terms` are optional and use `technical`, `identifier`, `path` or `flag`.

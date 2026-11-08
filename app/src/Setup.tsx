@@ -1,16 +1,18 @@
-import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { CoreSource, InputDevice, Settings } from "./source";
-import type { HostState } from "./contracts";
+import { useEffect, useRef, useState } from "react";
+
 import { Icon, LevelMeter } from "./components";
+import type { HostState } from "./contracts";
 import { DesktopStatus, ShortcutFields, shortcutError, shortcutLabel } from "./shortcuts";
+import type { CoreSource, InputDevice, Settings } from "./source";
 
 type Step = "microphone" | "model" | "permissions" | "shortcut" | "try" | "done";
+
 type Mark = "todo" | "active" | "done" | "failed";
 
 const heard = 0.3;
-const required = ["microphone", "accessibility"];
+const required = new Set(["microphone", "accessibility"]);
 const titles: Record<Step, string> = {
   microphone: "Microphone",
   model: "Speech model",
@@ -54,7 +56,9 @@ function pasteProblem(notification?: string) {
 function useWindowFocus() {
   const [focused, setFocused] = useState(() => document.hasFocus());
   useEffect(() => {
-    const update = () => setFocused(document.hasFocus());
+    const update = () => {
+      setFocused(document.hasFocus());
+    };
     window.addEventListener("focus", update);
     window.addEventListener("blur", update);
     return () => {
@@ -77,7 +81,15 @@ function Keys({ value, mac }: { value: string; mac: boolean }) {
   );
 }
 
-function Check({ mark, children, detail }: { mark: Mark; children: React.ReactNode; detail?: string }) {
+function Check({
+  mark,
+  children,
+  detail,
+}: {
+  mark: Mark;
+  children: React.ReactNode;
+  detail?: string;
+}) {
   return (
     <li data-mark={mark}>
       <span className="mark" aria-hidden="true">
@@ -126,17 +138,23 @@ export function Setup({
   const configured = settings ? { ...settings, ...shortcuts } : null;
   const invalidShortcut = configured ? shortcutError(configured, mac) : null;
   const dirty = Boolean(
-    settings && Object.entries(shortcuts).some(([field, value]) => settings[field as keyof Settings] !== value),
+    settings &&
+    Object.entries(shortcuts).some(([field, value]) => settings[field as keyof Settings] !== value),
   );
   const missing = permissions
-    .filter(([name, status]) => required.includes(name) && status !== "authorized")
+    .filter(([name, status]) => required.has(name) && status !== "authorized")
     .map(([name]) => name);
   const download = host?.download;
   const ready = download?.state === "ready";
   const blocked: [string, Step] | null = !host
     ? ["Waiting for said to start", "microphone"]
     : !ready
-      ? [download?.state === "failed" ? "The speech model needs a retry" : "Waiting for the speech model", "model"]
+      ? [
+          download?.state === "failed"
+            ? "The speech model needs a retry"
+            : "Waiting for the speech model",
+          "model",
+        ]
       : missing.length
         ? [
             `Allow ${missing.map(permissionName).join(" and ")}`,
@@ -149,9 +167,12 @@ export function Setup({
   const level = host?.preview ?? null;
   const trial = source.getSnapshot().sessions.find((session) => session.id === host?.trial);
   const trialText = trial ? (trial.edited ?? trial.committed + trial.partial).trim() : "";
-  const trialSettled = Boolean(trial && !["recording", "finishing", "saving", "pasting"].includes(trial.phase));
+  const trialSettled = Boolean(
+    trial && !["recording", "finishing", "saving", "pasting"].includes(trial.phase),
+  );
   const delivered = Boolean(
-    trial && (trial.phase === "pasted" || (host?.input === "clipboard" && pastedTrial === trial.id)),
+    trial &&
+    (trial.phase === "pasted" || (host?.input === "clipboard" && pastedTrial === trial.id)),
   );
   const microphonePermission = host?.permissions.microphone;
 
@@ -188,9 +209,13 @@ export function Setup({
   const wasGranted = useRef(granted);
   useEffect(() => {
     if (step === "permissions" && granted && !wasGranted.current) {
-      const timer = setTimeout(() => setStep("shortcut"), 700);
+      const timer = setTimeout(() => {
+        setStep("shortcut");
+      }, 700);
       wasGranted.current = granted;
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+      };
     }
     wasGranted.current = granted;
   }, [step, granted]);
@@ -222,13 +247,17 @@ export function Setup({
       finished.current = trialId;
       void finish().catch(() => {});
     }, 1200);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [delivered, trialId, canFinish]);
 
   function next() {
     if (step === "shortcut" && dirty) {
       void save()
-        .then(() => setStep("try"))
+        .then(() => {
+          setStep("try");
+        })
         .catch(() => {});
       return;
     }
@@ -241,7 +270,8 @@ export function Setup({
 
   const hotkey = configured?.hotkey ?? "";
   const doneSteps: Record<Step, boolean> = {
-    microphone: (loudest >= heard || Boolean(host?.setup_complete)) && microphonePermission !== "denied",
+    microphone:
+      (loudest >= heard || Boolean(host?.setup_complete)) && microphonePermission !== "denied",
     model: ready,
     permissions: granted,
     shortcut: Boolean(settings) && !dirty && !invalidShortcut,
@@ -291,7 +321,11 @@ export function Setup({
               Microphone access
               <small>{statusText[microphonePermission] ?? microphonePermission}</small>
             </span>
-            <button onClick={() => void send({ type: "permission", permission: "microphone" }).catch(() => {})}>
+            <button
+              onClick={() =>
+                void send({ type: "permission", permission: "microphone" }).catch(() => {})
+              }
+            >
               Allow
             </button>
           </div>
@@ -313,7 +347,12 @@ export function Setup({
             </small>
           </span>
           <button
-            disabled={!host || download?.state === "verifying" || download?.state === "downloading" || download?.state === "loading"}
+            disabled={
+              !host ||
+              download?.state === "verifying" ||
+              download?.state === "downloading" ||
+              download?.state === "loading"
+            }
             onClick={() => void send({ type: "download_model" }).catch(() => {})}
           >
             {download?.state === "failed" ? "Retry" : ready ? "Verify again" : "Download"}
@@ -340,7 +379,7 @@ export function Setup({
           <div className="setting-row" key={permission}>
             <span>
               {permissionName(permission)}
-              {!required.includes(permission) ? <span className="quiet"> · optional</span> : null}
+              {!required.has(permission) ? <span className="quiet"> · optional</span> : null}
               <small>{permissionText[permission]?.[1] ?? ""}</small>
             </span>
             <span className="actions">
@@ -349,7 +388,9 @@ export function Setup({
                 {statusText[status] ?? status}
               </span>
               {status === "authorized" ? null : (
-                <button onClick={() => void send({ type: "permission", permission }).catch(() => {})}>
+                <button
+                  onClick={() => void send({ type: "permission", permission }).catch(() => {})}
+                >
                   {permission === "microphone" ? "Allow" : "Open Settings"}
                 </button>
               )}
@@ -364,11 +405,16 @@ export function Setup({
           <ShortcutFields
             settings={configured}
             mac={mac}
-            onChange={(patch) => setShortcuts({ ...shortcuts, ...patch })}
+            onChange={(patch) => {
+              setShortcuts({ ...shortcuts, ...patch });
+            }}
           />
         ) : null}
         <div className="actions end">
-          <button disabled={!dirty || Boolean(invalidShortcut)} onClick={() => void save().catch(() => {})}>
+          <button
+            disabled={!dirty || Boolean(invalidShortcut)}
+            onClick={() => void save().catch(() => {})}
+          >
             {dirty ? "Save shortcuts" : "Saved"}
           </button>
         </div>
@@ -382,14 +428,20 @@ export function Setup({
           className="practice"
           aria-label="Practice field"
           value={practice}
-          onChange={(event) => setPractice(event.target.value)}
+          onChange={(event) => {
+            setPractice(event.target.value);
+          }}
           onPaste={() => trial && trialSettled && setPastedTrial(trial.id)}
           placeholder="Your words land here."
           spellCheck={false}
         />
         <ul className="checks" aria-label="Dictation checks">
           <Check mark={trial ? "done" : "active"}>
-            {trial ? "Shortcut detected" : host?.input === "clipboard" ? "Press Start" : "Press the shortcut"}
+            {trial
+              ? "Shortcut detected"
+              : host?.input === "clipboard"
+                ? "Press Start"
+                : "Press the shortcut"}
           </Check>
           <Check
             mark={
@@ -401,18 +453,42 @@ export function Setup({
                     ? "active"
                     : "todo"
             }
-            detail={trialSettled && !trialText && trialPeak.peak < heard ? "Only silence came through. Check the microphone step." : undefined}
+            detail={
+              trialSettled && !trialText && trialPeak.peak < heard
+                ? "Only silence came through. Check the microphone step."
+                : undefined
+            }
           >
             Hearing you
           </Check>
           <Check
-            mark={trialText && trial?.phase !== "recording" ? "done" : trialSettled ? "failed" : trial ? "active" : "todo"}
-            detail={trialSettled && !trialText ? "No speech recognized. Speak a little longer." : trialText || undefined}
+            mark={
+              trialText && trial?.phase !== "recording"
+                ? "done"
+                : trialSettled
+                  ? "failed"
+                  : trial
+                    ? "active"
+                    : "todo"
+            }
+            detail={
+              trialSettled && !trialText
+                ? "No speech recognized. Speak a little longer."
+                : trialText || undefined
+            }
           >
             Recognized
           </Check>
           <Check
-            mark={delivered ? "done" : trialSettled && trialText && host?.input !== "clipboard" ? "failed" : trialSettled && trialText ? "active" : "todo"}
+            mark={
+              delivered
+                ? "done"
+                : trialSettled && trialText && host?.input !== "clipboard"
+                  ? "failed"
+                  : trialSettled && trialText
+                    ? "active"
+                    : "todo"
+            }
             detail={
               delivered || !trialSettled || !trialText
                 ? undefined
@@ -428,10 +504,14 @@ export function Setup({
           <button
             className={host?.input === "clipboard" ? undefined : "quiet"}
             disabled={!ready}
-            onMouseDown={(event) => event.preventDefault()}
+            onMouseDown={(event) => {
+              event.preventDefault();
+            }}
             onClick={() => {
               practiceField.current?.focus();
-              void send(trial?.phase === "recording" ? { type: "stop" } : { type: "start", mode: "quick" }).catch(() => {});
+              void send(
+                trial?.phase === "recording" ? { type: "stop" } : { type: "start", mode: "quick" },
+              ).catch(() => {});
             }}
           >
             {trial?.phase === "recording"
@@ -449,7 +529,11 @@ export function Setup({
           <dt>Dictate</dt>
           <dd>
             {configured ? <Keys value={configured.hotkey} mac={mac} /> : null}
-            <small>{host?.input === "hold" ? "Hold, speak, let go. The text is pasted where your cursor is." : "Press, speak, press again."}</small>
+            <small>
+              {host?.input === "hold"
+                ? "Hold, speak, let go. The text is pasted where your cursor is."
+                : "Press, speak, press again."}
+            </small>
           </dd>
           <dt>Review first</dt>
           <dd>
@@ -463,7 +547,8 @@ export function Setup({
           </dd>
         </dl>
         <p className="quiet setup-note">
-          said keeps running in the {mac ? "menu bar" : "tray"}. History, Settings and this setup are there.
+          said keeps running in the {mac ? "menu bar" : "tray"}. History, Settings and this setup
+          are there.
         </p>
       </>
     ),
@@ -471,21 +556,32 @@ export function Setup({
 
   const lead: Record<Step, React.ReactNode> = {
     microphone: "Pick the microphone said should listen to, then say a few words.",
-    model: "said turns speech into text on this computer. The model downloads once; nothing you say leaves your machine.",
-    permissions: "macOS asks before an app can hear you or paste for you. This page updates as soon as you allow each one.",
+    model:
+      "said turns speech into text on this computer. The model downloads once; nothing you say leaves your machine.",
+    permissions:
+      "macOS asks before an app can hear you or paste for you. This page updates as soon as you allow each one.",
     shortcut: "This is the key you will use to dictate in any app.",
     try:
       host?.input === "clipboard" ? (
-        <>Press Start, say a sentence, then Stop. said copies the text; paste it below with <kbd>Ctrl</kbd> <kbd>V</kbd>.</>
+        <>
+          Press Start, say a sentence, then Stop. said copies the text; paste it below with{" "}
+          <kbd>Ctrl</kbd> <kbd>V</kbd>.
+        </>
       ) : host?.input === "toggle" ? (
-        <>Click in the box, press <Keys value={hotkey} mac={mac} />, say a sentence, then press it again.</>
+        <>
+          Click in the box, press <Keys value={hotkey} mac={mac} />, say a sentence, then press it
+          again.
+        </>
       ) : (
-        <>Click in the box, hold <Keys value={hotkey} mac={mac} />, say a sentence, then let go.</>
+        <>
+          Click in the box, hold <Keys value={hotkey} mac={mac} />, say a sentence, then let go.
+        </>
       ),
     done: "said is ready.",
   };
 
   const index = steps.indexOf(step);
+
   return (
     <section className="setup">
       {step === "done" ? null : (
@@ -496,9 +592,15 @@ export function Setup({
                 <button
                   aria-current={item === step ? "step" : undefined}
                   data-done={doneSteps[item]}
-                  onClick={() => setStep(item)}
+                  onClick={() => {
+                    setStep(item);
+                  }}
                 >
-                  {doneSteps[item] ? <Icon name="check" /> : <span className="step-number">{position + 1}</span>}
+                  {doneSteps[item] ? (
+                    <Icon name="check" />
+                  ) : (
+                    <span className="step-number">{position + 1}</span>
+                  )}
                   {titles[item]}
                 </button>
               </li>
@@ -513,19 +615,32 @@ export function Setup({
       </div>
       <div className="setup-foot">
         {index > 0 ? (
-          <button className="quiet" onClick={() => setStep(steps[index - 1])}>
+          <button
+            className="quiet"
+            onClick={() => {
+              setStep(steps[index - 1]);
+            }}
+          >
             Back
           </button>
         ) : null}
         <span className="spacer" />
         {step === "done" ? (
-          <button className="primary" onClick={() => void (isTauri() ? getCurrentWindow().close() : undefined)}>
+          <button
+            className="primary"
+            onClick={() => void (isTauri() ? getCurrentWindow().close() : undefined)}
+          >
             Close
           </button>
         ) : step === "try" ? (
           <>
             {blocked ? (
-              <button className="quiet setup-reason" onClick={() => setStep(blocked[1])}>
+              <button
+                className="quiet setup-reason"
+                onClick={() => {
+                  setStep(blocked[1]);
+                }}
+              >
                 {blocked[0]}
                 <Icon name="arrow" />
               </button>
@@ -537,8 +652,14 @@ export function Setup({
           </>
         ) : (
           <>
-            {step === "shortcut" && invalidShortcut ? <span className="setup-reason quiet">Fix the shortcut to continue</span> : null}
-            <button className="primary" disabled={step === "shortcut" && Boolean(invalidShortcut)} onClick={next}>
+            {step === "shortcut" && invalidShortcut ? (
+              <span className="setup-reason quiet">Fix the shortcut to continue</span>
+            ) : null}
+            <button
+              className="primary"
+              disabled={step === "shortcut" && Boolean(invalidShortcut)}
+              onClick={next}
+            >
               Continue
               <Icon name="arrow" />
             </button>

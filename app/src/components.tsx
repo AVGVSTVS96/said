@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+
 import type { Phase, SessionView } from "./source";
 
 const paths = {
@@ -44,11 +45,13 @@ export function LevelMeter({
 }) {
   const value = Math.max(0, Math.min(1, level ?? 0));
   const shown = useRef({ input: level, value });
-  if (shown.current.input !== level)
+
+  if (shown.current.input !== level) {
     shown.current = {
       input: level,
       value: level === null ? 0 : Math.max(value, shown.current.value - 0.08),
     };
+  }
   return (
     <span
       className={`meter ${className}`.trim()}
@@ -58,9 +61,7 @@ export function LevelMeter({
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
       aria-valuetext={
-        level === null
-          ? "Waiting for microphone"
-          : `${Math.round(value * 100)} percent`
+        level === null ? "Waiting for microphone" : `${Math.round(value * 100)} percent`
       }
     >
       {Array.from({ length: bars }, (_, index) => (
@@ -98,6 +99,7 @@ export function Status({
 }) {
   const text = label ?? (session ? sessionLabel(session) : "");
   const live = session?.phase === "recording" && session.level !== null;
+
   return (
     <span className="status" key={text} role="status" data-live={live}>
       <span className="dot" />
@@ -116,20 +118,17 @@ export function Target({ name }: { name?: string }) {
   ) : null;
 }
 
-export function Transcript({
-  committed,
-  partial,
-}: {
-  committed: string;
-  partial: string;
-}) {
+export function Transcript({ committed, partial }: { committed: string; partial: string }) {
   const previous = useRef(committed);
+
   const settled = committed.startsWith(previous.current)
     ? previous.current.length
     : committed.length;
+
   useEffect(() => {
     previous.current = committed;
   }, [committed]);
+
   return (
     <>
       <span>{committed.slice(0, settled)}</span>
@@ -144,9 +143,11 @@ export function Transcript({
 export function TranscriptTail({ session }: { session: SessionView }) {
   const element = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (element.current)
+    if (element.current) {
       element.current.scrollTop = element.current.scrollHeight;
+    }
   }, [session.committed, session.partial]);
+
   return (
     <div className="overlay-text" ref={element}>
       <Transcript committed={session.committed} partial={session.partial} />
@@ -158,5 +159,6 @@ export const modifier = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ct
 
 export function duration(milliseconds: number) {
   const seconds = Math.floor(milliseconds / 1000);
+
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }

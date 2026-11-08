@@ -762,7 +762,6 @@ button.shortcut[aria-pressed="true"] {
   }
 }
 
-
 .overlay-panel .status,
 .overlay-panel .meter {
   transition: opacity 200ms var(--ease-out);

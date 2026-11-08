@@ -24,20 +24,20 @@ Setup is a step flow: microphone, model, permissions (macOS), shortcut, try it. 
 
 ## Failure behavior
 
-| Event | Implementation behavior |
-| --- | --- |
-| Silence | Capture continues until stop; there is no silence gate or timeout. |
-| Empty recognition | Save the recording and empty result; paste nothing. |
-| Another utterance is finishing | Capture the next one into its own WAV/spool; one worker lease serializes recognition. |
-| Observed focus departure or closed target | Retain text for explicit insertion and inhibit automatic delivery. |
-| Explicit microphone disconnect | Drain captured samples and finish; do not select a replacement device. PipeWire's default input may follow a replacement source. |
-| Live audio receiver gap | Invalidate live recognition and replay the complete durable WAV. |
-| Capture/storage failure without durable stop | Save failed status rather than treating partial capture as a successful result. |
-| Worker failure | Preserve capture; a fresh recognition replays the recording. |
-| App interrupted | Startup repairs pending WAVs and recognizes them into recovered history without automatic paste. A write or hardware failure can still lose unflushed data. |
-| Cancel | Stop capture, retain canceled history and inhibit delivery. Escape depends on native input availability. |
-| Lock, revoked grant or Secure Input | Native availability signals stop capture and inhibit delivery; show the reason. |
-| Paste rejected or unsupported target | Retain the stored transcript for explicit copy/insertion. Do not automatically retry an uncertain chord. |
+| Event                                        | Implementation behavior                                                                                                                                     |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Silence                                      | Capture continues until stop; there is no silence gate or timeout.                                                                                          |
+| Empty recognition                            | Save the recording and empty result; paste nothing.                                                                                                         |
+| Another utterance is finishing               | Capture the next one into its own WAV/spool; one worker lease serializes recognition.                                                                       |
+| Observed focus departure or closed target    | Retain text for explicit insertion and inhibit automatic delivery.                                                                                          |
+| Explicit microphone disconnect               | Drain captured samples and finish; do not select a replacement device. PipeWire's default input may follow a replacement source.                            |
+| Live audio receiver gap                      | Invalidate live recognition and replay the complete durable WAV.                                                                                            |
+| Capture/storage failure without durable stop | Save failed status rather than treating partial capture as a successful result.                                                                             |
+| Worker failure                               | Preserve capture; a fresh recognition replays the recording.                                                                                                |
+| App interrupted                              | Startup repairs pending WAVs and recognizes them into recovered history without automatic paste. A write or hardware failure can still lose unflushed data. |
+| Cancel                                       | Stop capture, retain canceled history and inhibit delivery. Escape depends on native input availability.                                                    |
+| Lock, revoked grant or Secure Input          | Native availability signals stop capture and inhibit delivery; show the reason.                                                                             |
+| Paste rejected or unsupported target         | Retain the stored transcript for explicit copy/insertion. Do not automatically retry an uncertain chord.                                                    |
 
 Bounded rings and disk spools avoid retaining the whole recording in memory. The audio crate has a one-hour synthetic capture test; it does not certify full-app memory use with a large history or long native recognition. Multi-line text is preserved, but destination handling of newlines and bracketed paste needs per-target testing.
 
@@ -68,13 +68,13 @@ macOS uses a filtering Quartz session event tap for shortcuts, Accessibility win
 
 ## Local data
 
-| Data | Linux | macOS |
-| --- | --- | --- |
-| Settings | `$XDG_CONFIG_HOME/said/settings.toml` (default `~/.config/said`) | `~/Library/Application Support/said/settings.toml` |
-| History and WAVs | `$XDG_DATA_HOME/said/` (default `~/.local/share/said`) | `~/Library/Application Support/said/` |
-| App model/runtime cache | `<data>/models/` | `<data>/models/` |
-| Worker spool / development cache | `~/.cache/said-models/` | `~/.cache/said-models/` |
-| Linux control socket | `$XDG_RUNTIME_DIR/said.sock`, 0600 | Not used |
+| Data                             | Linux                                                            | macOS                                              |
+| -------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| Settings                         | `$XDG_CONFIG_HOME/said/settings.toml` (default `~/.config/said`) | `~/Library/Application Support/said/settings.toml` |
+| History and WAVs                 | `$XDG_DATA_HOME/said/` (default `~/.local/share/said`)           | `~/Library/Application Support/said/`              |
+| App model/runtime cache          | `<data>/models/`                                                 | `<data>/models/`                                   |
+| Worker spool / development cache | `~/.cache/said-models/`                                          | `~/.cache/said-models/`                            |
+| Linux control socket             | `$XDG_RUNTIME_DIR/said.sock`, 0600                               | Not used                                           |
 
 Personal directories/files are owner-only. The app holds a data-directory lock; Linux CLI peers must have the same UID. History uses SQLite STRICT tables, immutable-original triggers and FTS5. Settings writes use a temporary file, sync and rename. Retention is explicit and asks for confirmation; there is no automatic age limit. Nothing syncs across machines. Model provisioning uses network downloads; audio is not uploaded.
 

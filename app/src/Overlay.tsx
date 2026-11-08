@@ -1,13 +1,6 @@
-import type { CoreSource, SessionView } from "./source";
+import { Icon, LevelMeter, sessionLabel, Status, Target, TranscriptTail } from "./components";
 import { shortcutLabel } from "./shortcuts";
-import {
-  Icon,
-  LevelMeter,
-  sessionLabel,
-  Status,
-  Target,
-  TranscriptTail,
-} from "./components";
+import type { CoreSource, SessionView } from "./source";
 
 export function Overlay({
   session,
@@ -19,19 +12,24 @@ export function Overlay({
   send: CoreSource["dispatch"];
 }) {
   const snapshot = source.getSnapshot();
-  const settings = snapshot.settings;
-  const autoSend =
-    session?.target && settings?.apps[session.target.app_id]?.send;
+  const { settings } = snapshot;
+
+  const autoSend = session?.target && settings?.apps[session.target.app_id]?.send;
+
   const notification = session && snapshot.host?.notifications[session.id];
-  const note = !session
-    ? ""
-    : notification && notification !== sessionLabel(session)
+
+  const note = session
+    ? notification && notification !== sessionLabel(session)
       ? notification
       : session.phase === "saved"
-        ? settings ? `Press ${shortcutLabel(settings.insert_last_hotkey, Boolean(snapshot.host && "accessibility" in snapshot.host.permissions))} to insert` : "Use Insert last to insert"
+        ? settings
+          ? `Press ${shortcutLabel(settings.insert_last_hotkey, Boolean(snapshot.host && "accessibility" in snapshot.host.permissions))} to insert`
+          : "Use Insert last to insert"
         : session.phase === "failed"
           ? "Kept in history"
-          : "";
+          : ""
+    : "";
+
   return (
     <main className="stage overlay-stage" aria-label="Dictation overlay">
       <section
@@ -45,20 +43,16 @@ export function Overlay({
               <Status session={session}>
                 {autoSend ? <span className="quiet">auto-send</span> : null}
               </Status>
-              <Target
-                name={session.target?.name || session.target?.app_id || "Clipboard"}
-              />
+              <Target name={session.target?.name || session.target?.app_id || "Clipboard"} />
               {session.phase === "recording" ? (
                 <button
                   className="close"
                   aria-label="Cancel dictation"
                   disabled={!source.connected}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() =>
-                    void send({ type: "cancel", id: session.id }).catch(
-                      () => {},
-                    )
-                  }
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                  }}
+                  onClick={() => void send({ type: "cancel", id: session.id }).catch(() => {})}
                 >
                   <Icon name="close" />
                 </button>
@@ -74,9 +68,7 @@ export function Overlay({
           </>
         ) : (
           <p className="quiet">
-            {source.connected
-              ? (snapshot.host?.unavailable ?? "Ready")
-              : "Waiting for connection"}
+            {source.connected ? (snapshot.host?.unavailable ?? "Ready") : "Waiting for connection"}
           </p>
         )}
       </section>

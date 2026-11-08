@@ -1,33 +1,27 @@
 import { useRef, useState } from "react";
+
+import { duration, Icon, LevelMeter, modifier, Status, Target, Transcript } from "./components";
+import { editDraft, editorText } from "./editor";
+import type { Draft } from "./editor";
+import { Playback } from "./Playback";
 import type { CoreSource, SessionView, UiAction, Utterance } from "./source";
 import { userText } from "./source";
-import { Playback } from "./Playback";
-import {
-  duration,
-  Icon,
-  LevelMeter,
-  modifier,
-  Status,
-  Target,
-  Transcript,
-} from "./components";
-import { editDraft, editorText, type Draft } from "./editor";
 
 function editedRange(before: string, after: string) {
   let start = 0;
-  while (
-    start < before.length &&
-    start < after.length &&
-    before[start] === after[start]
-  )
+
+  while (start < before.length && start < after.length && before[start] === after[start]) {
     start++;
+  }
   let end = 0;
+
   while (
     end < before.length - start &&
     end < after.length - start &&
     before[before.length - end - 1] === after[after.length - end - 1]
-  )
+  ) {
     end++;
+  }
   return [start, after.length - end] as const;
 }
 
@@ -56,40 +50,45 @@ export function Interactive({
   const id = session?.id ?? utterance?.id;
   const committed = session?.committed ?? utterance?.raw_text ?? "";
   const partial = session?.partial ?? "";
+
   const savedEdit =
-    userText(session) ??
-    (utterance?.text !== utterance?.raw_text ? utterance?.text : null);
+    userText(session) ?? (utterance?.text === utterance?.raw_text ? null : utterance?.text);
+
   const protectedDraft =
-    draft ??
-    (savedEdit !== null && savedEdit !== undefined
-      ? editDraft(savedEdit)
-      : null);
+    draft ?? (savedEdit !== null && savedEdit !== undefined ? editDraft(savedEdit) : null);
+
   const text = editorText(protectedDraft, committed, partial);
+
   const recording =
-    session?.phase === "recording" ||
-    session?.phase === "finishing" ||
-    session?.phase === "saving";
-  const ready =
-    !session || session.phase === "reviewing" || session.phase === "pasted";
+    session?.phase === "recording" || session?.phase === "finishing" || session?.phase === "saving";
+
+  const ready = !session || session.phase === "reviewing" || session.phase === "pasted";
+
   const editable =
-    !session ||
-    ["recording", "finishing", "saving", "reviewing", "pasted"].includes(
-      session.phase,
-    );
-  const insertable = Boolean(
-    id && ready && source.connected && text.length > 0,
-  );
-  const [from, to] = protectedDraft?.edited
-    ? editedRange(committed + partial, text)
-    : [0, 0];
+    !session || ["recording", "finishing", "saving", "reviewing", "pasted"].includes(session.phase);
+
+  const insertable = Boolean(id && ready && source.connected && text.length > 0);
+
+  const [from, to] = protectedDraft?.edited ? editedRange(committed + partial, text) : [0, 0];
 
   async function act(type: "insert" | "copy" | "discard" | "cancel") {
-    if (!id || pending) return;
+    if (!id || pending) {
+      return;
+    }
     setPending(true);
+
     try {
-      if (draft?.edited) await send({ type: "edit", id, text });
+      if (draft?.edited) {
+        await send({ type: "edit", id, text });
+      }
       await send({ type, id } satisfies UiAction);
-      if (type === "insert" && source.getSnapshot().sessions.some((view) => view.id === id && view.phase === "pasted")) onClose?.();
+
+      if (
+        type === "insert" &&
+        source.getSnapshot().sessions.some((view) => view.id === id && view.phase === "pasted")
+      ) {
+        onClose?.();
+      }
     } catch {
     } finally {
       setPending(false);
@@ -108,7 +107,10 @@ export function Interactive({
           !composing.current
         ) {
           event.preventDefault();
-          if (insertable) void act("insert");
+
+          if (insertable) {
+            void act("insert");
+          }
         }
       }}
     >
@@ -116,15 +118,9 @@ export function Interactive({
         {session ? (
           <Status session={session} />
         ) : (
-          <Status
-            label={
-              utterance ? "Saved" : source.connected ? "Ready" : "Not connected"
-            }
-          />
+          <Status label={utterance ? "Saved" : source.connected ? "Ready" : "Not connected"} />
         )}
-        {session?.phase === "recording" ? (
-          <LevelMeter level={session.level} />
-        ) : null}
+        {session?.phase === "recording" ? <LevelMeter level={session.level} /> : null}
         {!session && utterance ? (
           <span className="quiet">{duration(utterance.duration_ms)}</span>
         ) : null}
@@ -166,7 +162,10 @@ export function Interactive({
           onCompositionStart={() => {
             composing.current = true;
             onEdit(editDraft(text));
-            if (id) void send({ type: "edit", id, text }).catch(() => {});
+
+            if (id) {
+              void send({ type: "edit", id, text }).catch(() => {});
+            }
           }}
           onCompositionEnd={() => {
             composing.current = false;
@@ -174,11 +173,17 @@ export function Interactive({
           onChange={(event) => {
             const next = event.target.value;
             onEdit(editDraft(next));
-            if (id) void send({ type: "edit", id, text: next }).catch(() => {});
+
+            if (id) {
+              void send({ type: "edit", id, text: next }).catch(() => {});
+            }
           }}
           onScroll={(event) => {
             const mirror = event.currentTarget.previousElementSibling;
-            if (mirror) mirror.scrollTop = event.currentTarget.scrollTop;
+
+            if (mirror) {
+              mirror.scrollTop = event.currentTarget.scrollTop;
+            }
           }}
         />
       </div>
@@ -195,7 +200,9 @@ export function Interactive({
         <button
           className="quiet"
           aria-expanded={original}
-          onClick={() => setOriginal(!original)}
+          onClick={() => {
+            setOriginal(!original);
+          }}
         >
           {original ? "Hide original" : "Show original"}
         </button>

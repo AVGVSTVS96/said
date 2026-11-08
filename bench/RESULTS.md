@@ -26,15 +26,15 @@ finished. Each completed the **same 27 clips**, excluding the long monologue.
 Both full runs returned nonzero. These are comparable short-corpus scores,
 not full-suite pass results.
 
-| Engine | Completed | Literal WER | Normalized WER | Negative tokens kept | Lost / added / changed | Filler recall | Repeat recall | Identifiers exact | Technical terms |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| moonshine-medium-en | 27/28 | 31.7% | 18.8% | 13/15 | 1 / 0 / 1 | 7/10 | 3/6 | 2/8 | 9/10 |
-| moonshine-small-en | 27/28 | 34.5% | 24.7% | 12/15 | 3 / 0 / 0 | 7/10 | 3/6 | 2/8 | 9/10 |
+| Engine              | Completed | Literal WER | Normalized WER | Negative tokens kept | Lost / added / changed | Filler recall | Repeat recall | Identifiers exact | Technical terms |
+| ------------------- | --------: | ----------: | -------------: | -------------------: | ---------------------: | ------------: | ------------: | ----------------: | --------------: |
+| moonshine-medium-en |     27/28 |       31.7% |          18.8% |                13/15 |              1 / 0 / 1 |          7/10 |           3/6 |               2/8 |            9/10 |
+| moonshine-small-en  |     27/28 |       34.5% |          24.7% |                12/15 |              3 / 0 / 0 |          7/10 |           3/6 |               2/8 |            9/10 |
 
-| Engine | First partial p50 / p95 | Release→final p50 / p95, 5–20 s clips | Release samples | Cold load | Sampled total RSS | Silence/noise words |
-|---|---:|---:|---:|---:|---:|---:|
-| moonshine-medium-en | 815 / 1078 ms | 2089 / 8798 ms | 8 | 1604 ms | 782 MiB | 0 |
-| moonshine-small-en | 874 / 1262 ms | 1128 / 7023 ms | 8 | 1197 ms | 445 MiB | 0 |
+| Engine              | First partial p50 / p95 | Release→final p50 / p95, 5–20 s clips | Release samples | Cold load | Sampled total RSS | Silence/noise words |
+| ------------------- | ----------------------: | ------------------------------------: | --------------: | --------: | ----------------: | ------------------: |
+| moonshine-medium-en |           815 / 1078 ms |                        2089 / 8798 ms |               8 |   1604 ms |           782 MiB |                   0 |
+| moonshine-small-en  |           874 / 1262 ms |                        1128 / 7023 ms |               8 |   1197 ms |           445 MiB |                   0 |
 
 Both miss the measured first-words target of 800 ms p50 and release-to-final
 target of 1 s p95. Both stay under the sampled 1 GB Linux RAM target in these
@@ -97,10 +97,10 @@ Inspect [CI raw results](results/linux-ci.clips.jsonl),
 
 ## Platform defaults and scope
 
-| Platform | Existing provisional manifest default | Public selection status |
-|---|---|---|
-| Linux | moonshine-small-en | Not certified: full-suite failure and negative-word losses |
-| macOS | moonshine-medium-en | Not measured on macOS; Linux results cannot set a Mac default |
+| Platform | Existing provisional manifest default | Public selection status                                       |
+| -------- | ------------------------------------- | ------------------------------------------------------------- |
+| Linux    | moonshine-small-en                    | Not certified: full-suite failure and negative-word losses    |
+| macOS    | moonshine-medium-en                   | Not measured on macOS; Linux results cannot set a Mac default |
 
 The model manifest is unchanged. A release decision requires listened synthetic
 references, full completion, platform runs and the priority order in SPEC:
@@ -215,10 +215,10 @@ No GUI app, microphone recording, permission prompt or desktop input was used.
 Both completed the same 27 short clips before and after. The long clip is excluded
 from this comparison because neither baseline completed it.
 
-| Engine | Literal before → after | Normalized before → after | Negatives kept before → after | Filler kept | Repeats kept |
-|---|---:|---:|---:|---:|---:|
-| moonshine-small-en | 34.5% → 33.5% | 24.7% → 23.3% | 12/15 → 12/15 | 7/10 → 7/10 | 3/6 → 3/6 |
-| moonshine-medium-en | 31.7% → 31.7% | 18.8% → 17.4% | 13/15 → 13/15 | 7/10 → 7/10 | 3/6 → 3/6 |
+| Engine              | Literal before → after | Normalized before → after | Negatives kept before → after | Filler kept | Repeats kept |
+| ------------------- | ---------------------: | ------------------------: | ----------------------------: | ----------: | -----------: |
+| moonshine-small-en  |          34.5% → 33.5% |             24.7% → 23.3% |                 12/15 → 12/15 | 7/10 → 7/10 |    3/6 → 3/6 |
+| moonshine-medium-en |          31.7% → 31.7% |             18.8% → 17.4% |                 13/15 → 13/15 | 7/10 → 7/10 |    3/6 → 3/6 |
 
 Small still drops three negatives. Medium keeps the same 13/15, but its error
 mix changes from one dropped plus one changed to two dropped. Identifier exactness
@@ -227,12 +227,12 @@ verbatim certificate or improved negation retention.
 
 ### Full corrected corpus: 28 clips per engine and platform
 
-| Platform / engine | Completed | Literal WER | Normalized WER | First partial p50 / p95 | Release p95, 5–20 s clips | Sampled RSS |
-|---|---:|---:|---:|---:|---:|---:|
-| linux / moonshine-medium-en | 28/28 | 22.3% | 12.3% | 854 / 3092 ms | 20770 ms | 778 MiB |
-| linux / moonshine-small-en | 28/28 | 23.1% | 14.9% | 784 / 2130 ms | 3565 ms | 442 MiB |
-| macos / moonshine-medium-en | 28/28 | 22.3% | 12.5% | 596 / 2188 ms | 961 ms | 2171 MiB |
-| macos / moonshine-small-en | 28/28 | 23.8% | 15.4% | 578 / 2083 ms | 733 ms | 2050 MiB |
+| Platform / engine           | Completed | Literal WER | Normalized WER | First partial p50 / p95 | Release p95, 5–20 s clips | Sampled RSS |
+| --------------------------- | --------: | ----------: | -------------: | ----------------------: | ------------------------: | ----------: |
+| linux / moonshine-medium-en |     28/28 |       22.3% |          12.3% |           854 / 3092 ms |                  20770 ms |     778 MiB |
+| linux / moonshine-small-en  |     28/28 |       23.1% |          14.9% |           784 / 2130 ms |                   3565 ms |     442 MiB |
+| macos / moonshine-medium-en |     28/28 |       22.3% |          12.5% |           596 / 2188 ms |                    961 ms |    2171 MiB |
+| macos / moonshine-small-en  |     28/28 |       23.8% |          15.4% |           578 / 2083 ms |                    733 ms |    2050 MiB |
 
 The lower full-suite WER includes the easy, repeated long script and must not be
 compared directly with baseline 27-clip WER. Linux is the shared Ryzen 7 5700G
@@ -242,12 +242,12 @@ experiment. RSS is sampled parent + direct worker, can double-count mappings,
 and is not macOS physical/unified-memory footprint. The measured macOS RSS is
 over the spec's 1.5 GB target. Linux release p95 remains over its 1-second target.
 
-| Platform / engine | Long clip normalized WER | Release → final | Long negative tokens kept |
-|---|---:|---:|---:|
-| linux / moonshine-medium-en | 7.6% | 231.332 s | 16/16 |
-| linux / moonshine-small-en | 6.9% | 62.466 s | 16/16 |
-| macos / moonshine-medium-en | 7.6% | 0.412 s | 16/16 |
-| macos / moonshine-small-en | 6.9% | 0.197 s | 16/16 |
+| Platform / engine           | Long clip normalized WER | Release → final | Long negative tokens kept |
+| --------------------------- | -----------------------: | --------------: | ------------------------: |
+| linux / moonshine-medium-en |                     7.6% |       231.332 s |                     16/16 |
+| linux / moonshine-small-en  |                     6.9% |        62.466 s |                     16/16 |
+| macos / moonshine-medium-en |                     7.6% |         0.412 s |                     16/16 |
+| macos / moonshine-small-en  |                     6.9% |         0.197 s |                     16/16 |
 
 The 98.13-second clip completed everywhere. All 16 long-script negative tokens
 were retained. Fillers remain weak: Small keeps 1/8, Medium 3/8; both keep 4/8
@@ -281,7 +281,6 @@ Receipts: [Linux full metrics](results/linux-engine-fix.summary.json),
 The corpus/reference statuses and all WAV hashes are unchanged. Inspect the
 receipts' actual hashes rather than expecting byte-identical timings on a busy host.
 
-
 ## Native Parakeet replacement
 
 Measured 2026-10-10–11 UTC. Both platforms use the same pinned FP32 ONNX
@@ -298,14 +297,14 @@ negative/scope tokens and 72 um/uh-class tokens. The ten low-confidence clips
 are runtime diagnostics, not silently promoted into the headline cohort.
 References, identifiers, audio and raw outputs remain outside the repository.
 
-| Configuration | Headline clips | WER | Protected kept; extra | um/uh kept; extra | Repetition-span tokens | Added words |
-|---|---:|---:|---:|---:|---:|---:|
-| Before: Moonshine Small | 170 | 7.11% | 218/222; +5 | 38/72; +5 | 168/200 | 231 |
-| Before: Moonshine Medium | 170 | 6.28% | 220/222; +6 | 35/72; +3 | 170/200 | 228 |
-| Bake-off anchor: Parakeet MLX BF16, 30s/5s | 170 | 1.95% | 222/222; +0 | 67/72; +7 | 197/200 | 53 |
-| After: native Parakeet FP32, Linux | 170 | 1.95% | 222/222; +0 | 69/72; +7 | 196/200 | 50 |
-| After: native Parakeet FP32, macOS | 170 | 1.95% | 222/222; +0 | 69/72; +7 | 196/200 | 50 |
-| Comparator: Phonon-2 / Fermion 0.2.11 Linux | 170 | 3.53% | 220/222; +0 | 62/72; +6 | 185/200 | 74 |
+| Configuration                               | Headline clips |   WER | Protected kept; extra | um/uh kept; extra | Repetition-span tokens | Added words |
+| ------------------------------------------- | -------------: | ----: | --------------------: | ----------------: | ---------------------: | ----------: |
+| Before: Moonshine Small                     |            170 | 7.11% |           218/222; +5 |         38/72; +5 |                168/200 |         231 |
+| Before: Moonshine Medium                    |            170 | 6.28% |           220/222; +6 |         35/72; +3 |                170/200 |         228 |
+| Bake-off anchor: Parakeet MLX BF16, 30s/5s  |            170 | 1.95% |           222/222; +0 |         67/72; +7 |                197/200 |          53 |
+| After: native Parakeet FP32, Linux          |            170 | 1.95% |           222/222; +0 |         69/72; +7 |                196/200 |          50 |
+| After: native Parakeet FP32, macOS          |            170 | 1.95% |           222/222; +0 |         69/72; +7 |                196/200 |          50 |
+| Comparator: Phonon-2 / Fermion 0.2.11 Linux |            170 | 3.53% |           220/222; +0 |         62/72; +6 |                185/200 |          74 |
 
 Both native platforms completed 180/180 speech clips and the two private
 known-empty controls. Every one of the 170 headline raw transcripts is
@@ -329,10 +328,10 @@ Quantiles below are recomputed with the runner's nearest-rank definition.
 Phonon is the earlier bake-off run; these were separate shared-host phases,
 not an isolated simultaneous performance experiment.
 
-| Linux configuration | n | First partial p50 / p95 | Release→Final p50 / p95 |
-|---|---:|---:|---:|
-| Native Parakeet FP32, 8 threads | 8/8 | 687 / 1395 ms | 487 / 2382 ms |
-| Phonon-2 CPU, adaptive cadence | 8/8 | 921 / 1820 ms | 200 / 796 ms |
+| Linux configuration             |   n | First partial p50 / p95 | Release→Final p50 / p95 |
+| ------------------------------- | --: | ----------------------: | ----------------------: |
+| Native Parakeet FP32, 8 threads | 8/8 |           687 / 1395 ms |           487 / 2382 ms |
+| Phonon-2 CPU, adaptive cadence  | 8/8 |           921 / 1820 ms |            200 / 796 ms |
 
 For the six 5–20 second clips, native Parakeet release p95 is **549 ms**.
 Its two longer clips raise the all-eight p95 to 2.38 seconds. All eight final
@@ -389,12 +388,12 @@ Both platforms completed the same 28 public clips, 208.34 seconds of audio.
 Their final transcript bytes agree on every clip. The references and audio
 hashes are unchanged from the corrected Moonshine runs above.
 
-| Platform / engine | Completed | Normalized WER | First partial p50 / p95 | Release p95, 5–20 s | Sampled RSS |
-|---|---:|---:|---:|---:|---:|
-| Before: Linux / Moonshine Small | 28/28 | 14.9% | 784 / 2130 ms | 3565 ms | 442 MiB |
-| Before: macOS / Moonshine Medium | 28/28 | 12.5% | 596 / 2188 ms | 961 ms | 2171 MiB |
-| After: Linux / native Parakeet | 28/28 | 9.63% | 685 / 1405 ms | 706 ms | 2.67 GiB |
-| After: macOS / native Parakeet | 28/28 | 9.63% | 568 / 1188 ms | 762 ms | 3.18 GiB |
+| Platform / engine                | Completed | Normalized WER | First partial p50 / p95 | Release p95, 5–20 s | Sampled RSS |
+| -------------------------------- | --------: | -------------: | ----------------------: | ------------------: | ----------: |
+| Before: Linux / Moonshine Small  |     28/28 |          14.9% |           784 / 2130 ms |             3565 ms |     442 MiB |
+| Before: macOS / Moonshine Medium |     28/28 |          12.5% |           596 / 2188 ms |              961 ms |    2171 MiB |
+| After: Linux / native Parakeet   |     28/28 |          9.63% |           685 / 1405 ms |              706 ms |    2.67 GiB |
+| After: macOS / native Parakeet   |     28/28 |          9.63% |           568 / 1188 ms |              762 ms |    3.18 GiB |
 
 Native literal WER is 17.86% on both platforms. Public retention is **30/31
 negations, 13/18 fillers, 9/14 repetition opportunities, 1/8 identifiers and
@@ -493,14 +492,14 @@ noise. The available mixed FP16/INT8 export retains protected tokens but loses
 three hesitation tokens on Linux and two on macOS, exceeding the one-token
 allowance. Its sampled memory is also higher than FP32 on both CPUs.
 
-| Configuration | Private silver WER | Protected kept; extra | um/uh kept; extra | Repetition-span tokens | Sampled parent + worker RSS |
-|---|---:|---:|---:|---:|---:|
-| Retained FP32, Linux | 1.95% (197/10,116) | 222/222; +0 | 69/72; +7 | 196/200 | 2.71 GiB |
-| Retained FP32, macOS | 1.95% (197/10,116) | 222/222; +0 | 69/72; +7 | 196/200 | 2.92 GiB |
-| INT8, Linux | 2.56% (259/10,116) | 222/222; +2 | 69/72; +5 | 187/200 | 1.25 GiB |
-| INT8, macOS | 2.71% (274/10,116) | 222/222; +3 | 68/72; +5 | 188/200 | 1.81 GiB |
-| FP16 encoder / INT8 decoder+joiner, Linux | 2.10% (212/10,116) | 222/222; +0 | 66/72; +7 | 195/200 | 3.96 GiB |
-| FP16 encoder / INT8 decoder+joiner, macOS | 2.10% (212/10,116) | 222/222; +0 | 67/72; +7 | 195/200 | 3.53 GiB |
+| Configuration                             | Private silver WER | Protected kept; extra | um/uh kept; extra | Repetition-span tokens | Sampled parent + worker RSS |
+| ----------------------------------------- | -----------------: | --------------------: | ----------------: | ---------------------: | --------------------------: |
+| Retained FP32, Linux                      | 1.95% (197/10,116) |           222/222; +0 |         69/72; +7 |                196/200 |                    2.71 GiB |
+| Retained FP32, macOS                      | 1.95% (197/10,116) |           222/222; +0 |         69/72; +7 |                196/200 |                    2.92 GiB |
+| INT8, Linux                               | 2.56% (259/10,116) |           222/222; +2 |         69/72; +5 |                187/200 |                    1.25 GiB |
+| INT8, macOS                               | 2.71% (274/10,116) |           222/222; +3 |         68/72; +5 |                188/200 |                    1.81 GiB |
+| FP16 encoder / INT8 decoder+joiner, Linux | 2.10% (212/10,116) |           222/222; +0 |         66/72; +7 |                195/200 |                    3.96 GiB |
+| FP16 encoder / INT8 decoder+joiner, macOS | 2.10% (212/10,116) |           222/222; +0 |         67/72; +7 |                195/200 |                    3.53 GiB |
 
 The gate requires 222/222 protected tokens with zero extras, at least 68/72
 hesitations and 195/200 repetition tokens, and WER within sampling noise.

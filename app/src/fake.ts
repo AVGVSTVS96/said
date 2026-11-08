@@ -1,19 +1,15 @@
-import {
-  createCoreSource,
-  type EngineEvent,
-  type SessionView,
-  type Settings,
-  type UiAction,
-  type Utterance,
-} from "./source";
 import type { DownloadState, HostAction, HostState } from "./contracts";
+import { createCoreSource } from "./source";
+import type { EngineEvent, SessionView, Settings, UiAction, Utterance } from "./source";
 
 const id = "00000000-0000-4000-8000-000000000001";
+
 const target = {
   app_id: "example.editor",
   window_id: "1",
   name: "Text editor",
 };
+
 const settings: Settings = {
   hotkey: "super+z",
   interactive_hotkey: "super+x",
@@ -25,6 +21,7 @@ const settings: Settings = {
     "example.editor": { paste: "ctrl+v", send: false },
   },
 };
+
 const trace: readonly EngineEvent[] = [
   { type: "partial", text: "the the old value" },
   { type: "partial", text: "the the old value, actually" },
@@ -47,6 +44,7 @@ function fixtures(): Utterance[] {
     { text: "first line\n  second line with spaces\n", status: "done" },
     { text: "", status: "empty" },
   ] as const;
+
   return examples.map((entry, index) => ({
     id: `00000000-0000-4000-8000-${String(index + 2).padStart(12, "0")}`,
     audio_id: `00000000-0000-4000-8000-${String(index + 2).padStart(12, "0")}`,
@@ -65,11 +63,29 @@ const trialId = "00000000-0000-4000-8000-0000000000aa";
 
 function fakeHost(mac: boolean, model: DownloadState["state"]): HostState {
   return {
-    models: [{ id: settings.engine, license: "CC-BY-4.0, NVIDIA", source: "https://huggingface.co/nvidia" }],
+    models: [
+      {
+        id: settings.engine,
+        license: "CC-BY-4.0, NVIDIA",
+        source: "https://huggingface.co/nvidia",
+      },
+    ],
     download:
       model === "ready"
-        ? { state: "ready", file: settings.engine, received: 671088640, total: 671088640, error: null }
-        : { state: "downloading", file: "encoder.int8.onnx", received: 432013312, total: 671088640, error: null },
+        ? {
+            state: "ready",
+            file: settings.engine,
+            received: 671_088_640,
+            total: 671_088_640,
+            error: null,
+          }
+        : {
+            state: "downloading",
+            file: "encoder.int8.onnx",
+            received: 432_013_312,
+            total: 671_088_640,
+            error: null,
+          },
     permissions: mac ? { microphone: "authorized", accessibility: "denied" } : {},
     instructions: mac
       ? ["Hold-to-talk available. Hold a shortcut to talk; tap to toggle."]
@@ -89,7 +105,10 @@ function fakeHost(mac: boolean, model: DownloadState["state"]): HostState {
   };
 }
 
-export function createFakeSource({ mac = false, model = "ready" }: { mac?: boolean; model?: DownloadState["state"] } = {}) {
+export function createFakeSource({
+  mac = false,
+  model = "ready",
+}: { mac?: boolean; model?: DownloadState["state"] } = {}) {
   let session: SessionView;
   let history: Utterance[];
   let configured: Settings;
@@ -100,15 +119,21 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
   let editorTail = 0;
   let ownedTail = false;
   const actions: UiAction[] = [];
+
   function hostAction(action: HostAction) {
-    if (action.type === "settings_save") configured = action.settings;
-    else if (action.type === "download_model") host = { ...host, download: fakeHost(mac, "ready").download };
-    else if (action.type === "permission")
+    if (action.type === "settings_save") {
+      configured = action.settings;
+    } else if (action.type === "download_model") {
+      host = { ...host, download: fakeHost(mac, "ready").download };
+    } else if (action.type === "permission") {
       host = { ...host, permissions: { ...host.permissions, [action.permission]: "authorized" } };
-    else if (action.type === "preview") host = { ...host, preview: action.active ? 0.46 : null };
-    else if (action.type === "setup_complete") host = { ...host, setup_complete: true };
-    else if (action.type === "history_search") query = action.query.toLocaleLowerCase();
-    else if (action.type === "start") {
+    } else if (action.type === "preview") {
+      host = { ...host, preview: action.active ? 0.46 : null };
+    } else if (action.type === "setup_complete") {
+      host = { ...host, setup_complete: true };
+    } else if (action.type === "history_search") {
+      query = action.query.toLocaleLowerCase();
+    } else if (action.type === "start") {
       trial = {
         id: trialId,
         mode: "quick",
@@ -122,51 +147,75 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
       host = { ...host, trial: trialId, notifications: {} };
     } else if (action.type === "stop" && trial?.phase === "recording") {
       const clipboard = host.input === "clipboard";
-      trial = { ...trial, phase: clipboard ? "saved" : "pasted", committed: "Testing one, two, three.", partial: "", level: null };
+      trial = {
+        ...trial,
+        phase: clipboard ? "saved" : "pasted",
+        committed: "Testing one, two, three.",
+        partial: "",
+        level: null,
+      };
       host = { ...host, notifications: { [trialId]: clipboard ? "Copied" : "Pasted" } };
-    } else if (action.type !== "trial" && action.type !== "stop") throw new Error("This operation needs a native host.");
+    } else if (action.type !== "trial" && action.type !== "stop") {
+      throw new Error("This operation needs a native host.");
+    }
     publish();
   }
+
   const source = createCoreSource(async (action) => {
-    if (!["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(action.type))
-      return hostAction(action as HostAction);
+    if (!["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(action.type)) {
+      hostAction(action as HostAction);
+      return;
+    }
     actions.push(action as UiAction);
     const actionId = "id" in action ? action.id : history[0]?.id;
-    if (!actionId) return;
+
+    if (!actionId) {
+      return;
+    }
     const row = history.find((row) => row.id === actionId);
+
     if (action.type === "edit") {
       if (action.id === session.id) {
         const previous = session.edited ?? session.committed + session.partial;
-        if (session.edited === null) editorTail = session.committed.length;
+
+        if (session.edited === null) {
+          editorTail = session.committed.length;
+        }
         let prefix = 0;
-        while (
-          prefix < previous.length &&
-          previous[prefix] === action.text[prefix]
-        )
+
+        while (prefix < previous.length && previous[prefix] === action.text[prefix]) {
           prefix++;
+        }
         let suffix = 0;
+
         while (
           suffix < Math.min(previous.length, action.text.length) - prefix &&
-          previous[previous.length - suffix - 1] ===
-            action.text[action.text.length - suffix - 1]
-        )
+          previous[previous.length - suffix - 1] === action.text[action.text.length - suffix - 1]
+        ) {
           suffix++;
+        }
         if (
           previous.length - suffix > editorTail ||
           (prefix >= editorTail && session.partial !== "")
-        )
+        ) {
           ownedTail = true;
-        else editorTail += action.text.length - previous.length;
+        } else {
+          editorTail += action.text.length - previous.length;
+        }
         session = { ...session, edited: action.text };
       }
-      if (row)
+
+      if (row) {
         history = history.map((row) =>
           row.id === action.id ? { ...row, text: action.text } : row,
         );
+      }
     }
+
     if (action.type === "discard" || action.type === "cancel") {
-      if (session.id === actionId)
+      if (session.id === actionId) {
         session = { ...session, phase: "saved", partial: "", level: null };
+      }
       history = history.map((row) =>
         row.id === actionId
           ? {
@@ -176,6 +225,7 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
           : row,
       );
     }
+
     publish();
   });
 
@@ -183,7 +233,9 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
     source.receive({
       sessions: trial ? [session, trial] : [session],
       history: query
-        ? history.filter((row) => `${row.text}\n${row.raw_text}`.toLocaleLowerCase().includes(query))
+        ? history.filter((row) =>
+            `${row.text}\n${row.raw_text}`.toLocaleLowerCase().includes(query),
+          )
         : history,
       settings: configured,
       host,
@@ -205,7 +257,13 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
     actions.length = 0;
     history = fixtures();
     configured = mac
-      ? { ...settings, hotkey: "alt+space", interactive_hotkey: "alt+x", insert_last_hotkey: "alt+a", apps: {} }
+      ? {
+          ...settings,
+          hotkey: "alt+space",
+          interactive_hotkey: "alt+x",
+          insert_last_hotkey: "alt+a",
+          apps: {},
+        }
       : settings;
     host = fakeHost(mac, model);
     trial = null;
@@ -225,35 +283,37 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
 
   function next() {
     const event = trace[step++];
-    if (!event || session.phase !== "recording") return;
-    if (
-      (event.type === "partial" || event.type === "committed") &&
-      session.edited !== null
-    ) {
+
+    if (!event || session.phase !== "recording") {
+      return;
+    }
+    if ((event.type === "partial" || event.type === "committed") && session.edited !== null) {
       session = {
         ...session,
-        edited: ownedTail
-          ? session.edited
-          : session.edited.slice(0, editorTail) + event.text,
+        edited: ownedTail ? session.edited : session.edited.slice(0, editorTail) + event.text,
       };
+
       if (event.type === "committed") {
         editorTail = session.edited!.length;
         ownedTail = false;
       }
     }
-    if (event.type === "partial")
+
+    if (event.type === "partial") {
       session = {
         ...session,
         partial: event.text,
         level: 0.28 + (step % 3) * 0.19,
       };
-    if (event.type === "committed")
+    }
+    if (event.type === "committed") {
       session = {
         ...session,
         committed: session.committed + event.text,
         partial: "",
         level: 0.55,
       };
+    }
     if (event.type === "final") {
       session = { ...session, phase: "reviewing", level: null };
       history = [
@@ -272,6 +332,7 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
         ...history,
       ];
     }
+
     publish();
   }
 
@@ -285,6 +346,7 @@ export function createFakeSource({ mac = false, model = "ready" }: { mac?: boole
   }
 
   reset();
+
   return {
     ...source,
     next,

@@ -1,7 +1,8 @@
 import { useDeferredValue, useState } from "react";
-import type { CoreSource, Utterance } from "./source";
-import { Playback } from "./Playback";
+
 import { duration, Icon } from "./components";
+import { Playback } from "./Playback";
+import type { CoreSource, Utterance } from "./source";
 
 const when = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -25,6 +26,7 @@ export function History({
   const [expanded, setExpanded] = useState<string | null>(null);
   const search = useDeferredValue(query).toLocaleLowerCase();
   const hosted = Boolean(source.getSnapshot().host);
+
   const matches = rows
     .filter(
       (row) =>
@@ -47,8 +49,10 @@ export function History({
           onChange={(event) => {
             const query = event.target.value;
             setQuery(query);
-            if (hosted)
+
+            if (hosted) {
               void send({ type: "history_search", query }).catch(() => {});
+            }
           }}
         />
       </label>
@@ -70,9 +74,9 @@ export function History({
                 {row.pasted_to.name}
               </span>
             ) : null}
-            {row.status !== "done" ? (
+            {row.status === "done" ? null : (
               <span className="badge">{row.status ?? "Recognizing"}</span>
-            ) : null}
+            )}
             {row.text !== null && row.text !== row.raw_text ? (
               <span className="badge">Edited</span>
             ) : null}
@@ -91,9 +95,7 @@ export function History({
             <button
               className="quiet"
               disabled={!source.connected || !row.text}
-              onClick={() =>
-                void send({ type: "copy", id: row.id }).catch(() => {})
-              }
+              onClick={() => void send({ type: "copy", id: row.id }).catch(() => {})}
             >
               <Icon name="copy" />
               Copy
@@ -101,7 +103,9 @@ export function History({
             <button
               className="quiet"
               disabled={!source.connected || row.text === null}
-              onClick={() => edit(row.id)}
+              onClick={() => {
+                edit(row.id);
+              }}
             >
               <Icon name="edit" />
               Edit
@@ -109,9 +113,7 @@ export function History({
             <button
               className="quiet"
               disabled={!source.connected || !row.text}
-              onClick={() =>
-                void send({ type: "insert", id: row.id }).catch(() => {})
-              }
+              onClick={() => void send({ type: "insert", id: row.id }).catch(() => {})}
             >
               <Icon name="arrow" />
               Insert again
@@ -120,7 +122,9 @@ export function History({
             <button
               className="quiet"
               aria-expanded={expanded === row.id}
-              onClick={() => setExpanded(expanded === row.id ? null : row.id)}
+              onClick={() => {
+                setExpanded(expanded === row.id ? null : row.id);
+              }}
             >
               {expanded === row.id ? "Hide details" : "Details"}
             </button>
@@ -131,19 +135,13 @@ export function History({
               <span className="record">{row.raw_text ?? "Not available yet"}</span>
               <p className="quiet">
                 {row.engine}
-                {row.pasted_to
-                  ? ` · inserted into ${row.pasted_to.name}`
-                  : " · not inserted"}
+                {row.pasted_to ? ` · inserted into ${row.pasted_to.name}` : " · not inserted"}
               </p>
               <div className="actions">
                 <button
                   className="quiet"
                   disabled={!source.connected || row.raw_text === null}
-                  onClick={() =>
-                    void send({ type: "history_retry", id: row.id }).catch(
-                      () => {},
-                    )
-                  }
+                  onClick={() => void send({ type: "history_retry", id: row.id }).catch(() => {})}
                 >
                   <Icon name="retry" />
                   Retry recognition
@@ -151,11 +149,7 @@ export function History({
                 <button
                   className="quiet danger"
                   disabled={!source.connected}
-                  onClick={() =>
-                    void send({ type: "history_delete", id: row.id }).catch(
-                      () => {},
-                    )
-                  }
+                  onClick={() => void send({ type: "history_delete", id: row.id }).catch(() => {})}
                 >
                   <Icon name="trash" />
                   Delete
@@ -166,9 +160,7 @@ export function History({
         </article>
       ))}
       {matches.length === 0 ? (
-        <p className="empty quiet">
-          {query ? "Nothing matches." : "Nothing recorded yet."}
-        </p>
+        <p className="empty quiet">{query ? "Nothing matches." : "Nothing recorded yet."}</p>
       ) : null}
     </section>
   );

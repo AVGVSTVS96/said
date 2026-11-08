@@ -1,31 +1,25 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { product } from "./product";
-import {
-  type CoreSource,
-  type AppAction,
-  disconnectedSource,
-  userText,
-} from "./source";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+import type { Draft } from "./editor";
 import type { createFakeSource } from "./fake";
-import { Overlay } from "./Overlay";
-import { Interactive } from "./Interactive";
 import { History } from "./History";
+import { Interactive } from "./Interactive";
+import { Overlay } from "./Overlay";
+import { product } from "./product";
 import { Settings } from "./Settings";
 import { Setup } from "./Setup";
-import type { Draft } from "./editor";
+import { disconnectedSource, userText } from "./source";
+import type { CoreSource, AppAction } from "./source";
 
-const screens = [
-  "interactive",
-  "history",
-  "settings",
-  "setup",
-  "overlay",
-] as const;
+const screens = ["interactive", "history", "settings", "setup", "overlay"] as const;
+
 type Screen = (typeof screens)[number];
+
 type FakeSource = ReturnType<typeof createFakeSource>;
+
 const labels: Record<Screen, string> = {
   interactive: "Interactive",
   history: "History",
@@ -33,6 +27,7 @@ const labels: Record<Screen, string> = {
   setup: "Setup",
   overlay: "Overlay",
 };
+
 const phases = [
   "recording",
   "finishing",
@@ -47,15 +42,24 @@ const phases = [
 function FloatingPanel({ children }: { children: React.ReactNode }) {
   const stage = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!isTauri() || !stage.current) return;
+    if (!isTauri() || !stage.current) {
+      return;
+    }
     const element = stage.current;
+
     const observer = new ResizeObserver(() => {
-      if (element.offsetHeight)
+      if (element.offsetHeight) {
         void fitWindow(new LogicalSize(element.offsetWidth, element.offsetHeight));
+      }
     });
+
     observer.observe(element);
-    return () => observer.disconnect();
+
+    return () => {
+      observer.disconnect();
+    };
   }, []);
+
   return (
     <main className="stage panel-stage" ref={stage}>
       {children}
@@ -65,6 +69,7 @@ function FloatingPanel({ children }: { children: React.ReactNode }) {
 
 async function fitWindow(size: LogicalSize) {
   const window = getCurrentWindow();
+
   try {
     await Promise.all([window.setMinSize(size), window.setMaxSize(size)]);
     await window.setSize(size);
@@ -85,20 +90,22 @@ export function App({
   demo?: FakeSource;
 }) {
   const params = new URLSearchParams(window.location.search);
+
   const [screen, setScreen] = useState<Screen>(
     screens.find((screen) => screen === params.get("screen")) ?? "setup",
   );
+
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const snapshot = useSyncExternalStore(source.subscribe, source.getSnapshot);
+
   const session =
     screen === "interactive"
-      ? [...snapshot.sessions]
-          .reverse()
-          .find((session) => session.mode === "interactive")
+      ? [...snapshot.sessions].reverse().find((session) => session.mode === "interactive")
       : snapshot.sessions.at(-1);
+
   const utterance = selected
     ? snapshot.history.find((row) => row.id === selected)
     : snapshot.history.find((row) => row.id === session?.id);
@@ -110,32 +117,41 @@ export function App({
   }, [screen, demo]);
 
   useEffect(() => {
-    if (!isTauri() || screen !== "setup") return;
-    const stop = listen<string>("notice", (event) => setError(event.payload));
-    return () => void stop.then((unlisten) => unlisten());
+    if (!isTauri() || screen !== "setup") {
+      return;
+    }
+    const stop = listen<string>("notice", (event) => {
+      setError(event.payload);
+    });
+
+    return () =>
+      void stop.then((unlisten) => {
+        unlisten();
+      });
   }, [screen]);
 
   async function send(action: AppAction) {
     setError("");
     setFeedback("");
+
     try {
       await source.dispatch(action);
+
       if (action.type === "edit") {
         const current = source.getSnapshot();
+
         const accepted =
-          userText(
-            current.sessions.find((session) => session.id === action.id),
-          ) === action.text ||
-          current.history.some(
-            (row) => row.id === action.id && row.text === action.text,
-          );
-        if (accepted)
+          userText(current.sessions.find((session) => session.id === action.id)) === action.text ||
+          current.history.some((row) => row.id === action.id && row.text === action.text);
+
+        if (accepted) {
           setDrafts((drafts) => {
             if (drafts[action.id]?.text !== action.text) return drafts;
             const next = { ...drafts };
             delete next[action.id];
             return next;
           });
+        }
       } else if (demo) {
         setFeedback(
           `Demo: ${action.type.replaceAll("_", " ")} action recorded. No desktop action was performed.`,
@@ -144,11 +160,7 @@ export function App({
         setFeedback("Copied");
       }
     } catch (error) {
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Core could not complete the action.",
-      );
+      setError(error instanceof Error ? error.message : "Core could not complete the action.");
       throw error;
     }
   }
@@ -183,7 +195,10 @@ export function App({
       draft={drafts[selected ?? session?.id ?? ""] ?? null}
       onEdit={(draft) => {
         const id = selected ?? session?.id;
-        if (id) setDrafts((drafts) => ({ ...drafts, [id]: draft }));
+
+        if (id) {
+          setDrafts((drafts) => ({ ...drafts, [id]: draft }));
+        }
       }}
       onClose={onClose}
       note={note}
@@ -191,7 +206,12 @@ export function App({
   );
 
   if (!source.connected) {
-    return <main className="window" role="alert">Host disconnected: {snapshot.connectionError ?? "The core connection is not available."} Restart {product.name} to reconnect.</main>;
+    return (
+      <main className="window" role="alert">
+        Host disconnected: {snapshot.connectionError ?? "The core connection is not available."}{" "}
+        Restart {product.name} to reconnect.
+      </main>
+    );
   }
 
   return (
@@ -200,21 +220,16 @@ export function App({
         <Overlay session={session} source={source} send={send} />
       ) : screen === "interactive" ? (
         <FloatingPanel>
-          {editor(
-            isTauri() ? () => void getCurrentWindow().close() : undefined,
-          )}
+          {editor(isTauri() ? () => void getCurrentWindow().close() : undefined)}
         </FloatingPanel>
       ) : (
         <main className={`window${screen === "setup" ? " setup-window" : ""}`}>
           {screen === "history" && selected ? (
-            editor(() => setSelected(null))
+            editor(() => {
+              setSelected(null);
+            })
           ) : screen === "history" ? (
-            <History
-              rows={snapshot.history}
-              source={source}
-              send={send}
-              edit={setSelected}
-            />
+            <History rows={snapshot.history} source={source} send={send} edit={setSelected} />
           ) : screen === "settings" ? (
             <Settings
               key={JSON.stringify(snapshot.settings)}
@@ -248,12 +263,20 @@ export function App({
             <button
               key={item}
               aria-current={screen === item ? "page" : undefined}
-              onClick={() => navigate(item)}
+              onClick={() => {
+                navigate(item);
+              }}
             >
               {labels[item]}
             </button>
           ))}
-          <button onClick={() => demo.next()}>Next event</button>
+          <button
+            onClick={() => {
+              demo.next();
+            }}
+          >
+            Next event
+          </button>
           <button
             onClick={() => {
               demo.reset();
@@ -266,9 +289,9 @@ export function App({
           <select
             aria-label="Demo phase"
             value={session?.phase ?? "recording"}
-            onChange={(event) =>
-              demo.phase(event.target.value as (typeof phases)[number])
-            }
+            onChange={(event) => {
+              demo.phase(event.target.value as (typeof phases)[number]);
+            }}
           >
             {phases.map((phase) => (
               <option key={phase}>{phase}</option>

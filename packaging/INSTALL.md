@@ -8,11 +8,11 @@ Build the artifacts with [packaging instructions](README.md). Recognition runs l
 2. In Setup, press **Allow** next to Microphone and next to Accessibility and accept each macOS prompt. A second press opens the matching System Settings pane. Setup updates within a second of each change; shortcuts, focus tracking and paste start without reopening said. If Setup also lists Input Monitoring, allow it the same way.
 3. Let the model finish downloading/verifying. Try a scratch dictation in Setup before inserting into another app.
 
-| Action | Default shortcut |
-| --- | --- |
-| Quick dictation | Option+Space |
-| Interactive review | Option+X |
-| Insert last | Option+A |
+| Action             | Default shortcut |
+| ------------------ | ---------------- |
+| Quick dictation    | Option+Space     |
+| Interactive review | Option+X         |
+| Insert last        | Option+A         |
 
 Hold the dictation or interactive shortcut to talk and release to finish. A quick tap starts toggle recording; the next press stops it. Escape cancels during recording. Insert last never presses Enter.
 
@@ -51,11 +51,11 @@ systemctl --user start said.service
 
 Let the compositor or user service own the app's lifetime. Running `said` as a child of a build terminal can stop it when that terminal exits.
 
-| Action | Default shortcut |
-| --- | --- |
-| Quick dictation | Super+Z |
-| Interactive review | Super+X |
-| Insert last | Super+A |
+| Action             | Default shortcut |
+| ------------------ | ---------------- |
+| Quick dictation    | Super+Z          |
+| Interactive review | Super+X          |
+| Insert last        | Super+A          |
 
 All three settings match the supplied binds. Readable physical keyboards or a functioning GlobalShortcuts portal supply release events for hold-to-talk. The compositor bind alone toggles on each press. `said status` and Setup report the active mode and unavailable reason.
 

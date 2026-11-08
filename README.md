@@ -29,11 +29,11 @@ sudo pacman -U said-*.pkg.tar.zst
 
 Default shortcuts, all three editable in Settings:
 
-| | Linux | macOS |
-| --- | --- | --- |
-| Dictate | Super+Z | Option+Space |
-| Review before inserting | Super+X | Option+X |
-| Insert the last dictation | Super+A | Option+A |
+|                           | Linux   | macOS        |
+| ------------------------- | ------- | ------------ |
+| Dictate                   | Super+Z | Option+Space |
+| Review before inserting   | Super+X | Option+X     |
+| Insert the last dictation | Super+A | Option+A     |
 
 On Niri, add the provided include after reviewing it: three bind lines, one per shortcut. Setup and `said status` explain the active input mode. Readable keyboards or a working shortcuts portal provide hold and release; a compositor bind alone toggles on each press. Input-group access requires a new login and permits reading physical keyboard events. See [Linux setup](packaging/INSTALL.md#linux).
 

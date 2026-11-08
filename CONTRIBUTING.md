@@ -4,16 +4,16 @@ Read [SPEC.md](SPEC.md) for current behavior and limits, and [CONTRACTS.md](CONT
 
 ## Source map
 
-| Path | Responsibility |
-| --- | --- |
-| `crates/core` | Session reducer, shared types, SQLite history, settings and deterministic fakes |
-| `crates/audio` | Capture, bounded buffers, resampling, durable WAV and recovery |
-| `crates/engine` | Parakeet adapter, worker protocol, process supervision and model manifest |
-| `crates/platform` | Hotkeys, focus, clipboard, paste and native overlay hooks |
-| `app/src-tauri` | Host actor, effect execution, IPC, downloads, permissions and CLI |
-| `app/src` | React overlay, interactive editor, history, settings and setup |
-| `bench` | Public corpus, replay runner, scoring and receipts |
-| `packaging` | Arch package, Linux staging, macOS app/DMG and distribution notices |
+| Path              | Responsibility                                                                  |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `crates/core`     | Session reducer, shared types, SQLite history, settings and deterministic fakes |
+| `crates/audio`    | Capture, bounded buffers, resampling, durable WAV and recovery                  |
+| `crates/engine`   | Parakeet adapter, worker protocol, process supervision and model manifest       |
+| `crates/platform` | Hotkeys, focus, clipboard, paste and native overlay hooks                       |
+| `app/src-tauri`   | Host actor, effect execution, IPC, downloads, permissions and CLI               |
+| `app/src`         | React overlay, interactive editor, history, settings and setup                  |
+| `bench`           | Public corpus, replay runner, scoring and receipts                              |
+| `packaging`       | Arch package, Linux staging, macOS app/DMG and distribution notices             |
 
 Use Rust 2024 and React/TypeScript, with small modules and short call paths. Comments explain non-obvious platform facts. Tests should prove a meaningful behavior or failure path. Fixtures must be synthetic or freely licensed; keep personal recordings, transcripts, databases and research outside this public repository. Include provenance for new data and preserve third-party credits for reused code.
 

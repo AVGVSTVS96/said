@@ -7,6 +7,7 @@ import type {
   UiAction,
   Utterance,
 } from "./contracts";
+
 export type {
   EngineEvent,
   InputDevice,
@@ -51,35 +52,64 @@ export function createCoreSource(send: (action: AppAction) => Promise<void>) {
     settings: null,
     devices: [],
   };
+
   let pending = Promise.resolve();
   let connected = true;
   const listeners = new Set<() => void>();
+
   return {
-    get connected() { return connected; },
+    get connected() {
+      return connected;
+    },
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) {
       listeners.add(listener);
+
       return () => {
         listeners.delete(listener);
       };
     },
-    dispatch(action: AppAction) {
-      pending = pending.catch(() => {}).then(() => {
-        if (!connected) throw new Error(snapshot.connectionError ?? "The host connection is not available.");
-        return send(action);
-      });
+    async dispatch(action: AppAction) {
+      pending = pending
+        .catch(() => {})
+        .then(async () => {
+          if (!connected) {
+            throw new Error(snapshot.connectionError ?? "The host connection is not available.");
+          }
+          return send(action);
+        });
+
       return pending;
     },
     receive(next: Incoming) {
-      if (!connected) return;
-      if (next.sequence !== undefined && snapshot.sequence !== undefined && next.sequence <= snapshot.sequence) return;
+      if (!connected) {
+        return;
+      }
+      if (
+        next.sequence !== undefined &&
+        snapshot.sequence !== undefined &&
+        next.sequence <= snapshot.sequence
+      ) {
+        return;
+      }
       snapshot = { ...next, history: next.history ?? snapshot.history };
-      listeners.forEach((listener) => listener());
+      listeners.forEach((listener) => {
+        listener();
+      });
     },
     disconnect(error: string) {
       connected = false;
-      snapshot = { ...snapshot, sessions: [], settings: null, devices: [], host: undefined, connectionError: error };
-      listeners.forEach((listener) => listener());
+      snapshot = {
+        ...snapshot,
+        sessions: [],
+        settings: null,
+        devices: [],
+        host: undefined,
+        connectionError: error,
+      };
+      listeners.forEach((listener) => {
+        listener();
+      });
     },
   };
 }
