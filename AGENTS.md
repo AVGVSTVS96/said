@@ -30,7 +30,7 @@ Local dictation for macOS and Linux: hold a hotkey, speak, and the text lands in
 | `unsafe` only in FFI modules (`platform/macos`, `platform/linux`, the engine's sherpa-onnx loader) | `unsafe_code = "deny"` in `[workspace.lints]`; each exception is an `allow` with its reason |
 | A crate uses only what its `Cargo.toml` lists                                                      | Cargo                                                                                       |
 | Renderer types come from Rust                                                                      | `ts-rs` generates `app/src/bindings/`; `contracts.ts` re-exports them                       |
-| No `useEffect`, no comments, no `as` or `any` in TypeScript                                        | `oxlint.config.ts`                                                                          |
+| No `useEffect` outside `app/src/outside.ts`, no comments, `as` or `any` in TypeScript              | `oxlint.config.ts`                                                                          |
 | Clippy pedantic, no warnings                                                                       | `[workspace.lints]` and `-D warnings` in `check`                                            |
 
 ## Judgment
