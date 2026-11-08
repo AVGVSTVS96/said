@@ -30,7 +30,6 @@ impl Resampler {
                     rate as usize,
                     SAMPLE_RATE as usize,
                     512,
-                    2,
                     1,
                     FixedSync::Input,
                 )

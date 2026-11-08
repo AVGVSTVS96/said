@@ -9,7 +9,7 @@ use std::{
 };
 
 use cpal::{
-    FromSample, SizedSample,
+    ErrorKind, FromSample, SizedSample,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use crossbeam_channel::{Receiver, Sender, bounded};
@@ -113,10 +113,9 @@ impl Recorder for CpalRecorder {
                     drop(stream);
                     let mut failure = worker_state.failure.load(Ordering::Acquire);
                     if failure == BACKEND_ERROR
-                        && matches!(
-                            device.default_input_config(),
-                            Err(cpal::DefaultStreamConfigError::DeviceNotAvailable)
-                        )
+                        && device
+                            .default_input_config()
+                            .is_err_and(|error| error.kind() == ErrorKind::DeviceNotAvailable)
                     {
                         failure = DISCONNECTED;
                     }
@@ -245,17 +244,16 @@ where
     let channels = config.channels() as usize;
     let errors = state.clone();
     Ok(device.build_input_stream(
-        &config.clone().into(),
+        config.config(),
         move |data: &[T], _| {
             copy_input(data, channels, &mut producer, &state, |sample| {
                 sample.to_sample::<f32>()
             });
         },
-        move |error| {
-            errors.fail(match error {
-                cpal::StreamError::DeviceNotAvailable => DISCONNECTED,
-                _ => BACKEND_ERROR,
-            });
+        move |error| match error.kind() {
+            ErrorKind::Xrun | ErrorKind::DeviceChanged | ErrorKind::RealtimeDenied => {}
+            ErrorKind::DeviceNotAvailable => errors.fail(DISCONNECTED),
+            _ => errors.fail(BACKEND_ERROR),
         },
         None,
     )?)

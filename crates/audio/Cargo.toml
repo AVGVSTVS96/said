@@ -14,7 +14,7 @@ native = ["dep:cpal"]
 [dependencies]
 said-core.workspace = true
 crossbeam-channel.workspace = true
-cpal = { version = "0.17.3", optional = true }
-rtrb = "0.3.4"
-rubato = "3.0.0"
-audioadapter-buffers = "3.0.0"
+cpal = { version = "0.18", optional = true }
+rtrb = "0.4"
+rubato = "5"
+audioadapter-buffers = "5"
