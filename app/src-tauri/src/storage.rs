@@ -1,4 +1,3 @@
-use fs2::FileExt;
 use said_core::Result;
 use std::{
     fs::{self, File, OpenOptions},
@@ -43,7 +42,7 @@ impl Paths {
         private_dir(&self.data)?;
         private_dir(&self.config)?;
         let file = private_file(&self.data.join("app.lock"))?;
-        file.try_lock_exclusive()
+        file.try_lock()
             .map_err(|_| "another said process owns this data directory")?;
         Ok(file)
     }
