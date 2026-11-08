@@ -407,9 +407,7 @@ fn one_hour_synthetic_capture_has_flat_ram() {
     let (mut producer, mut consumer) = RingBuffer::new(96_000);
     let state = CaptureState::default();
     let input = sine(48_000, 1000.0, 4800);
-    #[cfg(target_os = "linux")]
     let mut baseline = 0;
-    #[cfg(target_os = "linux")]
     let mut maximum = 0;
     for tick in 0..36_000 {
         copy_input(&input, 1, &mut producer, &state, |s| s);
