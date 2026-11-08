@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useState } from "react";
 
+import type { Target as Destination } from "./contracts";
 import type { Phase, SessionView } from "./source";
 
 const paths = {
@@ -16,25 +17,23 @@ const paths = {
   trash: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6",
 } as const;
 
-export function Icon({ name }: { name: keyof typeof paths }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={paths[name]} />
-    </svg>
-  );
-}
+export const Icon = ({ name }: { name: keyof typeof paths }) => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d={paths[name]} />
+  </svg>
+);
 
-export function LevelMeter({
+export const LevelMeter = ({
   level,
   bars = 16,
   className = "",
@@ -42,19 +41,21 @@ export function LevelMeter({
   level: number | null;
   bars?: number;
   className?: string;
-}) {
+}) => {
   const value = Math.max(0, Math.min(1, level ?? 0));
-  const shown = useRef({ input: level, value });
+  const [shown, setShown] = useState({ input: level, value });
 
-  if (shown.current.input !== level) {
-    shown.current = {
+  if (shown.input !== level) {
+    setShown({
       input: level,
-      value: level === null ? 0 : Math.max(value, shown.current.value - 0.08),
-    };
+      value: level === null ? 0 : Math.max(value, shown.value - 0.08),
+    });
   }
+
   return (
     <span
       className={`meter ${className}`.trim()}
+      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- the lit bars are children, which a <meter> element can't render
       role="meter"
       aria-label="Microphone level"
       aria-valuemin={0}
@@ -65,11 +66,11 @@ export function LevelMeter({
       }
     >
       {Array.from({ length: bars }, (_, index) => (
-        <span key={index} data-lit={shown.current.value > index / bars} />
+        <span key={index} data-lit={shown.value > index / bars} />
       ))}
     </span>
   );
-}
+};
 
 const phaseLabels: Record<Phase, string> = {
   recording: "Listening",
@@ -82,13 +83,12 @@ const phaseLabels: Record<Phase, string> = {
   failed: "Needs attention",
 };
 
-export function sessionLabel(session: SessionView) {
-  return session.phase === "recording" && session.level === null
+export const sessionLabel = (session: SessionView) =>
+  session.phase === "recording" && session.level === null
     ? "Waiting for microphone"
     : phaseLabels[session.phase];
-}
 
-export function Status({
+export const Status = ({
   session,
   label,
   children,
@@ -96,69 +96,81 @@ export function Status({
   session?: SessionView;
   label?: string;
   children?: React.ReactNode;
-}) {
+}) => {
   const text = label ?? (session ? sessionLabel(session) : "");
   const live = session?.phase === "recording" && session.level !== null;
 
   return (
-    <span className="status" key={text} role="status" data-live={live}>
+    <output className="status" key={text} data-live={live}>
       <span className="dot" />
       {text}
       {children}
-    </span>
+    </output>
   );
-}
+};
 
-export function Target({ name }: { name?: string }) {
-  return name ? (
+export const targetName = (...targets: (Destination | null | undefined)[]) =>
+  targets.flatMap((target) => (target ? [target.name, target.app_id] : [])).find(Boolean);
+
+export const Target = ({ name }: { name: string | undefined }) =>
+  name === undefined ? null : (
     <span className="target">
       <Icon name="arrow" />
       {name}
     </span>
-  ) : null;
-}
+  );
 
-export function Transcript({ committed, partial }: { committed: string; partial: string }) {
-  const previous = useRef(committed);
+export const Transcript = ({ committed, partial }: { committed: string; partial: string }) => {
+  const [shown, setShown] = useState({ committed, settled: committed.length });
 
-  const settled = committed.startsWith(previous.current)
-    ? previous.current.length
-    : committed.length;
-
-  useEffect(() => {
-    previous.current = committed;
-  }, [committed]);
+  if (shown.committed !== committed) {
+    setShown({
+      committed,
+      settled: committed.startsWith(shown.committed) ? shown.committed.length : committed.length,
+    });
+  }
 
   return (
     <>
-      <span>{committed.slice(0, settled)}</span>
+      <span>{committed.slice(0, shown.settled)}</span>
       <span className="settle" key={committed.length}>
-        {committed.slice(settled)}
+        {committed.slice(shown.settled)}
       </span>
       <span className="provisional">{partial}</span>
     </>
   );
-}
+};
 
-export function TranscriptTail({ session }: { session: SessionView }) {
-  const element = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (element.current) {
-      element.current.scrollTop = element.current.scrollHeight;
+const keepScrolledToEnd = (element: HTMLElement | null) => {
+  const scrollToEnd = () => {
+    if (element) {
+      element.scrollTop = element.scrollHeight;
     }
-  }, [session.committed, session.partial]);
+  };
 
-  return (
-    <div className="overlay-text" ref={element}>
-      <Transcript committed={session.committed} partial={session.partial} />
-    </div>
-  );
-}
+  const observer = new MutationObserver(scrollToEnd);
 
-export const modifier = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
+  if (element) {
+    observer.observe(element, { childList: true, characterData: true, subtree: true });
+  }
 
-export function duration(milliseconds: number) {
+  scrollToEnd();
+
+  return () => {
+    observer.disconnect();
+  };
+};
+
+export const TranscriptTail = ({ session }: { session: SessionView }) => (
+  <div className="overlay-text" ref={keepScrolledToEnd}>
+    <Transcript committed={session.committed} partial={session.partial} />
+  </div>
+);
+
+export const modifier = /Mac|iPhone|iPad/u.test(navigator.platform) ? "⌘" : "Ctrl";
+
+export const duration = (milliseconds: number) => {
   const seconds = Math.floor(milliseconds / 1000);
 
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
+};

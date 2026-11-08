@@ -3,21 +3,27 @@ import { listen } from "@tauri-apps/api/event";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
-import { App } from "./App";
+import { App } from "./app";
 import type { HostSnapshot } from "./contracts";
 import { product } from "./product";
-import { createCoreSource } from "./source";
+import { createCoreSource, isUiAction } from "./source";
 
 import "./tokens.css";
 import "./style.css";
 
 document.title = product.name;
 
-const root = createRoot(document.querySelector("#root")!);
+const mount = document.querySelector("#root");
 
-if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("demo") === "1") {
+if (mount === null) {
+  throw new Error("index.html needs a #root element");
+}
+
+const root = createRoot(mount);
+const params = new URLSearchParams(window.location.search);
+
+if (import.meta.env.DEV && params.get("demo") === "1") {
   const { createFakeSource } = await import("./fake");
-  const params = new URLSearchParams(window.location.search);
 
   const demo = createFakeSource({
     mac: params.get("os") === "mac",
@@ -31,18 +37,14 @@ if (import.meta.env.DEV && new URLSearchParams(window.location.search).get("demo
   );
 } else if (isTauri()) {
   const source = createCoreSource(async (action) => {
-    const command = ["insert", "copy", "edit", "discard", "cancel", "insert_last"].includes(
-      action.type,
-    )
-      ? "ui_action"
-      : "host_action";
-    source.receive(await invoke<HostSnapshot>(command, { action }));
+    source.receive(
+      await invoke<HostSnapshot>(isUiAction(action) ? "ui_action" : "host_action", { action }),
+    );
   });
 
-  const updates = new Channel<HostSnapshot>();
-  updates.onmessage = (snapshot) => {
+  const updates = new Channel<HostSnapshot>((snapshot) => {
     source.receive(snapshot);
-  };
+  });
 
   try {
     await listen<string>("host-error", (event) => {

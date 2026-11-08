@@ -1,34 +1,43 @@
-import { Icon, LevelMeter, sessionLabel, Status, Target, TranscriptTail } from "./components";
-import { shortcutLabel } from "./shortcuts";
-import type { CoreSource, SessionView } from "./source";
+import {
+  Icon,
+  LevelMeter,
+  sessionLabel,
+  Status,
+  Target,
+  targetName,
+  TranscriptTail,
+} from "./components";
+import { macHost, shortcutLabel } from "./shortcuts";
+import type { CoreSnapshot, CoreSource, Send, SessionView } from "./source";
 
-export function Overlay({
+const overlayNote = (session: SessionView, { host, settings }: CoreSnapshot) => {
+  const notification = host?.notifications[session.id];
+
+  if (notification !== undefined && notification !== "" && notification !== sessionLabel(session)) {
+    return notification;
+  }
+
+  if (session.phase === "saved") {
+    return settings
+      ? `Press ${shortcutLabel(settings.insert_last_hotkey, macHost(host))} to insert`
+      : "Use Insert last to insert";
+  }
+
+  return session.phase === "failed" ? "Kept in history" : "";
+};
+
+export const Overlay = ({
   session,
   source,
   send,
 }: {
-  session?: SessionView;
+  session: SessionView | undefined;
   source: CoreSource;
-  send: CoreSource["dispatch"];
-}) {
+  send: Send;
+}) => {
   const snapshot = source.getSnapshot();
-  const { settings } = snapshot;
-
-  const autoSend = session?.target && settings?.apps[session.target.app_id]?.send;
-
-  const notification = session && snapshot.host?.notifications[session.id];
-
-  const note = session
-    ? notification && notification !== sessionLabel(session)
-      ? notification
-      : session.phase === "saved"
-        ? settings
-          ? `Press ${shortcutLabel(settings.insert_last_hotkey, Boolean(snapshot.host && "accessibility" in snapshot.host.permissions))} to insert`
-          : "Use Insert last to insert"
-        : session.phase === "failed"
-          ? "Kept in history"
-          : ""
-    : "";
+  const appId = session?.target?.app_id;
+  const autoSend = appId !== undefined && snapshot.settings?.apps[appId]?.send === true;
 
   return (
     <main className="stage overlay-stage" aria-label="Dictation overlay">
@@ -43,16 +52,19 @@ export function Overlay({
               <Status session={session}>
                 {autoSend ? <span className="quiet">auto-send</span> : null}
               </Status>
-              <Target name={session.target?.name || session.target?.app_id || "Clipboard"} />
+              <Target name={targetName(session.target) ?? "Clipboard"} />
               {session.phase === "recording" ? (
                 <button
+                  type="button"
                   className="close"
                   aria-label="Cancel dictation"
                   disabled={!source.connected}
                   onMouseDown={(event) => {
                     event.preventDefault();
                   }}
-                  onClick={() => void send({ type: "cancel", id: session.id }).catch(() => {})}
+                  onClick={() => {
+                    void send({ type: "cancel", id: session.id });
+                  }}
                 >
                   <Icon name="close" />
                 </button>
@@ -61,9 +73,7 @@ export function Overlay({
             <TranscriptTail session={session} />
             <div className="foot">
               <LevelMeter level={session.level} />
-              <span className="note" role="status">
-                {note}
-              </span>
+              <output className="note">{overlayNote(session, snapshot)}</output>
             </div>
           </>
         ) : (
@@ -74,4 +84,4 @@ export function Overlay({
       </section>
     </main>
   );
-}
+};
