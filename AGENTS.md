@@ -1,6 +1,6 @@
 # said
 
-Local dictation for macOS and Linux: hold a hotkey, speak, and the text lands in the focused app. A Rust workspace (session reducer, audio, the Parakeet engine, desktop adapters) behind a Tauri app with a React renderer. `SPEC.md` is current behavior, `CONTRACTS.md` the text, identity and delivery ordering.
+Local dictation for macOS and Linux that never edits what you said, ums and all: hold a hotkey, speak, and the text lands in the focused app. A Rust workspace (session reducer, audio, the Parakeet engine, desktop adapters) behind a Tauri app with a React renderer. `SPEC.md` is current behavior, `CONTRACTS.md` the text, identity and delivery ordering.
 
 ## Commands
 
