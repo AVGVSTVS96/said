@@ -1,6 +1,6 @@
 import { definePlugin, defineRule } from "@oxlint/plugins";
 
-const kept = /^\s*(?:SAFETY: \S|oxlint-(?:disable|enable)\S* .+ -- \S)|https:\/\//u;
+const kept = /^\s*(?:(?:WHY|SAFETY): [^\n]+$|oxlint-(?:disable|enable)\S* .+ -- \S)|https:\/\//u;
 
 export default definePlugin({
   meta: { name: "no-comments" },
@@ -12,7 +12,7 @@ export default definePlugin({
             if (comment.type !== "Shebang" && !kept.test(comment.value)) {
               context.report({
                 message:
-                  "Comments are banned: say it in a name, a type, a test or the commit. Kept: a link to an outside fact (https://…), a one-line SAFETY: for a type assertion, a lint directive with its reason after --.",
+                  "Say it in a name, a type, a test or the commit. A comment is only for what the code can't show: a one-line WHY: for a decision or fact, a link (https://…), a one-line SAFETY: for a type assertion, a lint directive with its reason after --.",
                 node: comment,
               });
             }
